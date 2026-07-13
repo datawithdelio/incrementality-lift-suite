@@ -21,3 +21,9 @@ class LoginResponse(BaseModel):
     session_token: str
     token_type: Literal["bearer"] = "bearer"
     expires_at: datetime
+
+
+class SessionResponse(BaseModel):
+    session_id: UUID
+    user_id: UUID
+    expires_at: datetime

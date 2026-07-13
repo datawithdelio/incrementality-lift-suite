@@ -76,7 +76,16 @@ class CredentialRepository(Protocol):
 
 class AuthSessionRepository(Protocol):
     async def add(self, session: AuthSession) -> None:
-        """Persist an authentication session."""
+        """Persist a new authentication session."""
+
+    async def get_by_token_hash(
+        self,
+        token_hash: str,
+    ) -> AuthSession | None:
+        """Find a session by its persistent token digest."""
+
+    async def save(self, session: AuthSession) -> None:
+        """Persist changes to an existing session."""
 
 
 class AuthenticationUnitOfWork(Protocol):
@@ -109,19 +118,8 @@ class SessionTokenHasher(Protocol):
         """Create the persistent digest for a raw session token."""
 
 
-class SessionRepository(Protocol):
-    async def get_by_token_hash(
-        self,
-        token_hash: str,
-    ) -> AuthSession | None:
-        """Find a session by its persistent token digest."""
-
-    async def save(self, session: AuthSession) -> None:
-        """Persist changes to an existing session."""
-
-
 class SessionUnitOfWork(Protocol):
-    sessions: SessionRepository
+    sessions: AuthSessionRepository
 
     async def __aenter__(
         self,
