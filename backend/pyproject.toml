@@ -37,6 +37,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-ra",
+    "--import-mode=importlib",
 ]
 
 [tool.coverage.run]
