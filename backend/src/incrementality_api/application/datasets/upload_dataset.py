@@ -51,7 +51,6 @@ class UploadDataset:
             if dataset is None:
                 raise DatasetUnavailableError("Dataset is unavailable.")
 
-            # Validate the transition before writing any bytes.
             uploaded_dataset = dataset.mark_uploaded(
                 uploaded_at=self._clock.now(),
             )
@@ -62,7 +61,10 @@ class UploadDataset:
                 write_result = await self._object_storage.write(
                     storage_key=dataset.storage_key,
                     media_type=dataset.media_type,
-                    chunks=command.chunks,
+                    chunks=self._limit_chunks(
+                        chunks=command.chunks,
+                        maximum_bytes=dataset.byte_size,
+                    ),
                 )
 
                 object_written = True
@@ -85,6 +87,28 @@ class UploadDataset:
                 raise
 
             return uploaded_dataset
+
+    @staticmethod
+    async def _limit_chunks(
+        *,
+        chunks: AsyncIterator[bytes],
+        maximum_bytes: int,
+    ) -> AsyncIterator[bytes]:
+        consumed_bytes = 0
+
+        async for chunk in chunks:
+            if not chunk:
+                continue
+
+            next_size = consumed_bytes + len(chunk)
+
+            if next_size > maximum_bytes:
+                raise DatasetUploadVerificationError(
+                    "Uploaded dataset exceeds the registered byte size."
+                )
+
+            consumed_bytes = next_size
+            yield chunk
 
     @staticmethod
     def _verify_upload(

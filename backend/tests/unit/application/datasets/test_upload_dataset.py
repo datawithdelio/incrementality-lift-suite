@@ -439,3 +439,43 @@ async def test_commit_failure_deletes_uploaded_object() -> None:
 
     assert unit_of_work.commit_count == 1
     assert unit_of_work.rollback_count == 1
+
+
+async def oversized_content_chunks() -> AsyncIterator[bytes]:
+    yield CONTENT
+    yield b"unexpected-extra-content"
+
+
+@pytest.mark.asyncio
+async def test_stops_stream_when_content_exceeds_registered_size() -> None:
+    dataset = build_pending_dataset()
+    unit_of_work = FakeUploadUnitOfWork(dataset)
+    object_storage = FakeObjectStorage()
+
+    command = UploadDatasetCommand(
+        workspace_id=dataset.workspace_id,
+        project_id=dataset.project_id,
+        dataset_id=dataset.id,
+        chunks=oversized_content_chunks(),
+    )
+
+    with pytest.raises(
+        DatasetUploadVerificationError,
+        match="exceeds the registered byte size",
+    ):
+        await UploadDataset(
+            unit_of_work=unit_of_work,
+            object_storage=object_storage,
+            clock=FixedClock(),
+        ).execute(command)
+
+    # Storage was invoked, but its write never completed.
+    assert object_storage.write_count == 1
+    assert object_storage.received_content == b""
+
+    # No complete object exists, so compensation deletion is unnecessary.
+    assert object_storage.deleted_keys == []
+
+    assert unit_of_work.datasets.updated_datasets == []
+    assert unit_of_work.commit_count == 0
+    assert unit_of_work.rollback_count == 1
