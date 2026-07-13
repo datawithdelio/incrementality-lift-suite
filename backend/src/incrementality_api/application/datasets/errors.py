@@ -8,3 +8,9 @@ class DatasetTooLargeError(DatasetApplicationError):
 
 class DatasetProjectUnavailableError(DatasetApplicationError):
     """Raised when the requested project cannot accept datasets."""
+
+
+class DatasetPersistenceConflictError(
+    DatasetApplicationError,
+):
+    """Raised when dataset metadata conflicts in persistence."""
