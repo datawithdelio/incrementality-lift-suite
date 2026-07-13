@@ -16,6 +16,7 @@ _PERMISSION_MATRIX: dict[
             WorkspacePermission.VIEW_WORKSPACE,
             WorkspacePermission.MANAGE_WORKSPACE,
             WorkspacePermission.MANAGE_MEMBERS,
+            WorkspacePermission.MANAGE_PROJECTS,
             WorkspacePermission.MANAGE_DATASETS,
             WorkspacePermission.RUN_ANALYSES,
             WorkspacePermission.VIEW_REPORTS,
@@ -24,6 +25,7 @@ _PERMISSION_MATRIX: dict[
     WorkspaceRole.ANALYST: frozenset(
         {
             WorkspacePermission.VIEW_WORKSPACE,
+            WorkspacePermission.MANAGE_PROJECTS,
             WorkspacePermission.MANAGE_DATASETS,
             WorkspacePermission.RUN_ANALYSES,
             WorkspacePermission.VIEW_REPORTS,
