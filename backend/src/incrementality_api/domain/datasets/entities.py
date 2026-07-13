@@ -1,8 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Self
 from uuid import UUID, uuid4
 
+from incrementality_api.domain.datasets.errors import (
+    InvalidDatasetTransitionError,
+)
 from incrementality_api.domain.datasets.status import (
     DatasetStatus,
 )
@@ -52,11 +55,21 @@ class Dataset:
             workspace_id=workspace_id,
             project_id=project_id,
             created_by_user_id=created_by_user_id,
-            source_filename=normalize_dataset_filename(source_filename),
-            storage_key=normalize_dataset_storage_key(storage_key),
-            media_type=normalize_dataset_media_type(media_type),
-            byte_size=validate_dataset_byte_size(byte_size),
-            checksum_sha256=normalize_dataset_checksum(checksum_sha256),
+            source_filename=normalize_dataset_filename(
+                source_filename,
+            ),
+            storage_key=normalize_dataset_storage_key(
+                storage_key,
+            ),
+            media_type=normalize_dataset_media_type(
+                media_type,
+            ),
+            byte_size=validate_dataset_byte_size(
+                byte_size,
+            ),
+            checksum_sha256=normalize_dataset_checksum(
+                checksum_sha256,
+            ),
             status=DatasetStatus.PENDING_UPLOAD,
             created_at=datetime.now(UTC),
             uploaded_at=None,
@@ -64,4 +77,23 @@ class Dataset:
             row_count=None,
             column_count=None,
             failure_reason=None,
+        )
+
+    def mark_uploaded(
+        self,
+        *,
+        uploaded_at: datetime,
+    ) -> Self:
+        if self.status is not DatasetStatus.PENDING_UPLOAD:
+            raise InvalidDatasetTransitionError(
+                f"Dataset in status '{self.status.value}' cannot be marked uploaded."
+            )
+
+        if uploaded_at.tzinfo is None or uploaded_at.utcoffset() is None:
+            raise InvalidDatasetTransitionError("Upload timestamp must be timezone-aware.")
+
+        return replace(
+            self,
+            status=DatasetStatus.UPLOADED,
+            uploaded_at=uploaded_at,
         )
