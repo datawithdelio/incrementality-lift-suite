@@ -6,7 +6,10 @@ from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from incrementality_api.core.config import get_settings
+from incrementality_api.infrastructure.database import models as database_models
 from incrementality_api.infrastructure.database.base import Base
+
+del database_models
 
 config = context.config
 
