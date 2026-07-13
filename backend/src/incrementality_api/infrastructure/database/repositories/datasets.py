@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy import update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -110,6 +111,54 @@ class SqlAlchemyDatasetRepository:
             return None
 
         return to_dataset_entity(model)
+
+    async def get_by_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+    ) -> Dataset | None:
+        statement = (
+            select(DatasetModel)
+            .where(
+                DatasetModel.id == dataset_id,
+                DatasetModel.workspace_id == workspace_id,
+                DatasetModel.project_id == project_id,
+            )
+            .with_for_update()
+        )
+
+        model = await self._session.scalar(statement)
+
+        if model is None:
+            return None
+
+        return to_dataset_entity(model)
+
+    async def update(
+        self,
+        dataset: Dataset,
+    ) -> None:
+        statement = (
+            sql_update(DatasetModel)
+            .where(
+                DatasetModel.id == dataset.id,
+                DatasetModel.workspace_id == dataset.workspace_id,
+                DatasetModel.project_id == dataset.project_id,
+            )
+            .values(
+                status=dataset.status.value,
+                uploaded_at=dataset.uploaded_at,
+                validation_completed_at=(dataset.validation_completed_at),
+                row_count=dataset.row_count,
+                column_count=dataset.column_count,
+                failure_reason=dataset.failure_reason,
+            )
+        )
+
+        await self._session.execute(statement)
+        await self._session.flush()
 
 
 class SqlAlchemyDatasetProjectReader:

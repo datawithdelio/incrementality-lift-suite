@@ -16,6 +16,21 @@ class DatasetRepository(Protocol):
     ) -> None:
         """Stage one dataset for persistence."""
 
+    async def get_by_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+    ) -> Dataset | None:
+        """Load one dataset within its complete tenant scope."""
+
+    async def update(
+        self,
+        dataset: Dataset,
+    ) -> None:
+        """Stage updated dataset lifecycle metadata."""
+
 
 class DatasetProjectReader(Protocol):
     async def get_by_id(
@@ -58,25 +73,8 @@ class DatasetUnitOfWork(Protocol):
         """Commit the dataset transaction."""
 
 
-class DatasetUploadRepository(Protocol):
-    async def get_by_scope(
-        self,
-        *,
-        workspace_id: UUID,
-        project_id: UUID,
-        dataset_id: UUID,
-    ) -> Dataset | None:
-        """Load one dataset within its complete tenant scope."""
-
-    async def update(
-        self,
-        dataset: Dataset,
-    ) -> None:
-        """Stage updated dataset lifecycle metadata."""
-
-
 class DatasetUploadUnitOfWork(Protocol):
-    datasets: DatasetUploadRepository
+    datasets: DatasetRepository
 
     async def __aenter__(
         self,
