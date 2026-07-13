@@ -102,3 +102,42 @@ class AuthenticationUnitOfWork(Protocol):
 
     async def rollback(self) -> None:
         """Roll back the authentication transaction."""
+
+
+class SessionTokenHasher(Protocol):
+    def hash_token(self, raw_token: str) -> str:
+        """Create the persistent digest for a raw session token."""
+
+
+class SessionRepository(Protocol):
+    async def get_by_token_hash(
+        self,
+        token_hash: str,
+    ) -> AuthSession | None:
+        """Find a session by its persistent token digest."""
+
+    async def save(self, session: AuthSession) -> None:
+        """Persist changes to an existing session."""
+
+
+class SessionUnitOfWork(Protocol):
+    sessions: SessionRepository
+
+    async def __aenter__(
+        self,
+    ) -> "SessionUnitOfWork":
+        """Begin the session transaction."""
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Roll back failures and close the transaction."""
+
+    async def commit(self) -> None:
+        """Commit the session transaction."""
+
+    async def rollback(self) -> None:
+        """Roll back the session transaction."""
