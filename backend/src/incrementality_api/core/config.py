@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     dataset_max_upload_bytes: int = 1_073_741_824
 
-    s3_endpoint_url: str = "http://localhost:9000"
+    s3_endpoint_url: str = "http://localhost:5001"
     s3_access_key: str = "incrementality"
     s3_secret_key: str = "incrementality-secret"
     s3_bucket: str = "incrementality-artifacts"

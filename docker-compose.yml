@@ -43,6 +43,59 @@ services:
       timeout: 5s
       retries: 10
 
+  moto:
+    image: motoserver/moto:5.2.2
+    ports:
+      - "5001:5000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; socket.create_connection(('127.0.0.1', 5000), 2).close()"
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+  s3-init:
+    image: motoserver/moto:5.2.2
+    depends_on:
+      moto:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: incrementality
+      AWS_SECRET_ACCESS_KEY: incrementality-secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint:
+      - python
+      - -c
+    command:
+      - |
+        import boto3
+
+        bucket = "incrementality-artifacts"
+
+        client = boto3.client(
+            "s3",
+            endpoint_url="http://moto:5000",
+            aws_access_key_id="incrementality",
+            aws_secret_access_key="incrementality-secret",
+            region_name="us-east-1",
+        )
+
+        existing = {
+            item["Name"]
+            for item in client.list_buckets().get("Buckets", [])
+        }
+
+        if bucket not in existing:
+            client.create_bucket(Bucket=bucket)
+
+        print(f"Bucket ready: {bucket}")
+
 volumes:
   incrementality_postgres_data:
   incrementality_redis_data:
