@@ -9,6 +9,7 @@ from incrementality_api.application.datasets.errors import (
 from incrementality_api.application.datasets.ports import (
     DatasetClock,
     DatasetObjectStorage,
+    DatasetObjectWriteResult,
     DatasetUploadUnitOfWork,
 )
 from incrementality_api.domain.datasets.entities import Dataset
@@ -50,38 +51,53 @@ class UploadDataset:
             if dataset is None:
                 raise DatasetUnavailableError("Dataset is unavailable.")
 
-            # Validate the lifecycle transition before writing bytes.
+            # Validate the transition before writing any bytes.
             uploaded_dataset = dataset.mark_uploaded(
                 uploaded_at=self._clock.now(),
             )
 
-            write_result = await self._object_storage.write(
-                storage_key=dataset.storage_key,
-                media_type=dataset.media_type,
-                chunks=command.chunks,
-            )
+            object_written = False
 
-            if write_result.byte_size != dataset.byte_size:
-                await self._object_storage.delete(
+            try:
+                write_result = await self._object_storage.write(
                     storage_key=dataset.storage_key,
+                    media_type=dataset.media_type,
+                    chunks=command.chunks,
                 )
 
-                raise DatasetUploadVerificationError(
-                    "Uploaded dataset byte size does not match the registered metadata."
+                object_written = True
+
+                self._verify_upload(
+                    dataset=dataset,
+                    write_result=write_result,
                 )
 
-            if write_result.checksum_sha256.casefold() != dataset.checksum_sha256:
-                await self._object_storage.delete(
-                    storage_key=dataset.storage_key,
+                await self._unit_of_work.datasets.update(
+                    uploaded_dataset,
                 )
+                await self._unit_of_work.commit()
+            except Exception:
+                if object_written:
+                    await self._object_storage.delete(
+                        storage_key=dataset.storage_key,
+                    )
 
-                raise DatasetUploadVerificationError(
-                    "Uploaded dataset checksum does not match the registered metadata."
-                )
-
-            await self._unit_of_work.datasets.update(
-                uploaded_dataset,
-            )
-            await self._unit_of_work.commit()
+                raise
 
             return uploaded_dataset
+
+    @staticmethod
+    def _verify_upload(
+        *,
+        dataset: Dataset,
+        write_result: DatasetObjectWriteResult,
+    ) -> None:
+        if write_result.byte_size != dataset.byte_size:
+            raise DatasetUploadVerificationError(
+                "Uploaded dataset byte size does not match the registered metadata."
+            )
+
+        if write_result.checksum_sha256.casefold() != dataset.checksum_sha256:
+            raise DatasetUploadVerificationError(
+                "Uploaded dataset checksum does not match the registered metadata."
+            )

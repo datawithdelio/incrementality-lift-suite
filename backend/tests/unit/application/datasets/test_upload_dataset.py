@@ -346,3 +346,96 @@ async def test_repeated_upload_is_rejected_before_storage() -> None:
     assert unit_of_work.datasets.updated_datasets == []
     assert unit_of_work.commit_count == 0
     assert unit_of_work.rollback_count == 1
+
+
+class FailingUpdateRepository(
+    FakeUploadRepository,
+):
+    async def update(
+        self,
+        dataset: Dataset,
+    ) -> None:
+        del dataset
+
+        raise RuntimeError("Dataset update failed.")
+
+
+class FailingUpdateUnitOfWork(
+    FakeUploadUnitOfWork,
+):
+    def __init__(
+        self,
+        dataset: Dataset,
+    ) -> None:
+        super().__init__(dataset)
+
+        self.datasets = FailingUpdateRepository(
+            dataset,
+        )
+
+
+class FailingCommitUnitOfWork(
+    FakeUploadUnitOfWork,
+):
+    async def commit(self) -> None:
+        self.commit_count += 1
+
+        raise RuntimeError("Dataset commit failed.")
+
+
+@pytest.mark.asyncio
+async def test_update_failure_deletes_uploaded_object() -> None:
+    dataset = build_pending_dataset()
+    unit_of_work = FailingUpdateUnitOfWork(
+        dataset,
+    )
+    object_storage = FakeObjectStorage()
+
+    with pytest.raises(
+        RuntimeError,
+        match="Dataset update failed",
+    ):
+        await UploadDataset(
+            unit_of_work=unit_of_work,
+            object_storage=object_storage,
+            clock=FixedClock(),
+        ).execute(
+            build_command(dataset),
+        )
+
+    assert object_storage.write_count == 1
+    assert object_storage.deleted_keys == [
+        dataset.storage_key,
+    ]
+
+    assert unit_of_work.commit_count == 0
+    assert unit_of_work.rollback_count == 1
+
+
+@pytest.mark.asyncio
+async def test_commit_failure_deletes_uploaded_object() -> None:
+    dataset = build_pending_dataset()
+    unit_of_work = FailingCommitUnitOfWork(
+        dataset,
+    )
+    object_storage = FakeObjectStorage()
+
+    with pytest.raises(
+        RuntimeError,
+        match="Dataset commit failed",
+    ):
+        await UploadDataset(
+            unit_of_work=unit_of_work,
+            object_storage=object_storage,
+            clock=FixedClock(),
+        ).execute(
+            build_command(dataset),
+        )
+
+    assert object_storage.write_count == 1
+    assert object_storage.deleted_keys == [
+        dataset.storage_key,
+    ]
+
+    assert unit_of_work.commit_count == 1
+    assert unit_of_work.rollback_count == 1
