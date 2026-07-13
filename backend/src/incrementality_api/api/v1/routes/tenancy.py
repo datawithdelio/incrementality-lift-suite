@@ -61,6 +61,7 @@ async def provision_tenant(
         workspace_slug=request.workspace_slug,
         owner_email=request.owner_email,
         owner_display_name=request.owner_display_name,
+        owner_password=request.owner_password,
     )
 
     try:

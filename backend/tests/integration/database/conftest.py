@@ -34,6 +34,8 @@ async def truncate_tenancy_tables() -> None:
             text(
                 """
                 TRUNCATE TABLE
+                    auth_sessions,
+                    user_credentials,
                     workspace_memberships,
                     workspaces,
                     users,

@@ -10,12 +10,14 @@ from incrementality_api.application.tenancy.errors import (
     TenancyConflictError,
 )
 from incrementality_api.application.tenancy.ports import (
+    CredentialRepository,
     MembershipRepository,
     OrganizationRepository,
     UserRepository,
     WorkspaceRepository,
 )
 from incrementality_api.infrastructure.database.repositories.tenancy import (
+    SqlAlchemyCredentialRepository,
     SqlAlchemyMembershipRepository,
     SqlAlchemyOrganizationRepository,
     SqlAlchemyUserRepository,
@@ -24,10 +26,11 @@ from incrementality_api.infrastructure.database.repositories.tenancy import (
 
 
 class SqlAlchemyTenancyUnitOfWork:
-    """Own one SQLAlchemy session and one database transaction."""
+    """Own one SQLAlchemy session and transaction."""
 
     organizations: OrganizationRepository
     users: UserRepository
+    credentials: CredentialRepository
     workspaces: WorkspaceRepository
     memberships: MembershipRepository
 
@@ -50,6 +53,9 @@ class SqlAlchemyTenancyUnitOfWork:
         self.users = SqlAlchemyUserRepository(
             session=session,
         )
+        self.credentials = SqlAlchemyCredentialRepository(
+            session=session,
+        )
         self.workspaces = SqlAlchemyWorkspaceRepository(
             session=session,
         )
@@ -65,6 +71,8 @@ class SqlAlchemyTenancyUnitOfWork:
         exception: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        del exception, traceback
+
         session = self._require_session()
 
         try:
