@@ -23,6 +23,9 @@ from incrementality_api.infrastructure.database.models.tenancy import (
 from incrementality_api.infrastructure.database.unit_of_work.tenancy import (
     SqlAlchemyTenancyUnitOfWork,
 )
+from incrementality_api.infrastructure.security.passwords import (
+    Argon2PasswordHasher,
+)
 
 
 def build_command() -> ProvisionTenantCommand:
@@ -33,6 +36,7 @@ def build_command() -> ProvisionTenantCommand:
         workspace_slug="marketing-science",
         owner_email="owner@example.com",
         owner_display_name="Tina Rincon",
+        owner_password="Secure-owner-password-123!",
     )
 
 
@@ -55,6 +59,7 @@ async def test_provision_tenant_persists_all_records(
     )
 
     result = await ProvisionTenant(
+        password_hasher=Argon2PasswordHasher(),
         unit_of_work=unit_of_work,
     ).execute(build_command())
 
@@ -105,6 +110,7 @@ async def test_duplicate_organization_rolls_back_entire_transaction(
     )
 
     await ProvisionTenant(
+        password_hasher=Argon2PasswordHasher(),
         unit_of_work=first_unit_of_work,
     ).execute(build_command())
 
@@ -121,6 +127,7 @@ async def test_duplicate_organization_rolls_back_entire_transaction(
 
     with pytest.raises(TenancyConflictError):
         await ProvisionTenant(
+            password_hasher=Argon2PasswordHasher(),
             unit_of_work=second_unit_of_work,
         ).execute(conflicting_command)
 

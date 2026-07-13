@@ -1,11 +1,9 @@
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProvisionTenantRequest(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
     organization_name: str = Field(
         min_length=1,
         max_length=200,
@@ -30,6 +28,26 @@ class ProvisionTenantRequest(BaseModel):
         min_length=1,
         max_length=200,
     )
+    owner_password: str = Field(
+        min_length=12,
+        max_length=1024,
+    )
+
+    @field_validator(
+        "organization_name",
+        "organization_slug",
+        "workspace_name",
+        "workspace_slug",
+        "owner_email",
+        "owner_display_name",
+        mode="before",
+    )
+    @classmethod
+    def strip_non_password_fields(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+
+        return value
 
 
 class ProvisionTenantResponse(BaseModel):

@@ -56,6 +56,7 @@ def build_payload() -> dict[str, str]:
         "workspace_slug": "marketing-science",
         "owner_email": "owner@example.com",
         "owner_display_name": "Tina Rincon",
+        "owner_password": "Secure-owner-password-123!",
     }
 
 

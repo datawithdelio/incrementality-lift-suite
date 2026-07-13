@@ -1,8 +1,14 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from incrementality_api.application.authentication.ports import (
+    PasswordHasher,
+)
 from incrementality_api.application.tenancy.ports import (
     TenancyUnitOfWork,
+)
+from incrementality_api.domain.authentication.entities import (
+    PasswordCredential,
 )
 from incrementality_api.domain.tenancy.entities import (
     Organization,
@@ -21,6 +27,7 @@ class ProvisionTenantCommand:
     workspace_slug: str
     owner_email: str
     owner_display_name: str
+    owner_password: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,10 +39,16 @@ class ProvisionedTenant:
 
 
 class ProvisionTenant:
-    """Create the initial records required for a new tenant."""
+    """Create a tenant and its initial owner atomically."""
 
-    def __init__(self, unit_of_work: TenancyUnitOfWork) -> None:
+    def __init__(
+        self,
+        *,
+        unit_of_work: TenancyUnitOfWork,
+        password_hasher: PasswordHasher,
+    ) -> None:
         self._unit_of_work = unit_of_work
+        self._password_hasher = password_hasher
 
     async def execute(
         self,
@@ -49,6 +62,13 @@ class ProvisionTenant:
         owner = User.create(
             email=command.owner_email,
             display_name=command.owner_display_name,
+        )
+
+        credential = PasswordCredential.create(
+            user_id=owner.id,
+            password_hash=self._password_hasher.hash(
+                command.owner_password,
+            ),
         )
 
         workspace = Workspace.create(
@@ -68,7 +88,12 @@ class ProvisionTenant:
                 organization,
             )
             await self._unit_of_work.users.add(owner)
-            await self._unit_of_work.workspaces.add(workspace)
+            await self._unit_of_work.credentials.add(
+                credential,
+            )
+            await self._unit_of_work.workspaces.add(
+                workspace,
+            )
             await self._unit_of_work.memberships.add(
                 membership,
             )

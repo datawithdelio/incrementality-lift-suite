@@ -4,11 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from incrementality_api.application.tenancy.errors import (
     TenancyConflictError,
 )
+from incrementality_api.domain.authentication.entities import (
+    PasswordCredential,
+)
 from incrementality_api.domain.tenancy.entities import (
     Organization,
     User,
     Workspace,
     WorkspaceMembership,
+)
+from incrementality_api.infrastructure.database.models.authentication import (
+    UserCredentialModel,
 )
 from incrementality_api.infrastructure.database.repositories.tenancy_mappers import (
     to_membership_model,
@@ -26,7 +32,7 @@ async def add_and_flush(
     Add one model and flush it inside the current transaction.
 
     Flushing establishes database dependency order without committing.
-    A later rollback still removes every record created in the transaction.
+    A later rollback still removes every record in the transaction.
     """
 
     session.add(model)
@@ -58,6 +64,25 @@ class SqlAlchemyUserRepository:
         await add_and_flush(
             self._session,
             to_user_model(user),
+        )
+
+
+class SqlAlchemyCredentialRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(
+        self,
+        credential: PasswordCredential,
+    ) -> None:
+        await add_and_flush(
+            self._session,
+            UserCredentialModel(
+                user_id=credential.user_id,
+                password_hash=credential.password_hash,
+                created_at=credential.created_at,
+                updated_at=credential.updated_at,
+            ),
         )
 
 

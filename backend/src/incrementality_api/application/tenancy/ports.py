@@ -1,6 +1,9 @@
 from types import TracebackType
 from typing import Protocol
 
+from incrementality_api.domain.authentication.entities import (
+    PasswordCredential,
+)
 from incrementality_api.domain.tenancy.entities import (
     Organization,
     User,
@@ -11,17 +14,25 @@ from incrementality_api.domain.tenancy.entities import (
 
 class OrganizationRepository(Protocol):
     async def add(self, organization: Organization) -> None:
-        """Persist an organization inside the current transaction."""
+        """Persist an organization inside the transaction."""
 
 
 class UserRepository(Protocol):
     async def add(self, user: User) -> None:
-        """Persist a user inside the current transaction."""
+        """Persist a user inside the transaction."""
+
+
+class CredentialRepository(Protocol):
+    async def add(
+        self,
+        credential: PasswordCredential,
+    ) -> None:
+        """Persist a password credential inside the transaction."""
 
 
 class WorkspaceRepository(Protocol):
     async def add(self, workspace: Workspace) -> None:
-        """Persist a workspace inside the current transaction."""
+        """Persist a workspace inside the transaction."""
 
 
 class MembershipRepository(Protocol):
@@ -29,12 +40,13 @@ class MembershipRepository(Protocol):
         self,
         membership: WorkspaceMembership,
     ) -> None:
-        """Persist a membership inside the current transaction."""
+        """Persist a membership inside the transaction."""
 
 
 class TenancyUnitOfWork(Protocol):
     organizations: OrganizationRepository
     users: UserRepository
+    credentials: CredentialRepository
     workspaces: WorkspaceRepository
     memberships: MembershipRepository
 
@@ -47,7 +59,7 @@ class TenancyUnitOfWork(Protocol):
         exception: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        """Commit or roll back the transaction scope."""
+        """Close or roll back the transaction scope."""
 
     async def commit(self) -> None:
         """Commit the current transaction."""

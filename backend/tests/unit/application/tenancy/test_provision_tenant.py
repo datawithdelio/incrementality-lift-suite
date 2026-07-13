@@ -6,6 +6,9 @@ from incrementality_api.application.tenancy.provision_tenant import (
     ProvisionTenant,
     ProvisionTenantCommand,
 )
+from incrementality_api.domain.authentication.entities import (
+    PasswordCredential,
+)
 from incrementality_api.domain.tenancy.entities import (
     Organization,
     User,
@@ -29,6 +32,17 @@ class FakeUserRepository:
 
     async def add(self, user: User) -> None:
         self.saved.append(user)
+
+
+class FakeCredentialRepository:
+    def __init__(self) -> None:
+        self.saved: list[PasswordCredential] = []
+
+    async def add(
+        self,
+        credential: PasswordCredential,
+    ) -> None:
+        self.saved.append(credential)
 
 
 class FakeWorkspaceRepository:
@@ -58,6 +72,7 @@ class FakeTenancyUnitOfWork:
     def __init__(self, *, workspace_should_fail: bool = False) -> None:
         self.organizations = FakeOrganizationRepository()
         self.users = FakeUserRepository()
+        self.credentials = FakeCredentialRepository()
         self.workspaces = FakeWorkspaceRepository(
             should_fail=workspace_should_fail,
         )
@@ -85,6 +100,25 @@ class FakeTenancyUnitOfWork:
         self.rollback_count += 1
 
 
+class StubPasswordHasher:
+    def hash(self, password: str) -> str:
+        del password
+        return "$argon2id$test-password-hash"
+
+    def verify(
+        self,
+        *,
+        password_hash: str,
+        password: str,
+    ) -> bool:
+        del password_hash, password
+        return False
+
+    def needs_rehash(self, password_hash: str) -> bool:
+        del password_hash
+        return False
+
+
 def build_command() -> ProvisionTenantCommand:
     return ProvisionTenantCommand(
         organization_name="Acme Media",
@@ -93,18 +127,23 @@ def build_command() -> ProvisionTenantCommand:
         workspace_slug="marketing-science",
         owner_email="owner@example.com",
         owner_display_name="Tina Rincon",
+        owner_password="Secure-owner-password-123!",
     )
 
 
 @pytest.mark.asyncio
 async def test_provision_tenant_creates_all_records_atomically() -> None:
     unit_of_work = FakeTenancyUnitOfWork()
-    service = ProvisionTenant(unit_of_work=unit_of_work)
+    service = ProvisionTenant(
+        unit_of_work=unit_of_work,
+        password_hasher=StubPasswordHasher(),
+    )
 
     result = await service.execute(build_command())
 
     assert len(unit_of_work.organizations.saved) == 1
     assert len(unit_of_work.users.saved) == 1
+    assert len(unit_of_work.credentials.saved) == 1
     assert len(unit_of_work.workspaces.saved) == 1
     assert len(unit_of_work.memberships.saved) == 1
 
@@ -132,7 +171,10 @@ async def test_provision_tenant_rolls_back_when_persistence_fails() -> None:
     unit_of_work = FakeTenancyUnitOfWork(
         workspace_should_fail=True,
     )
-    service = ProvisionTenant(unit_of_work=unit_of_work)
+    service = ProvisionTenant(
+        unit_of_work=unit_of_work,
+        password_hasher=StubPasswordHasher(),
+    )
 
     with pytest.raises(
         RuntimeError,
