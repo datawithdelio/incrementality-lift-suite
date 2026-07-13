@@ -14,3 +14,13 @@ class DatasetPersistenceConflictError(
     DatasetApplicationError,
 ):
     """Raised when dataset metadata conflicts in persistence."""
+
+
+class DatasetUnavailableError(DatasetApplicationError):
+    """Raised when a scoped dataset cannot be found."""
+
+
+class DatasetUploadVerificationError(
+    DatasetApplicationError,
+):
+    """Raised when uploaded bytes do not match registered metadata."""
