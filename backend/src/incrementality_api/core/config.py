@@ -19,8 +19,7 @@ class Settings(BaseSettings):
     app_api_v1_prefix: str = "/api/v1"
 
     database_url: str = (
-        "postgresql+asyncpg://incrementality:"
-        "incrementality@localhost:5432/incrementality"
+        "postgresql+asyncpg://incrementality:incrementality@localhost:5432/incrementality"
     )
 
     redis_url: str = "redis://localhost:6379/0"

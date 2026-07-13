@@ -33,7 +33,7 @@ async def check_liveness() -> HealthResponse:
     result = CheckLiveness().execute()
 
     return HealthResponse(
-        status=result.status,
+        status=result.status.value,
         checks=dict(result.checks),
     )
 
@@ -55,6 +55,6 @@ async def check_readiness(
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
     return HealthResponse(
-        status=result.status,
+        status=result.status.value,
         checks=dict(result.checks),
     )
