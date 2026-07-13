@@ -1,0 +1,44 @@
+# Environment
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+
+# IDE and OS
+.DS_Store
+.vscode/
+.idea/
+
+# Local data
+data/
+uploads/
+artifacts/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
