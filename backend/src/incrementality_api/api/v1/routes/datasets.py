@@ -13,10 +13,13 @@ from incrementality_api.api.dependencies.authorization import (
     RequireWorkspacePermission,
 )
 from incrementality_api.api.dependencies.datasets import (
+    get_list_dataset_columns_service,
+    get_read_dataset_service,
     get_register_dataset_service,
     get_upload_dataset_service,
 )
 from incrementality_api.api.v1.schemas.datasets import (
+    DatasetColumnResponse,
     DatasetResponse,
     RegisterDatasetRequest,
 )
@@ -29,6 +32,12 @@ from incrementality_api.application.datasets.errors import (
     DatasetTooLargeError,
     DatasetUnavailableError,
     DatasetUploadVerificationError,
+)
+from incrementality_api.application.datasets.read_dataset import (
+    GetDataset,
+    GetDatasetQuery,
+    ListDatasetColumns,
+    ListDatasetColumnsQuery,
 )
 from incrementality_api.application.datasets.register_dataset import (
     RegisterDataset,
@@ -49,6 +58,10 @@ from incrementality_api.domain.datasets.errors import (
 router = APIRouter(
     prefix=("/workspaces/{workspace_id}/projects/{project_id}/datasets"),
     tags=["datasets"],
+)
+
+_require_view_workspace = RequireWorkspacePermission(
+    WorkspacePermission.VIEW_WORKSPACE,
 )
 
 _require_manage_datasets = RequireWorkspacePermission(
@@ -108,6 +121,80 @@ async def register_project_dataset(
         ) from error
 
     return DatasetResponse.model_validate(dataset)
+
+
+@router.get(
+    "/{dataset_id}",
+    response_model=DatasetResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_project_dataset(
+    workspace_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_require_view_workspace),
+    ],
+    service: Annotated[
+        GetDataset,
+        Depends(get_read_dataset_service),
+    ],
+) -> DatasetResponse:
+    del principal
+
+    try:
+        dataset = await service.execute(
+            GetDatasetQuery(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+            )
+        )
+    except DatasetUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return DatasetResponse.model_validate(dataset)
+
+
+@router.get(
+    "/{dataset_id}/columns",
+    response_model=list[DatasetColumnResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def list_project_dataset_columns(
+    workspace_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_require_view_workspace),
+    ],
+    service: Annotated[
+        ListDatasetColumns,
+        Depends(get_list_dataset_columns_service),
+    ],
+) -> list[DatasetColumnResponse]:
+    del principal
+
+    try:
+        columns = await service.execute(
+            ListDatasetColumnsQuery(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+            )
+        )
+    except DatasetUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return [DatasetColumnResponse.model_validate(column) for column in columns]
 
 
 @router.put(

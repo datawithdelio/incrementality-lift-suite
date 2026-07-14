@@ -114,6 +114,26 @@ class SqlAlchemyDatasetRepository:
 
         return to_dataset_entity(model)
 
+    async def get_by_scope_read(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+    ) -> Dataset | None:
+        statement = select(DatasetModel).where(
+            DatasetModel.id == dataset_id,
+            DatasetModel.workspace_id == workspace_id,
+            DatasetModel.project_id == project_id,
+        )
+
+        model = await self._session.scalar(statement)
+
+        if model is None:
+            return None
+
+        return to_dataset_entity(model)
+
     async def get_by_scope(
         self,
         *,

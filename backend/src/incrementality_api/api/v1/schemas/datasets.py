@@ -3,6 +3,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from incrementality_api.domain.datasets.columns import (
+    DatasetColumnType,
+)
 from incrementality_api.domain.datasets.status import (
     DatasetStatus,
 )
@@ -47,7 +50,21 @@ class DatasetResponse(BaseModel):
     status: DatasetStatus
     created_at: datetime
     uploaded_at: datetime | None
+    validation_started_at: datetime | None
     validation_completed_at: datetime | None
     row_count: int | None
     column_count: int | None
     failure_reason: str | None
+
+
+class DatasetColumnResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+    ordinal_position: int
+    source_name: str
+    normalized_name: str
+    inferred_type: DatasetColumnType
+    nullable: bool
+    missing_count: int

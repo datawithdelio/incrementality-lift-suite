@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -16,6 +16,8 @@ from incrementality_api.api.dependencies.authorization import (
     get_authenticate_workspace_service,
 )
 from incrementality_api.api.dependencies.datasets import (
+    get_list_dataset_columns_service,
+    get_read_dataset_service,
     get_register_dataset_service,
 )
 from incrementality_api.api.dependencies.projects import (
@@ -36,6 +38,10 @@ from incrementality_api.application.authorization.authenticate_workspace import 
 from incrementality_api.application.authorization.authorize_workspace import (
     AuthorizeWorkspaceAction,
 )
+from incrementality_api.application.datasets.read_dataset import (
+    GetDataset,
+    ListDatasetColumns,
+)
 from incrementality_api.application.datasets.register_dataset import (
     RegisterDataset,
 )
@@ -49,6 +55,9 @@ from incrementality_api.domain.authorization.policy import (
     WorkspaceAccessPolicy,
 )
 from incrementality_api.domain.tenancy.roles import WorkspaceRole
+from incrementality_api.infrastructure.database.models.dataset_columns import (
+    DatasetColumnModel,
+)
 from incrementality_api.infrastructure.database.models.datasets import (
     DatasetModel,
 )
@@ -234,6 +243,20 @@ async def test_complete_dataset_api_lifecycle(
             maximum_upload_bytes=10_000_000,
         )
 
+    def override_read_dataset() -> GetDataset:
+        return GetDataset(
+            unit_of_work=SqlAlchemyDatasetUnitOfWork(
+                session_factory=tenancy_session_factory,
+            ),
+        )
+
+    def override_list_dataset_columns() -> ListDatasetColumns:
+        return ListDatasetColumns(
+            unit_of_work=SqlAlchemyDatasetUnitOfWork(
+                session_factory=tenancy_session_factory,
+            ),
+        )
+
     application = create_app()
 
     application.dependency_overrides[get_provision_tenant] = override_provision_tenant
@@ -247,6 +270,10 @@ async def test_complete_dataset_api_lifecycle(
     application.dependency_overrides[get_create_project_service] = override_create_project
 
     application.dependency_overrides[get_register_dataset_service] = override_register_dataset
+    application.dependency_overrides[get_read_dataset_service] = override_read_dataset
+    application.dependency_overrides[get_list_dataset_columns_service] = (
+        override_list_dataset_columns
+    )
 
     transport = ASGITransport(
         app=application,
@@ -330,6 +357,118 @@ async def test_complete_dataset_api_lifecycle(
             f"datasets/{DATASET_CHECKSUM}/"
             "campaign-results.csv"
         )
+
+        async with (
+            tenancy_session_factory() as session,
+            session.begin(),
+        ):
+            session.add_all(
+                [
+                    DatasetColumnModel(
+                        dataset_id=dataset_id,
+                        ordinal_position=2,
+                        source_name="Revenue",
+                        normalized_name="revenue",
+                        inferred_type="float",
+                        nullable=True,
+                        missing_count=2,
+                    ),
+                    DatasetColumnModel(
+                        dataset_id=dataset_id,
+                        ordinal_position=1,
+                        source_name="Market",
+                        normalized_name="market",
+                        inferred_type="string",
+                        nullable=False,
+                        missing_count=0,
+                    ),
+                ]
+            )
+
+        read_response = await client.get(
+            (
+                f"/api/v1/workspaces/{primary_workspace_id}"
+                f"/projects/{primary_project_id}"
+                f"/datasets/{dataset_id}"
+            ),
+            headers={
+                "Authorization": f"Bearer {primary_token}",
+            },
+        )
+
+        assert read_response.status_code == 200
+
+        read_payload = read_response.json()
+
+        assert read_payload["id"] == str(dataset_id)
+        assert read_payload["status"] == "pending_upload"
+        assert read_payload["source_filename"] == ("campaign-results.csv")
+        assert read_payload["validation_started_at"] is None
+        assert read_payload["validation_completed_at"] is None
+
+        columns_response = await client.get(
+            (
+                f"/api/v1/workspaces/{primary_workspace_id}"
+                f"/projects/{primary_project_id}"
+                f"/datasets/{dataset_id}/columns"
+            ),
+            headers={
+                "Authorization": f"Bearer {primary_token}",
+            },
+        )
+
+        assert columns_response.status_code == 200
+        assert columns_response.json() == [
+            {
+                "ordinal_position": 1,
+                "source_name": "Market",
+                "normalized_name": "market",
+                "inferred_type": "string",
+                "nullable": False,
+                "missing_count": 0,
+            },
+            {
+                "ordinal_position": 2,
+                "source_name": "Revenue",
+                "normalized_name": "revenue",
+                "inferred_type": "float",
+                "nullable": True,
+                "missing_count": 2,
+            },
+        ]
+
+        unauthenticated_response = await client.get(
+            f"/api/v1/workspaces/{primary_workspace_id}"
+            f"/projects/{primary_project_id}"
+            f"/datasets/{dataset_id}"
+        )
+
+        assert unauthenticated_response.status_code == 401
+
+        forbidden_read_response = await client.get(
+            (
+                f"/api/v1/workspaces/{primary_workspace_id}"
+                f"/projects/{primary_project_id}"
+                f"/datasets/{dataset_id}"
+            ),
+            headers={
+                "Authorization": f"Bearer {secondary_token}",
+            },
+        )
+
+        assert forbidden_read_response.status_code == 403
+
+        missing_scope_response = await client.get(
+            (f"/api/v1/workspaces/{primary_workspace_id}/projects/{uuid4()}/datasets/{dataset_id}"),
+            headers={
+                "Authorization": f"Bearer {primary_token}",
+            },
+        )
+
+        assert missing_scope_response.status_code == 404
+        assert missing_scope_response.json() == {
+            "detail": "Dataset is unavailable.",
+        }
 
         duplicate_response = await client.post(
             (f"/api/v1/workspaces/{primary_workspace_id}/projects/{primary_project_id}/datasets"),

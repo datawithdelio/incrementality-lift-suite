@@ -29,7 +29,16 @@ class DatasetRepository(Protocol):
         project_id: UUID,
         dataset_id: UUID,
     ) -> Dataset | None:
-        """Load one dataset within its complete tenant scope."""
+        """Load and lock one dataset within tenant scope."""
+
+    async def get_by_scope_read(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+    ) -> Dataset | None:
+        """Load one dataset without acquiring a write lock."""
 
     async def update(
         self,
@@ -102,6 +111,24 @@ class DatasetUnitOfWork(Protocol):
 
     async def commit(self) -> None:
         """Commit the dataset transaction."""
+
+
+class DatasetReadUnitOfWork(Protocol):
+    datasets: DatasetRepository
+    columns: DatasetColumnRepository
+
+    async def __aenter__(
+        self,
+    ) -> "DatasetReadUnitOfWork":
+        """Open one read-scoped database session."""
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Close the read-scoped database session."""
 
 
 class DatasetUploadUnitOfWork(Protocol):

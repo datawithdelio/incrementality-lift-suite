@@ -1,5 +1,9 @@
 from datetime import UTC, datetime
 
+from incrementality_api.application.datasets.read_dataset import (
+    GetDataset,
+    ListDatasetColumns,
+)
 from incrementality_api.application.datasets.register_dataset import (
     RegisterDataset,
 )
@@ -42,6 +46,26 @@ def get_register_dataset_service() -> RegisterDataset:
         ),
         storage_key_builder=DatasetObjectKeyBuilder(),
         maximum_upload_bytes=(settings.dataset_max_upload_bytes),
+    )
+
+
+def get_read_dataset_service() -> GetDataset:
+    """Construct the production dataset-read use case."""
+
+    return GetDataset(
+        unit_of_work=SqlAlchemyDatasetUnitOfWork(
+            session_factory=get_session_factory(),
+        ),
+    )
+
+
+def get_list_dataset_columns_service() -> ListDatasetColumns:
+    """Construct the production column-list use case."""
+
+    return ListDatasetColumns(
+        unit_of_work=SqlAlchemyDatasetUnitOfWork(
+            session_factory=get_session_factory(),
+        ),
     )
 
 
