@@ -1,5 +1,8 @@
 from fastapi import APIRouter
 
+from incrementality_api.api.v1.routes.analysis_runs import (
+    router as analysis_runs_router,
+)
 from incrementality_api.api.v1.routes.authentication import (
     router as authentication_router,
 )
@@ -22,3 +25,4 @@ api_router.include_router(tenancy_router)
 api_router.include_router(authentication_router)
 api_router.include_router(projects_router)
 api_router.include_router(datasets_router)
+api_router.include_router(analysis_runs_router)
