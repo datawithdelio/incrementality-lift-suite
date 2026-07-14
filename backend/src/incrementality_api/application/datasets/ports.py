@@ -148,3 +148,18 @@ class DatasetValidationUnitOfWork(Protocol):
 
     async def commit(self) -> None:
         """Commit updated validation lifecycle metadata."""
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetValidationResult:
+    row_count: int
+    column_count: int
+
+
+class DatasetContentValidator(Protocol):
+    async def validate(
+        self,
+        *,
+        chunks: AsyncIterator[bytes],
+    ) -> DatasetValidationResult:
+        """Validate dataset content and return structural metadata."""

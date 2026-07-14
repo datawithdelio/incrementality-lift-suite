@@ -24,3 +24,9 @@ class DatasetUploadVerificationError(
     DatasetApplicationError,
 ):
     """Raised when uploaded bytes do not match registered metadata."""
+
+
+class DatasetContentValidationError(
+    DatasetApplicationError,
+):
+    """Raised when uploaded dataset content is structurally invalid."""
