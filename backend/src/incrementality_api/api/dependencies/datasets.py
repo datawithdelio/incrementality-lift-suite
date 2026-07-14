@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from incrementality_api.application.datasets.register_dataset import (
     RegisterDataset,
 )
@@ -14,6 +16,19 @@ from incrementality_api.infrastructure.database.unit_of_work.datasets import (
 from incrementality_api.infrastructure.storage.dataset_keys import (
     DatasetObjectKeyBuilder,
 )
+from incrementality_api.infrastructure.storage.s3_clients import (
+    create_s3_compatible_client,
+)
+from incrementality_api.infrastructure.storage.s3_dataset_objects import (
+    S3DatasetObjectStorage,
+)
+
+
+class SystemDatasetClock:
+    """Provide timezone-aware UTC timestamps."""
+
+    def now(self) -> datetime:
+        return datetime.now(UTC)
 
 
 def get_register_dataset_service() -> RegisterDataset:
@@ -33,4 +48,25 @@ def get_register_dataset_service() -> RegisterDataset:
 def get_upload_dataset_service() -> UploadDataset:
     """Construct the production dataset-upload use case."""
 
-    raise RuntimeError("Dataset upload service is not configured.")
+    settings = get_settings()
+
+    client = create_s3_compatible_client(
+        endpoint_url=settings.s3_endpoint_url,
+        access_key=settings.s3_access_key,
+        secret_key=settings.s3_secret_key,
+        region=settings.s3_region,
+    )
+
+    object_storage = S3DatasetObjectStorage(
+        client=client,
+        bucket_name=settings.s3_bucket,
+        spool_max_memory_bytes=(settings.dataset_upload_spool_max_memory_bytes),
+    )
+
+    return UploadDataset(
+        unit_of_work=SqlAlchemyDatasetUnitOfWork(
+            session_factory=get_session_factory(),
+        ),
+        object_storage=object_storage,
+        clock=SystemDatasetClock(),
+    )
