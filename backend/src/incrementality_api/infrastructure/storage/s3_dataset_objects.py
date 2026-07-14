@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from hashlib import sha256
 from tempfile import SpooledTemporaryFile
 from typing import BinaryIO, Protocol, cast
@@ -7,6 +7,19 @@ from typing import BinaryIO, Protocol, cast
 from incrementality_api.application.datasets.ports import (
     DatasetObjectWriteResult,
 )
+
+
+class S3StreamingBody(Protocol):
+    """Blocking response body returned by an S3 client."""
+
+    def read(
+        self,
+        amount: int | None = None,
+    ) -> bytes:
+        """Read up to the requested number of bytes."""
+
+    def close(self) -> None:
+        """Close the underlying network response."""
 
 
 class S3CompatibleClient(Protocol):
@@ -22,6 +35,14 @@ class S3CompatibleClient(Protocol):
     ) -> object:
         """Store an object."""
 
+    def get_object(
+        self,
+        *,
+        Bucket: str,
+        Key: str,
+    ) -> Mapping[str, object]:
+        """Retrieve an object and its streaming response body."""
+
     def delete_object(
         self,
         *,
@@ -32,7 +53,7 @@ class S3CompatibleClient(Protocol):
 
 
 class S3DatasetObjectStorage:
-    """Stream dataset objects into S3-compatible storage."""
+    """Stream dataset objects to and from S3-compatible storage."""
 
     def __init__(
         self,
@@ -87,6 +108,42 @@ class S3DatasetObjectStorage:
             byte_size=byte_size,
             checksum_sha256=checksum.hexdigest(),
         )
+
+    async def read(
+        self,
+        *,
+        storage_key: str,
+        chunk_size: int = 1024 * 1024,
+    ) -> AsyncIterator[bytes]:
+        if chunk_size <= 0:
+            raise ValueError("Read chunk size must be positive.")
+
+        response = await asyncio.to_thread(
+            self._client.get_object,
+            Bucket=self._bucket_name,
+            Key=storage_key,
+        )
+
+        body = cast(
+            S3StreamingBody,
+            response["Body"],
+        )
+
+        try:
+            while True:
+                chunk = await asyncio.to_thread(
+                    body.read,
+                    chunk_size,
+                )
+
+                if not chunk:
+                    break
+
+                yield chunk
+        finally:
+            await asyncio.to_thread(
+                body.close,
+            )
 
     async def delete(
         self,

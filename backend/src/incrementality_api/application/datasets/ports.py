@@ -109,6 +109,14 @@ class DatasetObjectStorage(Protocol):
     ) -> DatasetObjectWriteResult:
         """Stream an object and return server-computed metadata."""
 
+    def read(
+        self,
+        *,
+        storage_key: str,
+        chunk_size: int = 1024 * 1024,
+    ) -> AsyncIterator[bytes]:
+        """Read an object through bounded asynchronous chunks."""
+
     async def delete(
         self,
         *,
