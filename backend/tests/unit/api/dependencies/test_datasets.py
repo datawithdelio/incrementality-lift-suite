@@ -11,9 +11,14 @@ from sqlalchemy.ext.asyncio import (
 from incrementality_api.api.dependencies import (
     datasets as dataset_dependencies,
 )
+from incrementality_api.application.datasets.manage_semantic_mapping import (
+    CreateDatasetSemanticMapping,
+    GetDatasetSemanticMapping,
+)
 from incrementality_api.application.datasets.ports import (
     DatasetClock,
     DatasetObjectStorage,
+    DatasetSemanticMappingUnitOfWork,
     DatasetUploadUnitOfWork,
 )
 from incrementality_api.application.datasets.upload_dataset import (
@@ -183,3 +188,134 @@ def test_system_dataset_clock_returns_aware_utc_time() -> None:
     assert current_time.tzinfo is not None
     assert current_time.utcoffset() is not None
     assert current_time.utcoffset().total_seconds() == 0
+
+
+def test_constructs_production_create_semantic_mapping_service(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    session_factory = cast(
+        async_sessionmaker[AsyncSession],
+        object(),
+    )
+    unit_of_work = cast(
+        DatasetSemanticMappingUnitOfWork,
+        object(),
+    )
+    clock = cast(
+        DatasetClock,
+        object(),
+    )
+    service = cast(
+        CreateDatasetSemanticMapping,
+        object(),
+    )
+
+    monkeypatch.setattr(
+        dataset_dependencies,
+        "get_session_factory",
+        lambda: session_factory,
+    )
+
+    def fake_unit_of_work(
+        *,
+        session_factory: async_sessionmaker[AsyncSession],
+    ) -> DatasetSemanticMappingUnitOfWork:
+        captured["session_factory"] = session_factory
+        return unit_of_work
+
+    monkeypatch.setattr(
+        dataset_dependencies,
+        "SqlAlchemyDatasetUnitOfWork",
+        fake_unit_of_work,
+    )
+
+    class FakeSystemClock:
+        def __new__(cls) -> DatasetClock:
+            return clock
+
+    monkeypatch.setattr(
+        dataset_dependencies,
+        "SystemDatasetClock",
+        FakeSystemClock,
+    )
+
+    def fake_create_service(
+        *,
+        unit_of_work: DatasetSemanticMappingUnitOfWork,
+        clock: DatasetClock,
+    ) -> CreateDatasetSemanticMapping:
+        captured["unit_of_work"] = unit_of_work
+        captured["clock"] = clock
+        return service
+
+    monkeypatch.setattr(
+        dataset_dependencies,
+        "CreateDatasetSemanticMapping",
+        fake_create_service,
+    )
+
+    result = dataset_dependencies.get_create_dataset_semantic_mapping_service()
+
+    assert result is service
+    assert captured["session_factory"] is session_factory
+    assert captured["unit_of_work"] is unit_of_work
+    assert captured["clock"] is clock
+
+
+def test_constructs_production_read_semantic_mapping_service(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    session_factory = cast(
+        async_sessionmaker[AsyncSession],
+        object(),
+    )
+    unit_of_work = cast(
+        DatasetSemanticMappingUnitOfWork,
+        object(),
+    )
+    service = cast(
+        GetDatasetSemanticMapping,
+        object(),
+    )
+
+    monkeypatch.setattr(
+        dataset_dependencies,
+        "get_session_factory",
+        lambda: session_factory,
+    )
+
+    def fake_unit_of_work(
+        *,
+        session_factory: async_sessionmaker[AsyncSession],
+    ) -> DatasetSemanticMappingUnitOfWork:
+        captured["session_factory"] = session_factory
+        return unit_of_work
+
+    monkeypatch.setattr(
+        dataset_dependencies,
+        "SqlAlchemyDatasetUnitOfWork",
+        fake_unit_of_work,
+    )
+
+    def fake_read_service(
+        *,
+        unit_of_work: DatasetSemanticMappingUnitOfWork,
+    ) -> GetDatasetSemanticMapping:
+        captured["unit_of_work"] = unit_of_work
+        return service
+
+    monkeypatch.setattr(
+        dataset_dependencies,
+        "GetDatasetSemanticMapping",
+        fake_read_service,
+    )
+
+    result = dataset_dependencies.get_read_dataset_semantic_mapping_service()
+
+    assert result is service
+    assert captured["session_factory"] is session_factory
+    assert captured["unit_of_work"] is unit_of_work

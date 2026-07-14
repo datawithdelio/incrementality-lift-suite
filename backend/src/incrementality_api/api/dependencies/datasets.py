@@ -1,5 +1,9 @@
 from datetime import UTC, datetime
 
+from incrementality_api.application.datasets.manage_semantic_mapping import (
+    CreateDatasetSemanticMapping,
+    GetDatasetSemanticMapping,
+)
 from incrementality_api.application.datasets.read_dataset import (
     GetDataset,
     ListDatasetColumns,
@@ -93,4 +97,25 @@ def get_upload_dataset_service() -> UploadDataset:
         ),
         object_storage=object_storage,
         clock=SystemDatasetClock(),
+    )
+
+
+def get_create_dataset_semantic_mapping_service() -> CreateDatasetSemanticMapping:
+    """Construct semantic-mapping creation orchestration."""
+
+    return CreateDatasetSemanticMapping(
+        unit_of_work=SqlAlchemyDatasetUnitOfWork(
+            session_factory=get_session_factory(),
+        ),
+        clock=SystemDatasetClock(),
+    )
+
+
+def get_read_dataset_semantic_mapping_service() -> GetDatasetSemanticMapping:
+    """Construct semantic-mapping read orchestration."""
+
+    return GetDatasetSemanticMapping(
+        unit_of_work=SqlAlchemyDatasetUnitOfWork(
+            session_factory=get_session_factory(),
+        ),
     )

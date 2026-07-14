@@ -68,3 +68,61 @@ class DatasetColumnResponse(BaseModel):
     inferred_type: DatasetColumnType
     nullable: bool
     missing_count: int
+
+
+class CreateDatasetSemanticMappingRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+
+    time_column: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+    unit_column: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+    treatment_column: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+    outcome_column: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+    spend_column: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+    )
+    covariate_columns: tuple[str, ...] = ()
+    treatment_value: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+    control_value: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+
+
+class DatasetSemanticMappingResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+    id: UUID
+    dataset_id: UUID
+    created_by_user_id: UUID
+    version: int
+    time_column: str
+    unit_column: str
+    treatment_column: str
+    outcome_column: str
+    spend_column: str | None
+    covariate_columns: tuple[str, ...]
+    treatment_value: str
+    control_value: str
+    created_at: datetime
+    updated_at: datetime

@@ -13,14 +13,18 @@ from incrementality_api.api.dependencies.authorization import (
     RequireWorkspacePermission,
 )
 from incrementality_api.api.dependencies.datasets import (
+    get_create_dataset_semantic_mapping_service,
     get_list_dataset_columns_service,
+    get_read_dataset_semantic_mapping_service,
     get_read_dataset_service,
     get_register_dataset_service,
     get_upload_dataset_service,
 )
 from incrementality_api.api.v1.schemas.datasets import (
+    CreateDatasetSemanticMappingRequest,
     DatasetColumnResponse,
     DatasetResponse,
+    DatasetSemanticMappingResponse,
     RegisterDatasetRequest,
 )
 from incrementality_api.application.authorization.authenticate_workspace import (
@@ -29,9 +33,16 @@ from incrementality_api.application.authorization.authenticate_workspace import 
 from incrementality_api.application.datasets.errors import (
     DatasetPersistenceConflictError,
     DatasetProjectUnavailableError,
+    DatasetSemanticMappingUnavailableError,
     DatasetTooLargeError,
     DatasetUnavailableError,
     DatasetUploadVerificationError,
+)
+from incrementality_api.application.datasets.manage_semantic_mapping import (
+    CreateDatasetSemanticMapping,
+    CreateDatasetSemanticMappingCommand,
+    GetDatasetSemanticMapping,
+    GetDatasetSemanticMappingQuery,
 )
 from incrementality_api.application.datasets.read_dataset import (
     GetDataset,
@@ -52,6 +63,7 @@ from incrementality_api.domain.authorization.permissions import (
 )
 from incrementality_api.domain.datasets.errors import (
     InvalidDatasetError,
+    InvalidDatasetSemanticMappingError,
     InvalidDatasetTransitionError,
 )
 
@@ -244,3 +256,134 @@ async def upload_project_dataset_content(
         ) from error
 
     return DatasetResponse.model_validate(dataset)
+
+
+@router.post(
+    "/{dataset_id}/semantic-mappings",
+    response_model=DatasetSemanticMappingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_project_dataset_semantic_mapping(
+    workspace_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    request: CreateDatasetSemanticMappingRequest,
+    principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_require_manage_datasets),
+    ],
+    service: Annotated[
+        CreateDatasetSemanticMapping,
+        Depends(get_create_dataset_semantic_mapping_service),
+    ],
+) -> DatasetSemanticMappingResponse:
+    try:
+        mapping = await service.execute(
+            CreateDatasetSemanticMappingCommand(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+                created_by_user_id=principal.user_id,
+                time_column=request.time_column,
+                unit_column=request.unit_column,
+                treatment_column=(request.treatment_column),
+                outcome_column=request.outcome_column,
+                spend_column=request.spend_column,
+                covariate_columns=(request.covariate_columns),
+                treatment_value=(request.treatment_value),
+                control_value=request.control_value,
+            )
+        )
+    except DatasetUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except DatasetPersistenceConflictError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+    except InvalidDatasetSemanticMappingError as error:
+        raise HTTPException(
+            status_code=(status.HTTP_422_UNPROCESSABLE_CONTENT),
+            detail=str(error),
+        ) from error
+
+    return DatasetSemanticMappingResponse.model_validate(mapping)
+
+
+@router.get(
+    "/{dataset_id}/semantic-mappings/latest",
+    response_model=DatasetSemanticMappingResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_latest_project_dataset_semantic_mapping(
+    workspace_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_require_view_workspace),
+    ],
+    service: Annotated[
+        GetDatasetSemanticMapping,
+        Depends(get_read_dataset_semantic_mapping_service),
+    ],
+) -> DatasetSemanticMappingResponse:
+    del principal
+
+    try:
+        mapping = await service.execute(
+            GetDatasetSemanticMappingQuery(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+            )
+        )
+    except DatasetSemanticMappingUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return DatasetSemanticMappingResponse.model_validate(mapping)
+
+
+@router.get(
+    "/{dataset_id}/semantic-mappings/{version}",
+    response_model=DatasetSemanticMappingResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_project_dataset_semantic_mapping_version(
+    workspace_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    version: int,
+    principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_require_view_workspace),
+    ],
+    service: Annotated[
+        GetDatasetSemanticMapping,
+        Depends(get_read_dataset_semantic_mapping_service),
+    ],
+) -> DatasetSemanticMappingResponse:
+    del principal
+
+    try:
+        mapping = await service.execute(
+            GetDatasetSemanticMappingQuery(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+                version=version,
+            )
+        )
+    except DatasetSemanticMappingUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return DatasetSemanticMappingResponse.model_validate(mapping)
