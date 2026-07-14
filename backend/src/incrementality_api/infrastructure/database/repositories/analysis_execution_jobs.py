@@ -105,6 +105,22 @@ class SqlAlchemyAnalysisExecutionJobRepository:
 
         return to_analysis_execution_job_entity(model)
 
+    async def get_by_analysis_run_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        analysis_run_id: UUID,
+    ) -> AnalysisExecutionJob | None:
+        model = await self._session.scalar(
+            select(AnalysisExecutionJobModel).where(
+                AnalysisExecutionJobModel.workspace_id == workspace_id,
+                AnalysisExecutionJobModel.project_id == project_id,
+                AnalysisExecutionJobModel.analysis_run_id == analysis_run_id,
+            )
+        )
+        return None if model is None else to_analysis_execution_job_entity(model)
+
     async def get_next_available_for_update(
         self,
         *,

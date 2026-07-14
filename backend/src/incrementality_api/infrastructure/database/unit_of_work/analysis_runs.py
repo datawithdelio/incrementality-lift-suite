@@ -11,6 +11,7 @@ from incrementality_api.application.analysis_runs.errors import (
 )
 from incrementality_api.application.analysis_runs.ports import (
     AnalysisExecutionJobRepository,
+    AnalysisResultRepository,
     AnalysisRunRepository,
 )
 from incrementality_api.application.datasets.ports import (
@@ -19,6 +20,9 @@ from incrementality_api.application.datasets.ports import (
 )
 from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
     SqlAlchemyAnalysisExecutionJobRepository,
+)
+from incrementality_api.infrastructure.database.repositories.analysis_results import (
+    SqlAlchemyAnalysisResultRepository,
 )
 from incrementality_api.infrastructure.database.repositories.analysis_runs import (
     SqlAlchemyAnalysisRunRepository,
@@ -38,6 +42,7 @@ class SqlAlchemyAnalysisRunUnitOfWork:
     semantic_mappings: DatasetSemanticMappingRepository
     analysis_runs: AnalysisRunRepository
     execution_jobs: AnalysisExecutionJobRepository
+    analysis_results: AnalysisResultRepository
 
     def __init__(
         self,
@@ -67,6 +72,7 @@ class SqlAlchemyAnalysisRunUnitOfWork:
         self.execution_jobs = SqlAlchemyAnalysisExecutionJobRepository(
             session=session,
         )
+        self.analysis_results = SqlAlchemyAnalysisResultRepository(session=session)
 
         return self
 

@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Protocol
 
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
@@ -27,6 +28,7 @@ class DifferenceInDifferencesObservation:
     outcome: float
     treated: bool
     post_period: bool
+    observed_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from incrementality_api.application.analysis_results.get_analysis_result import GetAnalysisResult
 from incrementality_api.application.analysis_runs.manage_analysis_runs import (
     GetAnalysisRun,
     QueueAnalysisRun,
@@ -37,4 +38,13 @@ def get_analysis_run_service() -> GetAnalysisRun:
         unit_of_work=SqlAlchemyAnalysisRunUnitOfWork(
             session_factory=get_session_factory(),
         ),
+    )
+
+
+def get_analysis_result_service() -> GetAnalysisResult:
+    """Construct the tenant-scoped result read use case."""
+    return GetAnalysisResult(
+        unit_of_work=SqlAlchemyAnalysisRunUnitOfWork(
+            session_factory=get_session_factory(),
+        )
     )

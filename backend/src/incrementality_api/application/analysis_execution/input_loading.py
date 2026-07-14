@@ -213,28 +213,31 @@ class DifferenceInDifferencesInputBuilder:
                 ) from error
             if not math.isfinite(outcome):
                 raise PermanentEstimationError(f"CSV row {row_number} has a non-finite outcome.")
-            post_period = self._is_post_period(
-                values[mapping.time_column],
-                configuration.intervention_time,
-            )
+            observed_at = self._parse_time(values[mapping.time_column])
+            post_period = self._is_post_period(observed_at, configuration.intervention_time)
             observations.append(
                 DifferenceInDifferencesObservation(
                     unit=values[mapping.unit_column],
                     outcome=outcome,
                     treated=treated,
                     post_period=post_period,
+                    observed_at=observed_at,
                 )
             )
         return DifferenceInDifferencesInput(observations=tuple(observations))
 
     @staticmethod
-    def _is_post_period(value: str, intervention_time: datetime) -> bool:
+    def _parse_time(value: str) -> datetime:
         try:
             observed_at = datetime.fromisoformat(value)
         except ValueError as error:
             raise PermanentEstimationError("Time values must be ISO-8601.") from error
+        return observed_at
+
+    @staticmethod
+    def _is_post_period(observed_at: datetime, intervention_time: datetime) -> bool:
         if observed_at.tzinfo is None or observed_at.utcoffset() is None:
-            if "T" in value:
+            if observed_at.time() != datetime.min.time():
                 raise PermanentEstimationError("Datetime values must be timezone-aware.")
             return observed_at.date() >= intervention_time.date()
         return observed_at >= intervention_time

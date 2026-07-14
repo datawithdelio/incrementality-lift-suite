@@ -7,6 +7,7 @@ from incrementality_api.application.datasets.ports import (
     DatasetRepository,
     DatasetSemanticMappingRepository,
 )
+from incrementality_api.domain.analysis_results.entities import AnalysisResult
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -44,12 +45,40 @@ class AnalysisExecutionJobRepository(Protocol):
         job: AnalysisExecutionJob,
     ) -> None: ...
 
+    async def get_by_analysis_run_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        analysis_run_id: UUID,
+    ) -> AnalysisExecutionJob | None: ...
+
+
+class AnalysisResultRepository(Protocol):
+    async def get_by_analysis_run_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        analysis_run_id: UUID,
+    ) -> AnalysisResult | None: ...
+
 
 class AnalysisRunUnitOfWork(Protocol):
-    datasets: DatasetRepository
-    semantic_mappings: DatasetSemanticMappingRepository
-    analysis_runs: AnalysisRunRepository
-    execution_jobs: AnalysisExecutionJobRepository
+    @property
+    def datasets(self) -> DatasetRepository: ...
+
+    @property
+    def semantic_mappings(self) -> DatasetSemanticMappingRepository: ...
+
+    @property
+    def analysis_runs(self) -> AnalysisRunRepository: ...
+
+    @property
+    def execution_jobs(self) -> AnalysisExecutionJobRepository: ...
+
+    @property
+    def analysis_results(self) -> AnalysisResultRepository: ...
 
     async def __aenter__(
         self,

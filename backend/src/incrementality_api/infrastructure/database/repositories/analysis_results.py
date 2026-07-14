@@ -95,3 +95,19 @@ class SqlAlchemyAnalysisResultRepository:
             )
         )
         return None if model is None else to_analysis_result(model)
+
+    async def get_by_analysis_run_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        analysis_run_id: UUID,
+    ) -> AnalysisResult | None:
+        model = await self._session.scalar(
+            select(AnalysisResultModel).where(
+                AnalysisResultModel.workspace_id == workspace_id,
+                AnalysisResultModel.project_id == project_id,
+                AnalysisResultModel.analysis_run_id == analysis_run_id,
+            )
+        )
+        return None if model is None else to_analysis_result(model)
