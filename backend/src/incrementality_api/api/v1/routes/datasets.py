@@ -5,6 +5,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status,
 )
 
@@ -13,6 +14,7 @@ from incrementality_api.api.dependencies.authorization import (
 )
 from incrementality_api.api.dependencies.datasets import (
     get_register_dataset_service,
+    get_upload_dataset_service,
 )
 from incrementality_api.api.v1.schemas.datasets import (
     DatasetResponse,
@@ -25,16 +27,23 @@ from incrementality_api.application.datasets.errors import (
     DatasetPersistenceConflictError,
     DatasetProjectUnavailableError,
     DatasetTooLargeError,
+    DatasetUnavailableError,
+    DatasetUploadVerificationError,
 )
 from incrementality_api.application.datasets.register_dataset import (
     RegisterDataset,
     RegisterDatasetCommand,
+)
+from incrementality_api.application.datasets.upload_dataset import (
+    UploadDataset,
+    UploadDatasetCommand,
 )
 from incrementality_api.domain.authorization.permissions import (
     WorkspacePermission,
 )
 from incrementality_api.domain.datasets.errors import (
     InvalidDatasetError,
+    InvalidDatasetTransitionError,
 )
 
 router = APIRouter(
@@ -95,6 +104,55 @@ async def register_project_dataset(
     except InvalidDatasetError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+
+    return DatasetResponse.model_validate(dataset)
+
+
+@router.put(
+    "/{dataset_id}/content",
+    response_model=DatasetResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def upload_project_dataset_content(
+    workspace_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    request: Request,
+    principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_require_manage_datasets),
+    ],
+    service: Annotated[
+        UploadDataset,
+        Depends(get_upload_dataset_service),
+    ],
+) -> DatasetResponse:
+    del principal
+
+    try:
+        dataset = await service.execute(
+            UploadDatasetCommand(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+                chunks=request.stream(),
+            )
+        )
+    except DatasetUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except DatasetUploadVerificationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+    except InvalidDatasetTransitionError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(error),
         ) from error
 

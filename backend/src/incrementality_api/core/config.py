@@ -25,8 +25,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     dataset_max_upload_bytes: int = 1_073_741_824
+    dataset_upload_spool_max_memory_bytes: int = 8_388_608
 
-    s3_endpoint_url: str = "http://localhost:9000"
+    s3_endpoint_url: str = "http://localhost:5001"
     s3_access_key: str = "incrementality"
     s3_secret_key: str = "incrementality-secret"
     s3_bucket: str = "incrementality-artifacts"

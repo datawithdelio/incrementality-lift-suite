@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from datetime import datetime
 from types import TracebackType
 from typing import Protocol
 from uuid import UUID
@@ -12,6 +15,21 @@ class DatasetRepository(Protocol):
         dataset: Dataset,
     ) -> None:
         """Stage one dataset for persistence."""
+
+    async def get_by_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+    ) -> Dataset | None:
+        """Load one dataset within its complete tenant scope."""
+
+    async def update(
+        self,
+        dataset: Dataset,
+    ) -> None:
+        """Stage updated dataset lifecycle metadata."""
 
 
 class DatasetProjectReader(Protocol):
@@ -53,3 +71,52 @@ class DatasetUnitOfWork(Protocol):
 
     async def commit(self) -> None:
         """Commit the dataset transaction."""
+
+
+class DatasetUploadUnitOfWork(Protocol):
+    datasets: DatasetRepository
+
+    async def __aenter__(
+        self,
+    ) -> "DatasetUploadUnitOfWork":
+        """Open the upload metadata transaction."""
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Roll back failures and close the transaction."""
+
+    async def commit(self) -> None:
+        """Commit updated dataset metadata."""
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetObjectWriteResult:
+    byte_size: int
+    checksum_sha256: str
+
+
+class DatasetObjectStorage(Protocol):
+    async def write(
+        self,
+        *,
+        storage_key: str,
+        media_type: str,
+        chunks: AsyncIterator[bytes],
+    ) -> DatasetObjectWriteResult:
+        """Stream an object and return server-computed metadata."""
+
+    async def delete(
+        self,
+        *,
+        storage_key: str,
+    ) -> None:
+        """Delete an uploaded object."""
+
+
+class DatasetClock(Protocol):
+    def now(self) -> datetime:
+        """Return the current timezone-aware timestamp."""
