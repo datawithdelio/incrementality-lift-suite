@@ -40,6 +40,9 @@ def build_settings() -> Settings:
         dataset_validation_job_claim_timeout_seconds=120,
         dataset_validation_worker_poll_interval_seconds=0.25,
         dataset_validation_worker_error_retry_seconds=2.5,
+        analysis_execution_retry_delay_seconds=45,
+        analysis_execution_worker_poll_interval_seconds=0.5,
+        analysis_execution_worker_error_retry_seconds=3.0,
         s3_endpoint_url="http://localhost:5001",
         s3_access_key="test-access",
         s3_secret_key="test-secret",
@@ -113,18 +116,57 @@ def test_builds_complete_production_worker(
     }
 
 
+def test_builds_complete_analysis_execution_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = build_settings()
+    fake_client = FakeS3Client()
+    fake_session_factory = object()
+    monkeypatch.setattr(worker_main, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        worker_main,
+        "get_session_factory",
+        lambda: fake_session_factory,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "create_s3_compatible_client",
+        lambda **_arguments: fake_client,
+    )
+
+    worker = worker_main.build_analysis_execution_worker()
+
+    assert worker._poll_interval_seconds == 0.5
+    assert worker._error_retry_seconds == 3.0
+    process_next = worker._process_next
+    assert process_next._claim_next is not None
+    assert process_next._input_loader is not None
+    assert process_next._estimator_selector is not None
+    assert process_next._persist_success is not None
+    assert process_next._record_retryable_failure._retry_policy._retry_delay == timedelta(
+        seconds=45
+    )
+    assert process_next._mark_failed is not None
+
+
 @pytest.mark.asyncio
 async def test_main_runs_worker_and_disposes_engine(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    worker = FakeWorker()
+    validation_worker = FakeWorker()
+    analysis_worker = FakeWorker()
     engine = FakeEngine()
     logging_calls: list[str] = []
 
     monkeypatch.setattr(
         worker_main,
         "build_dataset_validation_worker",
-        lambda: worker,
+        lambda: validation_worker,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "build_analysis_execution_worker",
+        lambda: analysis_worker,
     )
     monkeypatch.setattr(
         worker_main,
@@ -142,7 +184,8 @@ async def test_main_runs_worker_and_disposes_engine(
     await worker_main.main()
 
     assert logging_calls == ["configured"]
-    assert worker.run_count == 1
+    assert validation_worker.run_count == 1
+    assert analysis_worker.run_count == 1
     assert engine.dispose_count == 1
 
 

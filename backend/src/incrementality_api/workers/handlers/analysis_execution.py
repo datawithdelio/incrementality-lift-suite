@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from typing import Protocol
 from uuid import UUID
 
@@ -10,6 +12,8 @@ from incrementality_api.application.analysis_execution.estimation import (
 )
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
 
+logger = logging.getLogger(__name__)
+
 
 class ClaimNextExecution(Protocol):
     async def execute(self) -> AnalysisExecutionJob | None:
@@ -21,19 +25,11 @@ class AnalysisInputLoader(Protocol):
         """Load and construct estimator-ready analysis input."""
 
 
-class AnalysisResultSink(Protocol):
-    async def save(
-        self,
-        *,
-        job: AnalysisExecutionJob,
-        result: AnalysisEstimationResult,
-    ) -> None:
-        """Persist estimation output before successful settlement."""
-
-
-class MarkExecutionSucceeded(Protocol):
-    async def execute(self, job_id: UUID) -> AnalysisExecutionJob:
-        """Settle a successful execution."""
+class PersistExecutionSuccess(Protocol):
+    async def execute(
+        self, *, job_id: UUID, result: AnalysisEstimationResult
+    ) -> AnalysisExecutionJob:
+        """Persist the result and settle success in one transaction."""
 
 
 class RecordRetryableExecutionFailure(Protocol):
@@ -55,16 +51,14 @@ class RunNextAnalysisExecutionJob:
         claim_next: ClaimNextExecution,
         input_loader: AnalysisInputLoader,
         estimator_selector: AnalysisEstimatorSelector,
-        result_sink: AnalysisResultSink,
-        mark_succeeded: MarkExecutionSucceeded,
+        persist_success: PersistExecutionSuccess,
         record_retryable_failure: RecordRetryableExecutionFailure,
         mark_failed: MarkExecutionFailed,
     ) -> None:
         self._claim_next = claim_next
         self._input_loader = input_loader
         self._estimator_selector = estimator_selector
-        self._result_sink = result_sink
-        self._mark_succeeded = mark_succeeded
+        self._persist_success = persist_success
         self._record_retryable_failure = record_retryable_failure
         self._mark_failed = mark_failed
 
@@ -73,23 +67,41 @@ class RunNextAnalysisExecutionJob:
         if job is None:
             return None
 
+        log_context = {
+            "job_id": str(job.id),
+            "analysis_run_id": str(job.analysis_run_id),
+        }
+        logger.info("Claimed analysis execution job.", extra=log_context)
+
         try:
             estimator_input = await self._input_loader.load(job)
             estimator = self._estimator_selector.select(estimator_input.estimator_type)
-            result = estimator.estimate(estimator_input.payload)
-            await self._result_sink.save(job=job, result=result)
+            result = await asyncio.to_thread(
+                estimator.estimate,
+                estimator_input.payload,
+            )
         except RetryableEstimationError as error:
+            logger.warning(
+                "Analysis execution failed with retryable error.",
+                extra=log_context,
+            )
             return await self._record_retryable_failure.execute(
                 job_id=job.id,
                 error=_error_message(error),
             )
         except PermanentEstimationError as error:
+            logger.warning(
+                "Analysis execution failed permanently.",
+                extra=log_context,
+            )
             return await self._mark_failed.execute(
                 job_id=job.id,
                 error=_error_message(error),
             )
 
-        return await self._mark_succeeded.execute(job.id)
+        settled = await self._persist_success.execute(job_id=job.id, result=result)
+        logger.info("Analysis execution succeeded.", extra=log_context)
+        return settled
 
 
 def _error_message(error: Exception) -> str:

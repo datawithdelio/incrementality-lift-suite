@@ -8,14 +8,19 @@ from incrementality_api.application.analysis_execution.errors import (
     AnalysisExecutionJobUnavailableError,
     AnalysisExecutionRunUnavailableError,
 )
+from incrementality_api.application.analysis_execution.estimation import (
+    AnalysisEstimationResult,
+)
 from incrementality_api.application.analysis_execution.retry_policy import (
     FixedDelayAnalysisExecutionRetryPolicy,
 )
 from incrementality_api.application.analysis_execution.settle_execution import (
     MarkAnalysisExecutionFailed,
     MarkAnalysisExecutionSucceeded,
+    PersistAnalysisExecutionSuccess,
     RecordAnalysisExecutionFailure,
 )
+from incrementality_api.domain.analysis_results.entities import AnalysisResult
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.execution_job_status import (
     AnalysisExecutionJobStatus,
@@ -140,6 +145,17 @@ class FakeRunRepository:
         self.updated.append(run)
 
 
+class FakeResultRepository:
+    def __init__(self, add_error: Exception | None = None) -> None:
+        self._add_error = add_error
+        self.added: list[AnalysisResult] = []
+
+    async def add(self, result: AnalysisResult) -> None:
+        if self._add_error is not None:
+            raise self._add_error
+        self.added.append(result)
+
+
 class FakeUnitOfWork:
     def __init__(
         self,
@@ -147,12 +163,14 @@ class FakeUnitOfWork:
         job: AnalysisExecutionJob | None,
         run: AnalysisRun | None,
         run_update_error: Exception | None = None,
+        result_add_error: Exception | None = None,
     ) -> None:
         self.execution_jobs = FakeJobRepository(job)
         self.analysis_runs = FakeRunRepository(
             run,
             update_error=run_update_error,
         )
+        self.analysis_results = FakeResultRepository(result_add_error)
         self.commit_count = 0
         self.exit_exception_type: type[BaseException] | None = None
 
@@ -188,6 +206,67 @@ async def test_success_marks_job_and_run_succeeded_in_one_transaction() -> None:
     assert unit_of_work.analysis_runs.updated[0].status is AnalysisRunStatus.SUCCEEDED
     assert unit_of_work.analysis_runs.updated[0].completed_at == SETTLED_AT
     assert unit_of_work.commit_count == 1
+
+
+@pytest.mark.asyncio
+async def test_persists_structured_result_and_success_states_in_one_transaction() -> None:
+    job, run = build_running_pair()
+    unit_of_work = FakeUnitOfWork(job=job, run=run)
+    estimation = AnalysisEstimationResult(
+        effect=5.0,
+        standard_error=0.5,
+        p_value=0.01,
+        confidence_interval_low=4.0,
+        confidence_interval_high=6.0,
+        observation_count=100,
+        library_name="statsmodels",
+        library_version="0.14.6",
+        diagnostics={"r_squared": 0.9},
+    )
+
+    settled = await PersistAnalysisExecutionSuccess(
+        unit_of_work=unit_of_work,
+        clock=FixedClock(),
+    ).execute(job_id=job.id, result=estimation)
+
+    assert settled.status is AnalysisExecutionJobStatus.SUCCEEDED
+    assert len(unit_of_work.analysis_results.added) == 1
+    persisted = unit_of_work.analysis_results.added[0]
+    assert persisted.analysis_run_id == run.id
+    assert persisted.effect == 5.0
+    assert persisted.estimator_version == "did-v1"
+    assert unit_of_work.analysis_runs.updated[0].status is AnalysisRunStatus.SUCCEEDED
+    assert unit_of_work.commit_count == 1
+
+
+@pytest.mark.asyncio
+async def test_result_persistence_failure_prevents_success_state_updates() -> None:
+    job, run = build_running_pair()
+    unit_of_work = FakeUnitOfWork(
+        job=job,
+        run=run,
+        result_add_error=RuntimeError("Result insert failed."),
+    )
+    estimation = AnalysisEstimationResult(
+        effect=5.0,
+        standard_error=0.5,
+        p_value=0.01,
+        confidence_interval_low=4.0,
+        confidence_interval_high=6.0,
+        observation_count=100,
+        library_name="statsmodels",
+        library_version="0.14.6",
+    )
+
+    with pytest.raises(RuntimeError, match="Result insert failed"):
+        await PersistAnalysisExecutionSuccess(
+            unit_of_work=unit_of_work,
+            clock=FixedClock(),
+        ).execute(job_id=job.id, result=estimation)
+
+    assert unit_of_work.execution_jobs.updated == []
+    assert unit_of_work.analysis_runs.updated == []
+    assert unit_of_work.commit_count == 0
 
 
 @pytest.mark.asyncio

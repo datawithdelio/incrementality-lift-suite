@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -116,28 +117,17 @@ class FakeSelector:
         return self._estimator
 
 
-class FakeResultSink:
-    def __init__(self) -> None:
-        self.saved: list[tuple[AnalysisExecutionJob, AnalysisEstimationResult]] = []
-
-    async def save(
-        self,
-        *,
-        job: AnalysisExecutionJob,
-        result: AnalysisEstimationResult,
-    ) -> None:
-        self.saved.append((job, result))
-
-
 @dataclass
-class FakeMarkSucceeded:
+class FakePersistSuccess:
     result: AnalysisExecutionJob
 
     def __post_init__(self) -> None:
-        self.job_ids: list[UUID] = []
+        self.calls: list[tuple[UUID, AnalysisEstimationResult]] = []
 
-    async def execute(self, job_id: UUID) -> AnalysisExecutionJob:
-        self.job_ids.append(job_id)
+    async def execute(
+        self, *, job_id: UUID, result: AnalysisEstimationResult
+    ) -> AnalysisExecutionJob:
+        self.calls.append((job_id, result))
         return self.result
 
 
@@ -190,55 +180,59 @@ def build_processor(
     selector: FakeSelector,
 ) -> tuple[
     RunNextAnalysisExecutionJob,
-    FakeResultSink,
-    FakeMarkSucceeded,
+    FakePersistSuccess,
     FakeRecordRetryableFailure,
     FakeMarkFailed,
 ]:
-    sink = FakeResultSink()
-    mark_succeeded = FakeMarkSucceeded(settle_succeeded(job))
+    persist_success = FakePersistSuccess(settle_succeeded(job))
     record_retry = FakeRecordRetryableFailure(settle_retry(job, "retry"))
     mark_failed = FakeMarkFailed(settle_failed(job, "failed"))
     processor = RunNextAnalysisExecutionJob(
         claim_next=FakeClaimNext(job),
         input_loader=loader,
         estimator_selector=selector,
-        result_sink=sink,
-        mark_succeeded=mark_succeeded,
+        persist_success=persist_success,
         record_retryable_failure=record_retry,
         mark_failed=mark_failed,
     )
-    return processor, sink, mark_succeeded, record_retry, mark_failed
+    return processor, persist_success, record_retry, mark_failed
 
 
 @pytest.mark.asyncio
-async def test_successful_estimation_saves_result_then_settles_success() -> None:
+async def test_successful_estimation_saves_result_then_settles_success(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     job = build_running_job()
     estimator_input = build_input()
     result = build_result()
     estimator = FakeEstimator(result)
-    processor, sink, mark_succeeded, record_retry, mark_failed = build_processor(
+    processor, persist_success, record_retry, mark_failed = build_processor(
         job=job,
         loader=FakeInputLoader(estimator_input),
         selector=FakeSelector(estimator),
     )
 
-    settled = await processor.execute()
+    with caplog.at_level(logging.INFO):
+        settled = await processor.execute()
 
     assert settled is not None
     assert settled.status is AnalysisExecutionJobStatus.SUCCEEDED
     assert estimator.inputs == [estimator_input.payload]
-    assert sink.saved == [(job, result)]
-    assert mark_succeeded.job_ids == [job.id]
+    assert persist_success.calls == [(job.id, result)]
     assert record_retry.calls == []
     assert mark_failed.calls == []
+    success_record = next(
+        record for record in caplog.records if record.message == "Analysis execution succeeded."
+    )
+    assert success_record.job_id == str(job.id)
+    assert success_record.analysis_run_id == str(job.analysis_run_id)
 
 
 @pytest.mark.asyncio
 async def test_retryable_estimator_error_schedules_retry() -> None:
     job = build_running_job()
     error = RetryableEstimationError("Warehouse timed out.")
-    processor, sink, mark_succeeded, record_retry, mark_failed = build_processor(
+    processor, persist_success, record_retry, mark_failed = build_processor(
         job=job,
         loader=FakeInputLoader(build_input()),
         selector=FakeSelector(FakeEstimator(error=error)),
@@ -248,8 +242,7 @@ async def test_retryable_estimator_error_schedules_retry() -> None:
 
     assert settled is not None
     assert settled.status is AnalysisExecutionJobStatus.PENDING
-    assert sink.saved == []
-    assert mark_succeeded.job_ids == []
+    assert persist_success.calls == []
     assert record_retry.calls == [(job.id, "Warehouse timed out.")]
     assert mark_failed.calls == []
 
@@ -258,7 +251,7 @@ async def test_retryable_estimator_error_schedules_retry() -> None:
 async def test_permanent_estimator_error_dead_letters_execution() -> None:
     job = build_running_job()
     error = PermanentEstimationError("Treatment groups are missing.")
-    processor, sink, mark_succeeded, record_retry, mark_failed = build_processor(
+    processor, persist_success, record_retry, mark_failed = build_processor(
         job=job,
         loader=FakeInputLoader(build_input()),
         selector=FakeSelector(FakeEstimator(error=error)),
@@ -268,8 +261,7 @@ async def test_permanent_estimator_error_dead_letters_execution() -> None:
 
     assert settled is not None
     assert settled.status is AnalysisExecutionJobStatus.DEAD_LETTER
-    assert sink.saved == []
-    assert mark_succeeded.job_ids == []
+    assert persist_success.calls == []
     assert record_retry.calls == []
     assert mark_failed.calls == [(job.id, "Treatment groups are missing.")]
 
@@ -278,7 +270,7 @@ async def test_permanent_estimator_error_dead_letters_execution() -> None:
 async def test_unsupported_estimator_type_dead_letters_execution() -> None:
     job = build_running_job()
     unsupported = UnsupportedEstimatorTypeError("synthetic_control is unsupported.")
-    processor, _sink, _success, retry, failed = build_processor(
+    processor, _success, retry, failed = build_processor(
         job=job,
         loader=FakeInputLoader(build_input()),
         selector=FakeSelector(None, error=unsupported),

@@ -191,6 +191,30 @@ class SqlAlchemyDatasetSemanticMappingRepository:
             model,
         )
 
+    async def get_by_id_scope_and_version(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+        mapping_id: UUID,
+        version: int,
+    ) -> DatasetSemanticMapping | None:
+        model = await self._session.scalar(
+            select(DatasetSemanticMappingModel)
+            .join(DatasetModel, DatasetModel.id == DatasetSemanticMappingModel.dataset_id)
+            .where(
+                DatasetSemanticMappingModel.id == mapping_id,
+                DatasetSemanticMappingModel.dataset_id == dataset_id,
+                DatasetSemanticMappingModel.version == version,
+                DatasetModel.workspace_id == workspace_id,
+                DatasetModel.project_id == project_id,
+            )
+        )
+        if model is None:
+            return None
+        return await self._load_entity(model)
+
     async def _load_entity(
         self,
         model: DatasetSemanticMappingModel,

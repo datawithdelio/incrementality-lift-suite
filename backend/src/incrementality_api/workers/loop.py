@@ -2,6 +2,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
+from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
 from incrementality_api.domain.jobs.entities import (
     DatasetValidationJob,
 )
@@ -16,6 +17,11 @@ class ProcessNextValidationJobAction(Protocol):
         self,
     ) -> DatasetValidationJob | None:
         """Process at most one validation job."""
+
+
+class ProcessNextAnalysisJobAction(Protocol):
+    async def execute(self) -> AnalysisExecutionJob | None:
+        """Process at most one analysis execution job."""
 
 
 class DatasetValidationWorker:
@@ -59,6 +65,42 @@ class DatasetValidationWorker:
                 self._poll_interval_seconds,
             )
 
+        return job
+
+    async def run_forever(self) -> None:
+        while True:
+            await self.run_once()
+
+
+class AnalysisExecutionWorker:
+    """Continuously poll and process durable analysis execution jobs."""
+
+    def __init__(
+        self,
+        *,
+        process_next: ProcessNextAnalysisJobAction,
+        sleep: SleepAction,
+        poll_interval_seconds: float = 1.0,
+        error_retry_seconds: float = 5.0,
+    ) -> None:
+        if poll_interval_seconds <= 0:
+            raise ValueError("Poll interval must be positive.")
+        if error_retry_seconds <= 0:
+            raise ValueError("Error retry delay must be positive.")
+        self._process_next = process_next
+        self._sleep = sleep
+        self._poll_interval_seconds = poll_interval_seconds
+        self._error_retry_seconds = error_retry_seconds
+
+    async def run_once(self) -> AnalysisExecutionJob | None:
+        try:
+            job = await self._process_next.execute()
+        except Exception:
+            logger.exception("Unexpected analysis execution worker failure.")
+            await self._sleep(self._error_retry_seconds)
+            return None
+        if job is None:
+            await self._sleep(self._poll_interval_seconds)
         return job
 
     async def run_forever(self) -> None:

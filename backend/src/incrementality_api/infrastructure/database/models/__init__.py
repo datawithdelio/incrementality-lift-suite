@@ -1,3 +1,6 @@
+from incrementality_api.infrastructure.database.models.analysis_results import (
+    AnalysisResultModel,
+)
 from incrementality_api.infrastructure.database.models.authentication import (
     AuthSessionModel,
     UserCredentialModel,
@@ -26,6 +29,7 @@ from incrementality_api.infrastructure.database.models.tenancy import (
 )
 
 __all__ = [
+    "AnalysisResultModel",
     "AuthSessionModel",
     "DatasetColumnModel",
     "DatasetMappingCovariateModel",

@@ -12,12 +12,16 @@ from sqlalchemy.ext.asyncio import (
 from incrementality_api.application.analysis_execution.claim_next_execution_job import (
     ClaimNextAnalysisExecutionJob,
 )
+from incrementality_api.application.analysis_execution.estimation import (
+    AnalysisEstimationResult,
+)
 from incrementality_api.application.analysis_execution.retry_policy import (
     FixedDelayAnalysisExecutionRetryPolicy,
 )
 from incrementality_api.application.analysis_execution.settle_execution import (
     MarkAnalysisExecutionFailed,
     MarkAnalysisExecutionSucceeded,
+    PersistAnalysisExecutionSuccess,
     RecordAnalysisExecutionFailure,
 )
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
@@ -29,6 +33,9 @@ from incrementality_api.domain.analysis_runs.execution_jobs import (
 )
 from incrementality_api.infrastructure.database.models.analysis_execution_jobs import (
     AnalysisExecutionJobModel,
+)
+from incrementality_api.infrastructure.database.models.analysis_results import (
+    AnalysisResultModel,
 )
 from incrementality_api.infrastructure.database.models.analysis_runs import (
     AnalysisRunModel,
@@ -156,6 +163,22 @@ class FailingRunUpdateUnitOfWork(SqlAlchemyAnalysisExecutionJobUnitOfWork):
         await super().__aenter__()
         self.analysis_runs = FailingAnalysisRunRepository(self.analysis_runs)
         return self
+
+
+def build_estimation_result() -> AnalysisEstimationResult:
+    return AnalysisEstimationResult(
+        effect=5.0,
+        standard_error=0.5,
+        p_value=0.01,
+        confidence_interval_low=4.0,
+        confidence_interval_high=6.0,
+        observation_count=100,
+        library_name="statsmodels",
+        library_version="0.14.6",
+        diagnostics={"r_squared": 0.9, "covariance_type": "cluster"},
+        incremental_outcome=500.0,
+        relative_lift=0.1,
+    )
 
 
 async def seed_execution_scope(
@@ -846,6 +869,38 @@ async def test_success_settlement_persists_job_and_run_together(
 
 
 @pytest.mark.asyncio
+async def test_result_and_success_states_commit_in_one_postgresql_transaction(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    running = await seed_and_claim_running_execution(tenancy_session_factory)
+
+    settled = await PersistAnalysisExecutionSuccess(
+        unit_of_work=SqlAlchemyAnalysisExecutionJobUnitOfWork(
+            session_factory=tenancy_session_factory,
+        ),
+        clock=FixedSettlementClock(),
+    ).execute(job_id=running.id, result=build_estimation_result())
+
+    async with tenancy_session_factory() as session:
+        job = await session.get(AnalysisExecutionJobModel, running.id)
+        run = await session.get(AnalysisRunModel, running.analysis_run_id)
+        result = await session.scalar(
+            select(AnalysisResultModel).where(
+                AnalysisResultModel.analysis_run_id == running.analysis_run_id
+            )
+        )
+
+    assert settled.status is AnalysisExecutionJobStatus.SUCCEEDED
+    assert job is not None and job.status == "succeeded"
+    assert run is not None and run.status == "succeeded"
+    assert result is not None
+    assert result.effect == 5.0
+    assert result.sample_size == 100
+    assert result.diagnostics["covariance_type"] == "cluster"
+    assert result.incremental_outcome == 500.0
+
+
+@pytest.mark.asyncio
 async def test_retry_settlement_persists_pending_job_and_running_run_together(
     tenancy_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -925,3 +980,31 @@ async def test_settlement_rolls_back_job_when_run_update_fails(
     assert job.completed_at is None
     assert run.status == "running"
     assert run.completed_at is None
+
+
+@pytest.mark.asyncio
+async def test_result_insert_rolls_back_when_success_state_update_fails(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    running = await seed_and_claim_running_execution(tenancy_session_factory)
+
+    with pytest.raises(RuntimeError, match="Analysis run update failed"):
+        await PersistAnalysisExecutionSuccess(
+            unit_of_work=FailingRunUpdateUnitOfWork(
+                session_factory=tenancy_session_factory,
+            ),
+            clock=FixedSettlementClock(),
+        ).execute(job_id=running.id, result=build_estimation_result())
+
+    async with tenancy_session_factory() as session:
+        job = await session.get(AnalysisExecutionJobModel, running.id)
+        run = await session.get(AnalysisRunModel, running.analysis_run_id)
+        result = await session.scalar(
+            select(AnalysisResultModel).where(
+                AnalysisResultModel.analysis_run_id == running.analysis_run_id
+            )
+        )
+
+    assert result is None
+    assert job is not None and job.status == "running"
+    assert run is not None and run.status == "running"

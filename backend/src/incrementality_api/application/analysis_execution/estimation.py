@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
@@ -47,6 +48,13 @@ class AnalysisEstimationResult:
     confidence_interval_low: float
     confidence_interval_high: float
     observation_count: int
+    library_name: str = "unknown"
+    library_version: str = "unknown"
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
+    incremental_outcome: float | None = None
+    relative_lift: float | None = None
+    incremental_revenue: float | None = None
+    incremental_conversions: float | None = None
 
 
 class AnalysisEstimator(Protocol):

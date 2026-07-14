@@ -3,6 +3,7 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
+from incrementality_api.domain.analysis_results.entities import AnalysisResult
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -56,9 +57,15 @@ class AnalysisExecutionRunRepository(Protocol):
         """Stage updated analysis-run lifecycle metadata."""
 
 
+class AnalysisResultRepository(Protocol):
+    async def add(self, result: AnalysisResult) -> None:
+        """Stage the canonical structured result for an analysis run."""
+
+
 class AnalysisExecutionUnitOfWork(Protocol):
     execution_jobs: AnalysisExecutionJobRepository
     analysis_runs: AnalysisExecutionRunRepository
+    analysis_results: AnalysisResultRepository
 
     async def __aenter__(
         self,

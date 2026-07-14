@@ -145,6 +145,13 @@ class S3DatasetObjectStorage:
                 body.close,
             )
 
+    def read_chunks(
+        self,
+        storage_key: str,
+    ) -> AsyncIterator[bytes]:
+        """Adapt dataset reads to the analysis-input object-reader port."""
+        return self.read(storage_key=storage_key)
+
     async def delete(
         self,
         *,

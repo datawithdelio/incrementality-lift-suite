@@ -5,8 +5,16 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
+from incrementality_api.application.analysis_execution.ports import (
+    AnalysisExecutionJobRepository,
+    AnalysisExecutionRunRepository,
+    AnalysisResultRepository,
+)
 from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
     SqlAlchemyAnalysisExecutionJobRepository,
+)
+from incrementality_api.infrastructure.database.repositories.analysis_results import (
+    SqlAlchemyAnalysisResultRepository,
 )
 from incrementality_api.infrastructure.database.repositories.analysis_runs import (
     SqlAlchemyAnalysisRunRepository,
@@ -16,8 +24,9 @@ from incrementality_api.infrastructure.database.repositories.analysis_runs impor
 class SqlAlchemyAnalysisExecutionJobUnitOfWork:
     """Own one durable analysis-execution-job transaction."""
 
-    execution_jobs: SqlAlchemyAnalysisExecutionJobRepository
-    analysis_runs: SqlAlchemyAnalysisRunRepository
+    execution_jobs: AnalysisExecutionJobRepository
+    analysis_runs: AnalysisExecutionRunRepository
+    analysis_results: AnalysisResultRepository
 
     def __init__(
         self,
@@ -38,6 +47,7 @@ class SqlAlchemyAnalysisExecutionJobUnitOfWork:
         self.analysis_runs = SqlAlchemyAnalysisRunRepository(
             session=session,
         )
+        self.analysis_results = SqlAlchemyAnalysisResultRepository(session=session)
 
         return self
 

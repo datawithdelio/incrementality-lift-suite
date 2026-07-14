@@ -3,10 +3,12 @@ from uuid import uuid4
 
 import pytest
 
+from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
 from incrementality_api.domain.jobs.entities import (
     DatasetValidationJob,
 )
 from incrementality_api.workers.loop import (
+    AnalysisExecutionWorker,
     DatasetValidationWorker,
 )
 
@@ -82,6 +84,17 @@ class FakeSleeper:
         self.delays.append(delay)
 
 
+class FakeAnalysisProcessNext:
+    def __init__(self, results: list[AnalysisExecutionJob | None | BaseException]) -> None:
+        self._results = list(results)
+
+    async def execute(self) -> AnalysisExecutionJob | None:
+        result = self._results.pop(0)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+
 def build_succeeded_job() -> DatasetValidationJob:
     return (
         DatasetValidationJob.enqueue(
@@ -99,6 +112,46 @@ def build_succeeded_job() -> DatasetValidationJob:
             completed_at=COMPLETED_AT,
         )
     )
+
+
+def build_succeeded_analysis_job() -> AnalysisExecutionJob:
+    return (
+        AnalysisExecutionJob.enqueue(
+            workspace_id=uuid4(),
+            project_id=uuid4(),
+            analysis_run_id=uuid4(),
+            created_at=CREATED_AT,
+            available_at=AVAILABLE_AT,
+        )
+        .claim(claimed_at=CLAIMED_AT)
+        .mark_succeeded(completed_at=COMPLETED_AT)
+    )
+
+
+@pytest.mark.asyncio
+async def test_analysis_worker_polls_and_returns_processed_job() -> None:
+    job = build_succeeded_analysis_job()
+    sleeper = FakeSleeper()
+    worker = AnalysisExecutionWorker(
+        process_next=FakeAnalysisProcessNext([job]),
+        sleep=sleeper.sleep,
+        poll_interval_seconds=0.25,
+        error_retry_seconds=2.0,
+    )
+
+    assert await worker.run_once() == job
+    assert sleeper.delays == []
+
+
+@pytest.mark.asyncio
+async def test_analysis_worker_propagates_cancellation_for_graceful_shutdown() -> None:
+    worker = AnalysisExecutionWorker(
+        process_next=FakeAnalysisProcessNext([StopWorker()]),
+        sleep=FakeSleeper().sleep,
+    )
+
+    with pytest.raises(StopWorker):
+        await worker.run_forever()
 
 
 @pytest.mark.asyncio

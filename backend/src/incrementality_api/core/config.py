@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     dataset_validation_worker_poll_interval_seconds: float = 1.0
     dataset_validation_worker_error_retry_seconds: float = 5.0
 
+    analysis_execution_retry_delay_seconds: int = 30
+    analysis_execution_worker_poll_interval_seconds: float = 1.0
+    analysis_execution_worker_error_retry_seconds: float = 5.0
+
     s3_endpoint_url: str = "http://localhost:5001"
     s3_access_key: str = "incrementality"
     s3_secret_key: str = "incrementality-secret"

@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import (
 from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
     SqlAlchemyAnalysisExecutionJobRepository,
 )
+from incrementality_api.infrastructure.database.repositories.analysis_results import (
+    SqlAlchemyAnalysisResultRepository,
+)
 from incrementality_api.infrastructure.database.repositories.analysis_runs import (
     SqlAlchemyAnalysisRunRepository,
 )
@@ -86,6 +89,10 @@ async def test_enters_with_execution_job_repository() -> None:
         assert isinstance(
             unit_of_work.analysis_runs,
             SqlAlchemyAnalysisRunRepository,
+        )
+        assert isinstance(
+            unit_of_work.analysis_results,
+            SqlAlchemyAnalysisResultRepository,
         )
 
         await unit_of_work.commit()

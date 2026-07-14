@@ -72,6 +72,14 @@ class StatsmodelsDifferenceInDifferencesEstimator:
                 confidence_interval_low=float(interval[0]),
                 confidence_interval_high=float(interval[1]),
                 observation_count=len(observations),
+                library_name="statsmodels",
+                library_version=str(sm.__version__),
+                diagnostics={
+                    "r_squared": float(fitted.rsquared),
+                    "adjusted_r_squared": float(fitted.rsquared_adj),
+                    "degrees_of_freedom": float(fitted.df_resid),
+                    "covariance_type": str(fitted.cov_type),
+                },
             )
         except (ValueError, TypeError, np.linalg.LinAlgError) as error:
             raise PermanentEstimationError(
