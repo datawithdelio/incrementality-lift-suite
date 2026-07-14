@@ -94,12 +94,23 @@ class FakeDatasetRepository:
         self.updated_datasets.append(dataset)
 
 
+class FakeDatasetColumnRepository:
+    async def replace_for_dataset(
+        self,
+        *,
+        dataset_id,
+        columns,
+    ) -> None:
+        del dataset_id, columns
+
+
 class FakeValidationUnitOfWork:
     def __init__(
         self,
         dataset: Dataset | None,
     ) -> None:
         self.datasets = FakeDatasetRepository(dataset)
+        self.columns = FakeDatasetColumnRepository()
         self.commit_count = 0
         self.rollback_count = 0
 

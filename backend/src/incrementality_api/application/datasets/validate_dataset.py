@@ -120,5 +120,6 @@ class ValidateDataset:
                 dataset_id=command.dataset_id,
                 row_count=validation_result.row_count,
                 column_count=(validation_result.column_count),
+                columns=validation_result.columns,
             )
         )

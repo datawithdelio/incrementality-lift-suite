@@ -8,6 +8,9 @@ from incrementality_api.application.datasets.ports import (
     DatasetClock,
     DatasetValidationUnitOfWork,
 )
+from incrementality_api.domain.datasets.columns import (
+    DatasetColumnProfile,
+)
 from incrementality_api.domain.datasets.entities import Dataset
 
 
@@ -18,6 +21,7 @@ class MarkDatasetReadyCommand:
     dataset_id: UUID
     row_count: int
     column_count: int
+    columns: tuple[DatasetColumnProfile, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +62,11 @@ class MarkDatasetReady:
                 validation_completed_at=self._clock.now(),
                 row_count=command.row_count,
                 column_count=command.column_count,
+            )
+
+            await self._unit_of_work.columns.replace_for_dataset(
+                dataset_id=dataset.id,
+                columns=command.columns,
             )
 
             await self._unit_of_work.datasets.update(
