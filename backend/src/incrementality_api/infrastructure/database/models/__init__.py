@@ -5,6 +5,10 @@ from incrementality_api.infrastructure.database.models.authentication import (
 from incrementality_api.infrastructure.database.models.dataset_columns import (
     DatasetColumnModel,
 )
+from incrementality_api.infrastructure.database.models.dataset_semantic_mappings import (
+    DatasetMappingCovariateModel,
+    DatasetSemanticMappingModel,
+)
 from incrementality_api.infrastructure.database.models.datasets import (
     DatasetModel,
 )
@@ -24,7 +28,9 @@ from incrementality_api.infrastructure.database.models.tenancy import (
 __all__ = [
     "AuthSessionModel",
     "DatasetColumnModel",
+    "DatasetMappingCovariateModel",
     "DatasetModel",
+    "DatasetSemanticMappingModel",
     "DatasetValidationJobModel",
     "OrganizationModel",
     "ProjectModel",
