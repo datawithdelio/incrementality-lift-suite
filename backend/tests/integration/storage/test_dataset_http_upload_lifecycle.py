@@ -77,6 +77,9 @@ from incrementality_api.application.tenancy.provision_tenant import (
 from incrementality_api.domain.authorization.policy import (
     WorkspaceAccessPolicy,
 )
+from incrementality_api.infrastructure.database.models.dataset_columns import (
+    DatasetColumnModel,
+)
 from incrementality_api.infrastructure.database.models.datasets import (
     DatasetModel,
 )
@@ -515,6 +518,39 @@ async def test_complete_http_dataset_upload_lifecycle(
         assert validated_model.failure_reason is None
         assert validated_model.validation_started_at == FIXED_NOW
         assert validated_model.validation_completed_at == FIXED_NOW
+
+        async with tenancy_session_factory() as session:
+            column_result = await session.scalars(
+                select(DatasetColumnModel)
+                .where(
+                    DatasetColumnModel.dataset_id == dataset_id,
+                )
+                .order_by(
+                    DatasetColumnModel.ordinal_position,
+                )
+            )
+
+            persisted_columns = column_result.all()
+
+        assert len(persisted_columns) == 2
+
+        market_column = persisted_columns[0]
+
+        assert market_column.ordinal_position == 1
+        assert market_column.source_name == "market"
+        assert market_column.normalized_name == "market"
+        assert market_column.inferred_type == "string"
+        assert market_column.nullable is False
+        assert market_column.missing_count == 0
+
+        revenue_column = persisted_columns[1]
+
+        assert revenue_column.ordinal_position == 2
+        assert revenue_column.source_name == "revenue"
+        assert revenue_column.normalized_name == "revenue"
+        assert revenue_column.inferred_type == "integer"
+        assert revenue_column.nullable is False
+        assert revenue_column.missing_count == 0
 
         async with tenancy_session_factory() as session:
             completed_job = await session.scalar(
