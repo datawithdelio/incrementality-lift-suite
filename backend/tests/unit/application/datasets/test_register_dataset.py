@@ -137,13 +137,14 @@ def build_command(
     project_id: UUID,
     byte_size: int = 1024,
     source_filename: str = "campaign-results.csv",
+    media_type: str = "TEXT/CSV",
 ) -> RegisterDatasetCommand:
     return RegisterDatasetCommand(
         workspace_id=workspace_id,
         project_id=project_id,
         created_by_user_id=uuid4(),
         source_filename=source_filename,
-        media_type="TEXT/CSV",
+        media_type=media_type,
         byte_size=byte_size,
         checksum_sha256=VALID_CHECKSUM,
     )
@@ -185,6 +186,39 @@ async def test_registers_dataset_for_active_workspace_project() -> None:
 
     assert storage_key_builder.received_workspace_id == (workspace_id)
     assert storage_key_builder.received_project_id == project.id
+
+
+@pytest.mark.asyncio
+async def test_rejects_parquet_before_opening_transaction() -> None:
+    workspace_id = uuid4()
+    project = build_project(
+        workspace_id=workspace_id,
+    )
+
+    unit_of_work = FakeDatasetUnitOfWork(project)
+
+    service = RegisterDataset(
+        unit_of_work=unit_of_work,
+        storage_key_builder=StubStorageKeyBuilder(),
+        maximum_upload_bytes=10_000,
+    )
+
+    with pytest.raises(
+        InvalidDatasetError,
+        match="Dataset media type",
+    ):
+        await service.execute(
+            build_command(
+                workspace_id=workspace_id,
+                project_id=project.id,
+                source_filename="campaign-results.parquet",
+                media_type=("application/vnd.apache.parquet"),
+            )
+        )
+
+    assert unit_of_work.projects.requested_project_id is None
+    assert unit_of_work.datasets.added_datasets == []
+    assert unit_of_work.commit_count == 0
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,6 @@ from incrementality_api.domain.datasets.errors import (
 _SUPPORTED_MEDIA_TYPES = frozenset(
     {
         "text/csv",
-        "application/vnd.apache.parquet",
     }
 )
 

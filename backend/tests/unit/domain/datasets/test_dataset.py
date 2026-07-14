@@ -113,10 +113,6 @@ def test_rejects_source_filename_longer_than_255_characters() -> None:
     ("media_type", "expected"),
     [
         ("  TEXT/CSV  ", "text/csv"),
-        (
-            " APPLICATION/VND.APACHE.PARQUET ",
-            "application/vnd.apache.parquet",
-        ),
     ],
 )
 def test_normalizes_supported_media_type(
@@ -135,6 +131,7 @@ def test_normalizes_supported_media_type(
     [
         "application/json",
         "application/zip",
+        "application/vnd.apache.parquet",
     ],
 )
 def test_rejects_unsupported_media_type(

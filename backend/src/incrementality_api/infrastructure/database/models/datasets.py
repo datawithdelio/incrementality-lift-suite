@@ -38,7 +38,7 @@ class DatasetModel(TimestampMixin, Base):
             name="ck_datasets_storage_key_not_blank",
         ),
         CheckConstraint(
-            "media_type IN ('text/csv', 'application/vnd.apache.parquet')",
+            "media_type IN ('text/csv')",
             name="ck_datasets_media_type",
         ),
         CheckConstraint(
