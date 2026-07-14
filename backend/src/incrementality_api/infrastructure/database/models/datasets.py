@@ -65,6 +65,76 @@ class DatasetModel(TimestampMixin, Base):
             "failure_reason IS NULL OR btrim(failure_reason) <> ''",
             name="ck_datasets_failure_reason_not_blank",
         ),
+        CheckConstraint(
+            ("validation_started_at IS NULL OR uploaded_at IS NOT NULL"),
+            name=("ck_datasets_validation_started_requires_upload"),
+        ),
+        CheckConstraint(
+            ("validation_started_at IS NULL OR validation_started_at >= uploaded_at"),
+            name=("ck_datasets_validation_started_not_before_upload"),
+        ),
+        CheckConstraint(
+            ("validation_completed_at IS NULL OR validation_started_at IS NOT NULL"),
+            name=("ck_datasets_validation_completed_requires_start"),
+        ),
+        CheckConstraint(
+            ("validation_completed_at IS NULL OR validation_completed_at >= validation_started_at"),
+            name=("ck_datasets_validation_completed_not_before_start"),
+        ),
+        CheckConstraint(
+            """
+            (
+                status = 'pending_upload'
+                AND uploaded_at IS NULL
+                AND validation_started_at IS NULL
+                AND validation_completed_at IS NULL
+                AND row_count IS NULL
+                AND column_count IS NULL
+                AND failure_reason IS NULL
+            )
+            OR
+            (
+                status = 'uploaded'
+                AND uploaded_at IS NOT NULL
+                AND validation_started_at IS NULL
+                AND validation_completed_at IS NULL
+                AND row_count IS NULL
+                AND column_count IS NULL
+                AND failure_reason IS NULL
+            )
+            OR
+            (
+                status = 'validating'
+                AND uploaded_at IS NOT NULL
+                AND validation_started_at IS NOT NULL
+                AND validation_completed_at IS NULL
+                AND row_count IS NULL
+                AND column_count IS NULL
+                AND failure_reason IS NULL
+            )
+            OR
+            (
+                status = 'ready'
+                AND uploaded_at IS NOT NULL
+                AND validation_started_at IS NOT NULL
+                AND validation_completed_at IS NOT NULL
+                AND row_count IS NOT NULL
+                AND column_count IS NOT NULL
+                AND failure_reason IS NULL
+            )
+            OR
+            (
+                status = 'failed'
+                AND uploaded_at IS NOT NULL
+                AND validation_started_at IS NOT NULL
+                AND validation_completed_at IS NOT NULL
+                AND row_count IS NULL
+                AND column_count IS NULL
+                AND failure_reason IS NOT NULL
+            )
+            """,
+            name="ck_datasets_lifecycle_metadata",
+        ),
         Index(
             "ix_datasets_workspace_id",
             "workspace_id",
@@ -157,6 +227,11 @@ class DatasetModel(TimestampMixin, Base):
     )
 
     uploaded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    validation_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

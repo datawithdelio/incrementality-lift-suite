@@ -39,6 +39,7 @@ def to_dataset_model(
         checksum_sha256=dataset.checksum_sha256,
         status=dataset.status.value,
         uploaded_at=dataset.uploaded_at,
+        validation_started_at=dataset.validation_started_at,
         validation_completed_at=(dataset.validation_completed_at),
         row_count=dataset.row_count,
         column_count=dataset.column_count,
@@ -64,6 +65,7 @@ def to_dataset_entity(
         status=DatasetStatus(model.status),
         created_at=model.created_at,
         uploaded_at=model.uploaded_at,
+        validation_started_at=model.validation_started_at,
         validation_completed_at=(model.validation_completed_at),
         row_count=model.row_count,
         column_count=model.column_count,
@@ -150,6 +152,7 @@ class SqlAlchemyDatasetRepository:
             .values(
                 status=dataset.status.value,
                 uploaded_at=dataset.uploaded_at,
+                validation_started_at=(dataset.validation_started_at),
                 validation_completed_at=(dataset.validation_completed_at),
                 row_count=dataset.row_count,
                 column_count=dataset.column_count,
