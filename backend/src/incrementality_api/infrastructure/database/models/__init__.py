@@ -5,6 +5,9 @@ from incrementality_api.infrastructure.database.models.authentication import (
 from incrementality_api.infrastructure.database.models.datasets import (
     DatasetModel,
 )
+from incrementality_api.infrastructure.database.models.jobs import (
+    DatasetValidationJobModel,
+)
 from incrementality_api.infrastructure.database.models.projects import (
     ProjectModel,
 )
@@ -18,6 +21,7 @@ from incrementality_api.infrastructure.database.models.tenancy import (
 __all__ = [
     "AuthSessionModel",
     "DatasetModel",
+    "DatasetValidationJobModel",
     "OrganizationModel",
     "ProjectModel",
     "UserCredentialModel",
