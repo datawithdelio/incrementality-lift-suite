@@ -120,3 +120,23 @@ class DatasetObjectStorage(Protocol):
 class DatasetClock(Protocol):
     def now(self) -> datetime:
         """Return the current timezone-aware timestamp."""
+
+
+class DatasetValidationUnitOfWork(Protocol):
+    datasets: DatasetRepository
+
+    async def __aenter__(
+        self,
+    ) -> "DatasetValidationUnitOfWork":
+        """Open one validation lifecycle transaction."""
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Roll back failures and close the transaction."""
+
+    async def commit(self) -> None:
+        """Commit updated validation lifecycle metadata."""
