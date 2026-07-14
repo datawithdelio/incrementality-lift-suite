@@ -1,0 +1,62 @@
+from datetime import datetime
+from types import TracebackType
+from typing import Protocol
+from uuid import UUID
+
+from incrementality_api.application.datasets.ports import (
+    DatasetRepository,
+    DatasetSemanticMappingRepository,
+)
+from incrementality_api.domain.analysis_runs.entities import (
+    AnalysisRun,
+)
+
+
+class AnalysisRunRepository(Protocol):
+    async def add(
+        self,
+        run: AnalysisRun,
+    ) -> None:
+        """Stage one analysis run for persistence."""
+
+    async def get_by_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        analysis_run_id: UUID,
+    ) -> AnalysisRun | None:
+        """Load one run within complete tenant scope."""
+
+    async def update(
+        self,
+        run: AnalysisRun,
+    ) -> None:
+        """Stage updated analysis-run lifecycle metadata."""
+
+
+class AnalysisRunUnitOfWork(Protocol):
+    datasets: DatasetRepository
+    semantic_mappings: DatasetSemanticMappingRepository
+    analysis_runs: AnalysisRunRepository
+
+    async def __aenter__(
+        self,
+    ) -> "AnalysisRunUnitOfWork":
+        """Open one analysis-run transaction."""
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Roll back failures and close the transaction."""
+
+    async def commit(self) -> None:
+        """Commit analysis-run metadata atomically."""
+
+
+class AnalysisRunClock(Protocol):
+    def now(self) -> datetime:
+        """Return the current timezone-aware timestamp."""
