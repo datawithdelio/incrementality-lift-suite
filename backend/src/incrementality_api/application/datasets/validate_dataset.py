@@ -17,6 +17,9 @@ from incrementality_api.application.datasets.ports import (
     DatasetObjectStorage,
 )
 from incrementality_api.domain.datasets.entities import Dataset
+from incrementality_api.domain.datasets.status import (
+    DatasetStatus,
+)
 
 
 class BeginValidationAction(Protocol):
@@ -84,6 +87,12 @@ class ValidateDataset:
                 dataset_id=command.dataset_id,
             )
         )
+
+        if validating_dataset.status in {
+            DatasetStatus.READY,
+            DatasetStatus.FAILED,
+        }:
+            return validating_dataset
 
         chunks = self._object_storage.read(
             storage_key=validating_dataset.storage_key,

@@ -47,7 +47,11 @@ class BeginDatasetValidation:
             if dataset is None:
                 raise DatasetUnavailableError("Dataset is unavailable.")
 
-            if dataset.status is DatasetStatus.VALIDATING:
+            if dataset.status in {
+                DatasetStatus.VALIDATING,
+                DatasetStatus.READY,
+                DatasetStatus.FAILED,
+            }:
                 return dataset
 
             validating_dataset = dataset.begin_validation(
