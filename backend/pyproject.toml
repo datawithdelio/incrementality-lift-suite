@@ -18,6 +18,9 @@ dependencies = [
     "boto3>=1.43,<2.0",
 ]
 
+[project.scripts]
+incrementality-worker = "incrementality_api.workers.main:run"
+
 [project.optional-dependencies]
 dev = [
     "httpx2>=2.5,<3.0",

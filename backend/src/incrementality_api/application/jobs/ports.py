@@ -1,4 +1,5 @@
 from datetime import datetime
+from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
@@ -70,7 +71,7 @@ class DatasetValidationJobUnitOfWork(Protocol):
         self,
         exception_type: type[BaseException] | None,
         exception: BaseException | None,
-        traceback: object | None,
+        traceback: TracebackType | None,
     ) -> None:
         """Rollback failed work and close the transaction."""
 
