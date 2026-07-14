@@ -92,4 +92,60 @@ describe("ResultsExperience", () => {
     render(<ResultsExperience state={{ kind: "permission" }} />);
     expect(screen.getByText("You don’t have access to this result")).toBeInTheDocument();
   });
+
+  it("renders synthetic-control donor and placebo evidence", () => {
+    const synthetic = structuredClone(base);
+    synthetic.estimator_type = "synthetic_control";
+    synthetic.result!.technical_diagnostics = {
+      ...synthetic.result!.technical_diagnostics,
+      donor_weights: { "donor-a": 0.7, "donor-b": 0.3 },
+      pre_treatment_rmspe: 0.8,
+      rmspe_ratio: 5.2,
+      placebo_p_value: 0.08,
+      treatment_effects_over_time: [{ period: "2026-01-01", effect: 8.2 }],
+      placebo_tests: [{ unit: "donor-a", rmspe_ratio: 1.1 }],
+    };
+    render(<ResultsExperience state={{ kind: "ready", data: synthetic }} />);
+    expect(screen.getByText("Synthetic control fit")).toBeInTheDocument();
+    expect(screen.getByText("Donor weights")).toBeInTheDocument();
+    expect(screen.getByText("Placebo evidence")).toBeInTheDocument();
+  });
+
+  it("renders geographic assignments independently of fetching", () => {
+    const geo = structuredClone(base);
+    geo.estimator_type = "geo_holdout";
+    geo.result!.technical_diagnostics = {
+      ...geo.result!.technical_diagnostics,
+      geographic_assignments: [
+        { geo: "Boston", latitude: 42.36, longitude: -71.05, assignment: "treatment" },
+        { geo: "Atlanta", latitude: 33.75, longitude: -84.39, assignment: "holdout" },
+      ],
+      balance_diagnostics: { standardized_mean_difference: 0.1 },
+      spillover_warnings: [],
+    };
+    render(<ResultsExperience state={{ kind: "ready", data: geo }} />);
+    expect(screen.getByText("Geographic lift")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Geographic treatment and holdout assignments" })).toBeInTheDocument();
+  });
+
+  it("renders MMM posterior contribution and scenario planning", () => {
+    const mmm = structuredClone(base);
+    mmm.estimator_type = "marketing_mix_model";
+    mmm.result!.technical_diagnostics = {
+      ...mmm.result!.technical_diagnostics,
+      causal_claim_allowed: false,
+      plain_language_conclusion: "The posterior is stable enough for channel planning.",
+      recommendations_allowed: true,
+      channel_contributions: { search: 800, social: 400 },
+      posterior_intervals: { search: { low: 500, high: 1000 } },
+      channel_roas: { search: 3.2, social: 1.8 },
+      budget_response_curves: { search: [{ spend_multiplier: 1, expected_contribution: 800 }] },
+      scenario_plan: [{ scenario: "Shift 10%", recommended_channel: "search", budget_to_reallocate: 1000 }],
+      convergence: { max_r_hat: 1.01, min_effective_sample_size: 800, divergences: 0 },
+    };
+    render(<ResultsExperience state={{ kind: "ready", data: mmm }} />);
+    expect(screen.getByText("Channel contribution")).toBeInTheDocument();
+    expect(screen.getByText("Budget scenario")).toBeInTheDocument();
+    expect(screen.getAllByText("search")).toHaveLength(2);
+  });
 });

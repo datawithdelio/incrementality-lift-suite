@@ -18,6 +18,8 @@ dependencies = [
     "boto3>=1.43,<2.0",
     "numpy>=2.0,<3.0",
     "statsmodels>=0.14,<1.0",
+    "scipy>=1.14,<2.0",
+    "pymc>=6.1,<7.0",
 ]
 
 [project.scripts]

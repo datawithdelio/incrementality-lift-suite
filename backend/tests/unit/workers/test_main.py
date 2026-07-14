@@ -6,6 +6,16 @@ from typing import Any
 import pytest
 
 from incrementality_api.core.config import Settings
+from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.infrastructure.estimation.geo_holdout import (
+    StatsmodelsGeoHoldoutEstimator,
+)
+from incrementality_api.infrastructure.estimation.marketing_mix_model import (
+    BayesianMarketingMixEstimator,
+)
+from incrementality_api.infrastructure.estimation.synthetic_control import (
+    ScipySyntheticControlEstimator,
+)
 from incrementality_api.workers import main as worker_main
 
 
@@ -142,6 +152,23 @@ def test_builds_complete_analysis_execution_worker(
     assert process_next._claim_next is not None
     assert process_next._input_loader is not None
     assert process_next._estimator_selector is not None
+    assert set(process_next._input_loader._additional_builders) == {
+        AnalysisEstimatorType.SYNTHETIC_CONTROL,
+        AnalysisEstimatorType.GEO_HOLDOUT,
+        AnalysisEstimatorType.MARKETING_MIX_MODEL,
+    }
+    assert isinstance(
+        process_next._estimator_selector.select(AnalysisEstimatorType.SYNTHETIC_CONTROL),
+        ScipySyntheticControlEstimator,
+    )
+    assert isinstance(
+        process_next._estimator_selector.select(AnalysisEstimatorType.GEO_HOLDOUT),
+        StatsmodelsGeoHoldoutEstimator,
+    )
+    assert isinstance(
+        process_next._estimator_selector.select(AnalysisEstimatorType.MARKETING_MIX_MODEL),
+        BayesianMarketingMixEstimator,
+    )
     assert process_next._persist_success is not None
     assert process_next._record_retryable_failure._retry_policy._retry_delay == timedelta(
         seconds=45

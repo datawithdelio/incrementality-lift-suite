@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import math
+from collections import defaultdict
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,8 +13,14 @@ from incrementality_api.application.analysis_execution.estimation import (
     DifferenceInDifferencesInput,
     DifferenceInDifferencesObservation,
     EstimationError,
+    GeoCoordinate,
+    GeoHoldoutInput,
+    MarketingMixInput,
+    MarketingMixObservation,
+    PanelObservation,
     PermanentEstimationError,
     RetryableEstimationError,
+    SyntheticControlInput,
 )
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
@@ -61,6 +68,16 @@ class AnalysisInputMetadataReader(Protocol):
 class AnalysisDatasetObjectReader(Protocol):
     def read_chunks(self, storage_key: str) -> AsyncIterator[bytes]:
         """Stream one dataset object by its internal storage key."""
+
+
+class AdditionalEstimatorInputBuilder(Protocol):
+    def build(
+        self,
+        *,
+        rows: tuple[Mapping[str, str], ...],
+        mapping: DatasetSemanticMapping,
+        run: AnalysisRun,
+    ) -> object: ...
 
 
 class AnalysisInputMetadataValidator:
@@ -243,6 +260,213 @@ class DifferenceInDifferencesInputBuilder:
         return observed_at >= intervention_time
 
 
+def _configuration(run: AnalysisRun) -> dict[str, object]:
+    try:
+        parsed = json.loads(run.configuration_json)
+    except json.JSONDecodeError as error:
+        raise PermanentEstimationError("Analysis configuration is invalid JSON.") from error
+    if not isinstance(parsed, dict):
+        raise PermanentEstimationError("Analysis configuration must be an object.")
+    return parsed
+
+
+def _intervention_time(run: AnalysisRun) -> datetime:
+    value = _configuration(run).get("intervention_time")
+    if not isinstance(value, str):
+        raise PermanentEstimationError("Analysis requires intervention_time.")
+    try:
+        timestamp = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise PermanentEstimationError("intervention_time must be ISO-8601.") from error
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        raise PermanentEstimationError("intervention_time must be timezone-aware.")
+    return timestamp
+
+
+class PanelObservationBuilder:
+    """Construct library-independent panel observations from semantic roles."""
+
+    def build(
+        self,
+        *,
+        rows: tuple[Mapping[str, str], ...],
+        mapping: DatasetSemanticMapping,
+        intervention_time: datetime,
+    ) -> tuple[PanelObservation, ...]:
+        observations: list[PanelObservation] = []
+        required = (
+            mapping.time_column,
+            mapping.unit_column,
+            mapping.treatment_column,
+            mapping.outcome_column,
+        )
+        for row_number, row in enumerate(rows, start=2):
+            values = {name: str(row.get(name, "")).strip() for name in required}
+            missing = next((name for name, value in values.items() if not value), None)
+            if missing is not None:
+                raise PermanentEstimationError(
+                    f"CSV row {row_number} has a missing value for '{missing}'."
+                )
+            treatment = values[mapping.treatment_column].casefold()
+            if treatment == mapping.treatment_value.casefold():
+                treated = True
+            elif treatment == mapping.control_value.casefold():
+                treated = False
+            else:
+                raise PermanentEstimationError(
+                    f"CSV row {row_number} has an unknown treatment/control value."
+                )
+            try:
+                observed_at = datetime.fromisoformat(values[mapping.time_column])
+                outcome = float(values[mapping.outcome_column])
+            except ValueError as error:
+                raise PermanentEstimationError(
+                    f"CSV row {row_number} has invalid time or outcome data."
+                ) from error
+            if not math.isfinite(outcome):
+                raise PermanentEstimationError("Panel outcomes must be finite.")
+            post_period = DifferenceInDifferencesInputBuilder._is_post_period(
+                observed_at, intervention_time
+            )
+            observations.append(
+                PanelObservation(
+                    unit=values[mapping.unit_column],
+                    observed_at=observed_at,
+                    outcome=outcome,
+                    treated=treated,
+                    post_period=post_period,
+                )
+            )
+        return tuple(observations)
+
+
+class SyntheticControlInputBuilder:
+    def __init__(self, panel_builder: PanelObservationBuilder | None = None) -> None:
+        self._panel_builder = panel_builder or PanelObservationBuilder()
+
+    def build(
+        self,
+        *,
+        rows: tuple[Mapping[str, str], ...],
+        mapping: DatasetSemanticMapping,
+        run: AnalysisRun,
+    ) -> SyntheticControlInput:
+        return SyntheticControlInput(
+            self._panel_builder.build(
+                rows=rows,
+                mapping=mapping,
+                intervention_time=_intervention_time(run),
+            )
+        )
+
+
+class GeoHoldoutInputBuilder:
+    def __init__(self, panel_builder: PanelObservationBuilder | None = None) -> None:
+        self._panel_builder = panel_builder or PanelObservationBuilder()
+
+    def build(
+        self,
+        *,
+        rows: tuple[Mapping[str, str], ...],
+        mapping: DatasetSemanticMapping,
+        run: AnalysisRun,
+    ) -> GeoHoldoutInput:
+        configuration = _configuration(run)
+        coordinates_value = configuration.get("geo_coordinates")
+        if not isinstance(coordinates_value, dict):
+            raise PermanentEstimationError("Geo holdout requires geo_coordinates.")
+        coordinates: dict[str, GeoCoordinate] = {}
+        for unit, coordinate_value in coordinates_value.items():
+            if not isinstance(unit, str) or not isinstance(coordinate_value, dict):
+                raise PermanentEstimationError("Geo coordinates are invalid.")
+            latitude = coordinate_value.get("latitude")
+            longitude = coordinate_value.get("longitude")
+            if not isinstance(latitude, int | float) or not isinstance(longitude, int | float):
+                raise PermanentEstimationError("Geo coordinates must be numeric.")
+            if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+                raise PermanentEstimationError("Geo coordinates are outside valid bounds.")
+            coordinates[unit] = GeoCoordinate(float(latitude), float(longitude))
+        spillover_value = configuration.get("spillover_pairs", [])
+        if not isinstance(spillover_value, list):
+            raise PermanentEstimationError("spillover_pairs must be a list.")
+        spillovers: list[tuple[str, str]] = []
+        for pair in spillover_value:
+            if (
+                not isinstance(pair, list)
+                or len(pair) != 2
+                or not all(isinstance(item, str) for item in pair)
+            ):
+                raise PermanentEstimationError("Each spillover pair requires two geographies.")
+            spillovers.append((pair[0], pair[1]))
+        outcome_kind = configuration.get("outcome_kind", "outcome")
+        if outcome_kind not in {"outcome", "revenue", "conversions"}:
+            raise PermanentEstimationError("Geo outcome_kind is unsupported.")
+        return GeoHoldoutInput(
+            observations=self._panel_builder.build(
+                rows=rows,
+                mapping=mapping,
+                intervention_time=_intervention_time(run),
+            ),
+            coordinates=coordinates,
+            outcome_kind=str(outcome_kind),
+            spillover_pairs=tuple(spillovers),
+        )
+
+
+class MarketingMixInputBuilder:
+    """Aggregate mapped channel series before any PyMC-specific work."""
+
+    def build(
+        self,
+        *,
+        rows: tuple[Mapping[str, str], ...],
+        mapping: DatasetSemanticMapping,
+        run: AnalysisRun,
+    ) -> MarketingMixInput:
+        if mapping.spend_column is None:
+            raise PermanentEstimationError("MMM requires a mapped spend column.")
+        channels = (mapping.spend_column, *mapping.covariate_columns)
+        grouped_outcomes: defaultdict[datetime, float] = defaultdict(float)
+        grouped_spend: defaultdict[datetime, dict[str, float]] = defaultdict(
+            lambda: {channel: 0.0 for channel in channels}
+        )
+        for row_number, row in enumerate(rows, start=2):
+            try:
+                observed_at = datetime.fromisoformat(str(row[mapping.time_column]).strip())
+                outcome = float(str(row[mapping.outcome_column]).strip())
+                spend = {channel: float(str(row[channel]).strip()) for channel in channels}
+            except (KeyError, ValueError) as error:
+                raise PermanentEstimationError(
+                    f"CSV row {row_number} has invalid MMM values."
+                ) from error
+            grouped_outcomes[observed_at] += outcome
+            for channel, value in spend.items():
+                grouped_spend[observed_at][channel] += value
+        configuration = _configuration(run)
+        adstock = configuration.get("adstock_decay", {})
+        saturation = configuration.get("saturation_half_spend", {})
+        seasonality_period = configuration.get("seasonality_period", 52)
+        outcome_kind = configuration.get("outcome_kind", "revenue")
+        if not isinstance(adstock, dict) or not isinstance(saturation, dict):
+            raise PermanentEstimationError("MMM channel configuration must be an object.")
+        if not isinstance(seasonality_period, int):
+            raise PermanentEstimationError("MMM seasonality_period must be an integer.")
+        if outcome_kind not in {"revenue", "conversions", "outcome"}:
+            raise PermanentEstimationError("MMM outcome_kind is unsupported.")
+        return MarketingMixInput(
+            observations=tuple(
+                MarketingMixObservation(period, grouped_outcomes[period], grouped_spend[period])
+                for period in sorted(grouped_outcomes)
+            ),
+            adstock_decay={str(key): float(value) for key, value in adstock.items()},
+            saturation_half_spend={
+                str(key): float(value) for key, value in saturation.items()
+            },
+            seasonality_period=seasonality_period,
+            outcome_kind=str(outcome_kind),
+        )
+
+
 class ProductionAnalysisInputLoader:
     """Coordinate metadata, object loading, validation, and input construction."""
 
@@ -255,6 +479,9 @@ class ProductionAnalysisInputLoader:
         row_loader: CsvAnalysisRowLoader,
         configuration_parser: DifferenceInDifferencesConfigurationParser,
         input_builder: DifferenceInDifferencesInputBuilder,
+        additional_builders: Mapping[
+            AnalysisEstimatorType, AdditionalEstimatorInputBuilder
+        ] | None = None,
     ) -> None:
         self._metadata_reader = metadata_reader
         self._object_storage = object_storage
@@ -262,11 +489,11 @@ class ProductionAnalysisInputLoader:
         self._row_loader = row_loader
         self._configuration_parser = configuration_parser
         self._input_builder = input_builder
+        self._additional_builders = dict(additional_builders or {})
 
     async def load(self, job: AnalysisExecutionJob) -> AnalysisEstimatorInput:
         metadata = await self._metadata_reader.load(job)
         self._metadata_validator.validate(job=job, metadata=metadata)
-        configuration = self._configuration_parser.parse(metadata.run)
         try:
             rows = await self._row_loader.load(
                 self._object_storage.read_chunks(metadata.dataset.storage_key)
@@ -275,6 +502,17 @@ class ProductionAnalysisInputLoader:
             raise
         except Exception as error:
             raise RetryableEstimationError("Dataset object storage is unavailable.") from error
+        if metadata.run.estimator_type is not AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES:
+            builder = self._additional_builders.get(metadata.run.estimator_type)
+            if builder is None:
+                raise PermanentEstimationError(
+                    f"No input builder supports '{metadata.run.estimator_type.value}'."
+                )
+            return AnalysisEstimatorInput(
+                estimator_type=metadata.run.estimator_type,
+                payload=builder.build(rows=rows, mapping=metadata.mapping, run=metadata.run),
+            )
+        configuration = self._configuration_parser.parse(metadata.run)
         return AnalysisEstimatorInput(
             estimator_type=metadata.run.estimator_type,
             payload=self._input_builder.build(

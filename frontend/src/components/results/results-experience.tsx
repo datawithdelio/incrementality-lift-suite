@@ -4,6 +4,7 @@ import type { AnalysisResultResponse, ResultsState } from "@/lib/results/types";
 import Link from "next/link";
 
 import { ComparisonChart, EventStudyChart } from "./result-charts";
+import { GeoHoldoutPanels, MarketingMixPanels, SyntheticControlPanels } from "./estimator-result-panels";
 import { StatusState } from "./status-state";
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -39,13 +40,29 @@ export function ResultsExperience({ state }: { state: ResultsState }) {
   const result = data.result;
   const diagnostics = result.technical_diagnostics;
   const warnings = stringArray(diagnostics.warnings);
-  const causal = diagnostics.causal_claim_allowed === true;
+  const decisionReady = diagnostics.causal_claim_allowed === true || diagnostics.recommendations_allowed === true;
   const conclusion = typeof diagnostics.plain_language_conclusion === "string"
     ? diagnostics.plain_language_conclusion
-    : causal ? "The design supports a measurable incremental effect." : "The estimate needs additional validation.";
+    : decisionReady
+      ? "The analysis is ready for decision support."
+      : "The estimate needs additional validation.";
   const samples = objectValue(diagnostics.sample_counts);
   const relativeLift = result.business_impact.relative_lift;
   const headline = relativeLift === null ? number(result.effect_estimate) : percent(relativeLift);
+  const estimatorLabel: Record<string, string> = {
+    difference_in_differences: "Difference-in-differences",
+    synthetic_control: "Synthetic control",
+    geo_holdout: "Geo holdout",
+    marketing_mix_model: "Bayesian marketing mix model",
+  };
+  const uncertaintyCopy = data.estimator_type === "marketing_mix_model"
+    ? `95% posterior interval ${number(result.confidence_interval.low)} to ${number(result.confidence_interval.high)}`
+    : `95% confidence interval ${number(result.confidence_interval.low)} to ${number(result.confidence_interval.high)} · p = ${number(result.p_value, 3)}`;
+  const groupMetric = data.estimator_type === "marketing_mix_model"
+    ? { label: "Channels / periods", value: `${String(samples.channels ?? "—")} / ${String(samples.periods ?? "—")}` }
+    : data.estimator_type === "synthetic_control"
+      ? { label: "Contributing donors", value: String(Object.keys(objectValue(diagnostics.donor_weights)).length) }
+      : { label: "Treated / control units", value: `${String(samples.treated_units ?? "—")} / ${String(samples.control_units ?? "—")}` };
 
   return (
     <main className="results-shell">
@@ -53,16 +70,16 @@ export function ResultsExperience({ state }: { state: ResultsState }) {
         <Link href="/" className="brand"><span>∆</span> Incrementality</Link>
         <button className="button secondary" onClick={() => downloadReport(data)}>Download report</button>
       </header>
-      <section className={`conclusion ${causal ? "trusted" : "caution"}`}>
+      <section className={`conclusion ${decisionReady ? "trusted" : "caution"}`}>
         <div>
-          <p className="eyebrow">Difference-in-differences · complete</p>
+          <p className="eyebrow">{estimatorLabel[data.estimator_type] ?? data.estimator_type} · complete</p>
           <h1>{conclusion}</h1>
-          <p className="confidence-copy">95% confidence interval {number(result.confidence_interval.low)} to {number(result.confidence_interval.high)} · p = {number(result.p_value, 3)}</p>
+          <p className="confidence-copy">{uncertaintyCopy}</p>
         </div>
         <div className="hero-metric"><strong>{headline}</strong><span>{relativeLift === null ? "treatment effect" : "estimated lift"}</span></div>
       </section>
 
-      {!causal || warnings.length ? (
+      {!decisionReady || warnings.length ? (
         <section className="warning-panel">
           <p className="eyebrow">Diagnostic review</p><h2>Use this result with caution</h2>
           <ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
@@ -70,18 +87,22 @@ export function ResultsExperience({ state }: { state: ResultsState }) {
       ) : null}
 
       <section className="metric-grid" aria-label="Key result metrics">
-        <Metric label="Effect per treated observation" value={number(result.effect_estimate)} />
+        <Metric label={data.estimator_type === "marketing_mix_model" ? "Average media contribution" : "Effect per treated observation"} value={number(result.effect_estimate)} />
         <Metric label="Incremental outcome" value={result.business_impact.incremental_outcome === null ? "—" : number(result.business_impact.incremental_outcome, 0)} />
-        <Metric label="Treated / control units" value={`${String(samples.treated_units ?? "—")} / ${String(samples.control_units ?? "—")}`} />
+        <Metric label={groupMetric.label} value={groupMetric.value} />
         <Metric label="Observations" value={number(result.sample_size, 0)} />
       </section>
 
-      <section className="story-grid">
+      {data.estimator_type === "synthetic_control" ? <SyntheticControlPanels diagnostics={diagnostics} /> : null}
+      {data.estimator_type === "geo_holdout" ? <GeoHoldoutPanels diagnostics={diagnostics} /> : null}
+      {data.estimator_type === "marketing_mix_model" ? <MarketingMixPanels diagnostics={diagnostics} /> : null}
+
+      {data.estimator_type === "difference_in_differences" ? <><section className="story-grid">
         <article className="panel wide"><div className="panel-heading"><div><p className="eyebrow">What changed</p><h2>Observed versus expected outcome</h2></div><p>The gap after treatment is the estimated incremental impact.</p></div><ComparisonChart points={arrayValue(diagnostics.observed_vs_counterfactual)} /></article>
         <article className="panel"><p className="eyebrow">Business impact</p><h2>{result.business_impact.incremental_revenue === null ? "Incremental outcome" : "Estimated revenue impact"}</h2><strong className="impact-number">{result.business_impact.incremental_revenue === null ? number(result.business_impact.incremental_outcome ?? 0, 0) : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(result.business_impact.incremental_revenue)}</strong><p>Estimated across treated observations after the intervention.</p></article>
       </section>
 
-      <section className="panel"><div className="panel-heading"><div><p className="eyebrow">Assumption check</p><h2>Effect over time</h2></div><p>Pre-treatment estimates should remain close to zero.</p></div><EventStudyChart points={arrayValue(diagnostics.event_study)} /></section>
+      <section className="panel"><div className="panel-heading"><div><p className="eyebrow">Assumption check</p><h2>Effect over time</h2></div><p>Pre-treatment estimates should remain close to zero.</p></div><EventStudyChart points={arrayValue(diagnostics.event_study)} /></section></> : null}
 
       <details className="technical"><summary>Technical details</summary><div className="technical-grid"><Metric label="Standard error" value={number(result.standard_error, 3)} /><Metric label="Estimator" value={`${result.estimator_version} · ${result.library_name} ${result.library_version}`} /><Metric label="Model" value={String(objectValue(diagnostics.model_specification).formula ?? "Difference-in-differences")} /><Metric label="Design assessment" value={String(diagnostics.design_assessment ?? "Not available")} /></div><pre>{JSON.stringify({ analysis_configuration: data.analysis_configuration, diagnostics }, null, 2)}</pre></details>
     </main>

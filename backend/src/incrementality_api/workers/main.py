@@ -12,7 +12,10 @@ from incrementality_api.application.analysis_execution.input_loading import (
     CsvAnalysisRowLoader,
     DifferenceInDifferencesConfigurationParser,
     DifferenceInDifferencesInputBuilder,
+    GeoHoldoutInputBuilder,
+    MarketingMixInputBuilder,
     ProductionAnalysisInputLoader,
+    SyntheticControlInputBuilder,
 )
 from incrementality_api.application.analysis_execution.retry_policy import (
     FixedDelayAnalysisExecutionRetryPolicy,
@@ -63,6 +66,17 @@ from incrementality_api.infrastructure.database.unit_of_work.jobs import (
 )
 from incrementality_api.infrastructure.estimation.difference_in_differences import (
     StatsmodelsDifferenceInDifferencesEstimator,
+)
+from incrementality_api.infrastructure.estimation.geo_holdout import (
+    StatsmodelsGeoHoldoutEstimator,
+)
+from incrementality_api.infrastructure.estimation.marketing_mix_model import (
+    BayesianMarketingMixEstimator,
+    MarketingMixTransformer,
+    PyMCMarketingMixModelRunner,
+)
+from incrementality_api.infrastructure.estimation.synthetic_control import (
+    ScipySyntheticControlEstimator,
 )
 from incrementality_api.infrastructure.storage.s3_clients import (
     create_s3_compatible_client,
@@ -223,12 +237,23 @@ def build_analysis_execution_worker() -> AnalysisExecutionWorker:
         row_loader=CsvAnalysisRowLoader(),
         configuration_parser=DifferenceInDifferencesConfigurationParser(),
         input_builder=DifferenceInDifferencesInputBuilder(),
+        additional_builders={
+            AnalysisEstimatorType.SYNTHETIC_CONTROL: SyntheticControlInputBuilder(),
+            AnalysisEstimatorType.GEO_HOLDOUT: GeoHoldoutInputBuilder(),
+            AnalysisEstimatorType.MARKETING_MIX_MODEL: MarketingMixInputBuilder(),
+        },
     )
     estimator_selector = AnalysisEstimatorRegistry(
         {
             AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES: (
                 StatsmodelsDifferenceInDifferencesEstimator()
-            )
+            ),
+            AnalysisEstimatorType.SYNTHETIC_CONTROL: ScipySyntheticControlEstimator(),
+            AnalysisEstimatorType.GEO_HOLDOUT: StatsmodelsGeoHoldoutEstimator(),
+            AnalysisEstimatorType.MARKETING_MIX_MODEL: BayesianMarketingMixEstimator(
+                model_runner=PyMCMarketingMixModelRunner(),
+                transformer=MarketingMixTransformer(),
+            ),
         }
     )
     process_next = RunNextAnalysisExecutionJob(

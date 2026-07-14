@@ -37,6 +37,50 @@ class DifferenceInDifferencesInput:
 
 
 @dataclass(frozen=True, slots=True)
+class PanelObservation:
+    unit: str
+    observed_at: datetime
+    outcome: float
+    treated: bool
+    post_period: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SyntheticControlInput:
+    observations: tuple[PanelObservation, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class GeoCoordinate:
+    latitude: float
+    longitude: float
+
+
+@dataclass(frozen=True, slots=True)
+class GeoHoldoutInput:
+    observations: tuple[PanelObservation, ...]
+    coordinates: Mapping[str, GeoCoordinate]
+    outcome_kind: str
+    spillover_pairs: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class MarketingMixObservation:
+    observed_at: datetime
+    outcome: float
+    channel_spend: Mapping[str, float]
+
+
+@dataclass(frozen=True, slots=True)
+class MarketingMixInput:
+    observations: tuple[MarketingMixObservation, ...]
+    adstock_decay: Mapping[str, float]
+    saturation_half_spend: Mapping[str, float]
+    seasonality_period: int
+    outcome_kind: str
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisEstimatorInput:
     estimator_type: AnalysisEstimatorType
     payload: object
