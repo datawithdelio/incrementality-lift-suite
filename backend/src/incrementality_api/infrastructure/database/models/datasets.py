@@ -26,6 +26,12 @@ class DatasetModel(TimestampMixin, Base):
     __tablename__ = "datasets"
     __table_args__ = (
         UniqueConstraint(
+            "id",
+            "workspace_id",
+            "project_id",
+            name="uq_datasets_id_workspace_project",
+        ),
+        UniqueConstraint(
             "storage_key",
             name="uq_datasets_storage_key",
         ),

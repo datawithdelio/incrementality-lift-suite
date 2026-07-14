@@ -28,6 +28,12 @@ class DatasetSemanticMappingModel(
     __tablename__ = "dataset_semantic_mappings"
     __table_args__ = (
         UniqueConstraint(
+            "id",
+            "dataset_id",
+            "version",
+            name=("uq_dataset_semantic_mappings_id_dataset_version"),
+        ),
+        UniqueConstraint(
             "dataset_id",
             "version",
             name=("uq_dataset_semantic_mappings_dataset_version"),

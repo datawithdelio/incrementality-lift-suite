@@ -39,3 +39,7 @@ __all__ = [
     "WorkspaceMembershipModel",
     "WorkspaceModel",
 ]
+
+from incrementality_api.infrastructure.database.models.analysis_runs import (
+    AnalysisRunModel as AnalysisRunModel,
+)
