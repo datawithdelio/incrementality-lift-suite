@@ -8,6 +8,9 @@ from uuid import UUID
 from incrementality_api.application.jobs.ports import (
     DatasetValidationJobRepository,
 )
+from incrementality_api.domain.datasets.columns import (
+    DatasetColumnProfile,
+)
 from incrementality_api.domain.datasets.entities import Dataset
 from incrementality_api.domain.projects.entities import Project
 
@@ -158,6 +161,7 @@ class DatasetValidationUnitOfWork(Protocol):
 class DatasetValidationResult:
     row_count: int
     column_count: int
+    columns: tuple[DatasetColumnProfile, ...] = ()
 
 
 class DatasetContentValidator(Protocol):

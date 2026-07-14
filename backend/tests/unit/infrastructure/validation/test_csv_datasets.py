@@ -36,6 +36,116 @@ async def test_returns_csv_row_and_column_counts() -> None:
 
 
 @pytest.mark.asyncio
+async def test_discovers_column_profiles_and_primitive_types() -> None:
+    content = (
+        b"Market Name,treated,orders,revenue,"
+        b"event_date,observed_at,notes\n"
+        b"north,true,10,250.5,2026-07-01,"
+        b"2026-07-01T12:30:00,launch\n"
+        b"south,false,,175,2026-07-02,"
+        b"2026-07-02T08:00:00,\n"
+    )
+
+    result = await CsvDatasetContentValidator().validate(
+        chunks=content_chunks(
+            content,
+            chunk_size=4,
+        ),
+    )
+
+    assert [column.ordinal_position for column in result.columns] == [1, 2, 3, 4, 5, 6, 7]
+
+    assert [column.source_name for column in result.columns] == [
+        "Market Name",
+        "treated",
+        "orders",
+        "revenue",
+        "event_date",
+        "observed_at",
+        "notes",
+    ]
+
+    assert [column.normalized_name for column in result.columns] == [
+        "market_name",
+        "treated",
+        "orders",
+        "revenue",
+        "event_date",
+        "observed_at",
+        "notes",
+    ]
+
+    assert [column.inferred_type.value for column in result.columns] == [
+        "string",
+        "boolean",
+        "integer",
+        "float",
+        "date",
+        "datetime",
+        "string",
+    ]
+
+    assert [column.missing_count for column in result.columns] == [0, 0, 1, 0, 0, 0, 1]
+
+    assert [column.nullable for column in result.columns] == [
+        False,
+        False,
+        True,
+        False,
+        False,
+        False,
+        True,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_generates_unique_normalized_column_names() -> None:
+    content = ("Ad Spend,ad-spend,🔥\n10,20,value\n").encode()
+
+    result = await CsvDatasetContentValidator().validate(
+        chunks=content_chunks(content),
+    )
+
+    assert [column.normalized_name for column in result.columns] == [
+        "ad_spend",
+        "ad_spend_2",
+        "column_3",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_header_only_columns_default_to_string() -> None:
+    result = await CsvDatasetContentValidator().validate(
+        chunks=content_chunks(
+            b"market,revenue\n",
+        ),
+    )
+
+    assert [column.inferred_type.value for column in result.columns] == [
+        "string",
+        "string",
+    ]
+
+    assert [column.nullable for column in result.columns] == [
+        False,
+        False,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_rejects_column_name_longer_than_255_characters() -> None:
+    content = (("x" * 256) + ",revenue\n" + "north,250\n").encode()
+
+    with pytest.raises(
+        DatasetContentValidationError,
+        match="must not exceed 255 characters",
+    ):
+        await CsvDatasetContentValidator().validate(
+            chunks=content_chunks(content),
+        )
+
+
+@pytest.mark.asyncio
 async def test_parses_quoted_newlines_across_chunks() -> None:
     content = b'market,notes\nnorth,"first line\nsecond line"\nsouth,"single line"\n'
 
