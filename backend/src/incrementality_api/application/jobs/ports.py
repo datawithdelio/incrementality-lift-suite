@@ -38,3 +38,31 @@ class DatasetValidationJobRepository(Protocol):
         job: DatasetValidationJob,
     ) -> None:
         """Stage updated durable-job lifecycle metadata."""
+
+
+class JobClock(Protocol):
+    def now(self) -> datetime:
+        """Return the current timezone-aware time."""
+
+
+class DatasetValidationJobUnitOfWork(Protocol):
+    validation_jobs: DatasetValidationJobRepository
+
+    async def __aenter__(
+        self,
+    ) -> "DatasetValidationJobUnitOfWork":
+        """Enter one durable-job transaction."""
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: object | None,
+    ) -> None:
+        """Rollback failed work and close the transaction."""
+
+    async def commit(self) -> None:
+        """Commit the durable-job transaction."""
+
+    async def rollback(self) -> None:
+        """Rollback the durable-job transaction."""
