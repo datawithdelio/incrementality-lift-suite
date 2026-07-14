@@ -13,12 +13,16 @@ from incrementality_api.application.datasets.ports import (
     DatasetColumnRepository,
     DatasetProjectReader,
     DatasetRepository,
+    DatasetSemanticMappingRepository,
 )
 from incrementality_api.application.jobs.ports import (
     DatasetValidationJobRepository,
 )
 from incrementality_api.infrastructure.database.repositories.dataset_columns import (
     SqlAlchemyDatasetColumnRepository,
+)
+from incrementality_api.infrastructure.database.repositories.dataset_semantic_mappings import (
+    SqlAlchemyDatasetSemanticMappingRepository,
 )
 from incrementality_api.infrastructure.database.repositories.datasets import (
     SqlAlchemyDatasetProjectReader,
@@ -34,6 +38,7 @@ class SqlAlchemyDatasetUnitOfWork:
 
     datasets: DatasetRepository
     columns: DatasetColumnRepository
+    semantic_mappings: DatasetSemanticMappingRepository
     projects: DatasetProjectReader
     validation_jobs: DatasetValidationJobRepository
 
@@ -54,6 +59,9 @@ class SqlAlchemyDatasetUnitOfWork:
             session=session,
         )
         self.columns = SqlAlchemyDatasetColumnRepository(
+            session=session,
+        )
+        self.semantic_mappings = SqlAlchemyDatasetSemanticMappingRepository(
             session=session,
         )
         self.projects = SqlAlchemyDatasetProjectReader(

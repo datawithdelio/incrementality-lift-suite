@@ -30,3 +30,9 @@ class DatasetContentValidationError(
     DatasetApplicationError,
 ):
     """Raised when uploaded dataset content is structurally invalid."""
+
+
+class DatasetSemanticMappingUnavailableError(
+    DatasetApplicationError,
+):
+    """Raised when a scoped semantic mapping cannot be found."""

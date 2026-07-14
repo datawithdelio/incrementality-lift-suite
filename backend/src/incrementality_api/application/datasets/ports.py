@@ -12,6 +12,9 @@ from incrementality_api.domain.datasets.columns import (
     DatasetColumnProfile,
 )
 from incrementality_api.domain.datasets.entities import Dataset
+from incrementality_api.domain.datasets.semantic_mapping import (
+    DatasetSemanticMapping,
+)
 from incrementality_api.domain.projects.entities import Project
 
 
@@ -129,6 +132,55 @@ class DatasetReadUnitOfWork(Protocol):
         traceback: TracebackType | None,
     ) -> None:
         """Close the read-scoped database session."""
+
+
+class DatasetSemanticMappingRepository(Protocol):
+    async def add(
+        self,
+        mapping: DatasetSemanticMapping,
+    ) -> None:
+        """Stage one semantic-mapping version for persistence."""
+
+    async def get_latest_by_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+    ) -> DatasetSemanticMapping | None:
+        """Load the newest mapping in complete tenant scope."""
+
+    async def get_by_scope_and_version(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+        version: int,
+    ) -> DatasetSemanticMapping | None:
+        """Load one mapping version in complete tenant scope."""
+
+
+class DatasetSemanticMappingUnitOfWork(Protocol):
+    datasets: DatasetRepository
+    columns: DatasetColumnRepository
+    semantic_mappings: DatasetSemanticMappingRepository
+
+    async def __aenter__(
+        self,
+    ) -> "DatasetSemanticMappingUnitOfWork":
+        """Open one semantic-mapping transaction."""
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Roll back failures and close the transaction."""
+
+    async def commit(self) -> None:
+        """Commit the semantic mapping atomically."""
 
 
 class DatasetUploadUnitOfWork(Protocol):
