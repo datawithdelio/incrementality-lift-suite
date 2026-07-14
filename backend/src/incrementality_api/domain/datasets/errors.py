@@ -10,3 +10,7 @@ class InvalidDatasetTransitionError(
     DatasetDomainError,
 ):
     """Raised when a dataset lifecycle transition is invalid."""
+
+
+class InvalidDatasetSemanticMappingError(ValueError):
+    """Raised when causal column roles are invalid."""
