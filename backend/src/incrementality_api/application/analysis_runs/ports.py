@@ -10,6 +10,9 @@ from incrementality_api.application.datasets.ports import (
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
+from incrementality_api.domain.analysis_runs.execution_jobs import (
+    AnalysisExecutionJob,
+)
 
 
 class AnalysisRunRepository(Protocol):
@@ -35,10 +38,18 @@ class AnalysisRunRepository(Protocol):
         """Stage updated analysis-run lifecycle metadata."""
 
 
+class AnalysisExecutionJobRepository(Protocol):
+    async def add(
+        self,
+        job: AnalysisExecutionJob,
+    ) -> None: ...
+
+
 class AnalysisRunUnitOfWork(Protocol):
     datasets: DatasetRepository
     semantic_mappings: DatasetSemanticMappingRepository
     analysis_runs: AnalysisRunRepository
+    execution_jobs: AnalysisExecutionJobRepository
 
     async def __aenter__(
         self,

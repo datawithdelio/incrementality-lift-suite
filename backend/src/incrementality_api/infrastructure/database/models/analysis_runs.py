@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
@@ -29,6 +30,12 @@ class AnalysisRunModel(
 
     __tablename__ = "analysis_runs"
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "workspace_id",
+            "project_id",
+            name="uq_analysis_runs_id_workspace_project",
+        ),
         CheckConstraint(
             "semantic_mapping_version > 0",
             name=("ck_analysis_runs_mapping_version_positive"),

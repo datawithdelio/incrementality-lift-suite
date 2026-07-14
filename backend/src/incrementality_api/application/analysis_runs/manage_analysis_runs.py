@@ -14,6 +14,9 @@ from incrementality_api.application.analysis_runs.ports import (
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
+from incrementality_api.domain.analysis_runs.execution_jobs import (
+    AnalysisExecutionJob,
+)
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
@@ -35,7 +38,7 @@ class QueueAnalysisRunCommand:
 
 
 class QueueAnalysisRun:
-    """Validate dependencies and queue a reproducible analysis run."""
+    """Validate dependencies and atomically queue an analysis."""
 
     def __init__(
         self,
@@ -75,6 +78,8 @@ class QueueAnalysisRun:
                     AnalysisRunSemanticMappingUnavailableError("Semantic mapping is unavailable.")
                 )
 
+            queued_at = self._clock.now()
+
             run = AnalysisRun.queue(
                 workspace_id=command.workspace_id,
                 project_id=command.project_id,
@@ -85,10 +90,21 @@ class QueueAnalysisRun:
                 estimator_type=command.estimator_type,
                 estimator_version=(command.estimator_version),
                 configuration_json=(command.configuration_json),
-                created_at=self._clock.now(),
+                created_at=queued_at,
+            )
+
+            execution_job = AnalysisExecutionJob.enqueue(
+                workspace_id=command.workspace_id,
+                project_id=command.project_id,
+                analysis_run_id=run.id,
+                created_at=queued_at,
+                available_at=queued_at,
+                max_attempts=3,
             )
 
             await self._unit_of_work.analysis_runs.add(run)
+
+            await self._unit_of_work.execution_jobs.add(execution_job)
 
             await self._unit_of_work.commit()
 

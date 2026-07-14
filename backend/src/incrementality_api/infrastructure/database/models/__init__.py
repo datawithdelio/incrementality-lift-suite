@@ -40,6 +40,9 @@ __all__ = [
     "WorkspaceModel",
 ]
 
+from incrementality_api.infrastructure.database.models.analysis_execution_jobs import (
+    AnalysisExecutionJobModel as AnalysisExecutionJobModel,
+)
 from incrementality_api.infrastructure.database.models.analysis_runs import (
     AnalysisRunModel as AnalysisRunModel,
 )

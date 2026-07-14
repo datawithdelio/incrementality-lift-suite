@@ -3,6 +3,7 @@ from types import TracebackType
 from uuid import UUID, uuid4
 
 import pytest
+
 from incrementality_api.application.analysis_runs.errors import (
     AnalysisRunDatasetNotReadyError,
     AnalysisRunDatasetUnavailableError,
@@ -15,9 +16,14 @@ from incrementality_api.application.analysis_runs.manage_analysis_runs import (
     QueueAnalysisRun,
     QueueAnalysisRunCommand,
 )
-
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
+)
+from incrementality_api.domain.analysis_runs.execution_job_status import (
+    AnalysisExecutionJobStatus,
+)
+from incrementality_api.domain.analysis_runs.execution_jobs import (
+    AnalysisExecutionJob,
 )
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
@@ -249,6 +255,17 @@ class FakeAnalysisRunRepository:
         return self._run
 
 
+class FakeExecutionJobRepository:
+    def __init__(self) -> None:
+        self.added: list[AnalysisExecutionJob] = []
+
+    async def add(
+        self,
+        job: AnalysisExecutionJob,
+    ) -> None:
+        self.added.append(job)
+
+
 class FakeAnalysisRunUnitOfWork:
     def __init__(
         self,
@@ -266,6 +283,7 @@ class FakeAnalysisRunUnitOfWork:
         self.analysis_runs = FakeAnalysisRunRepository(
             run,
         )
+        self.execution_jobs = FakeExecutionJobRepository()
         self.commit_count = 0
         self.entered = False
         self.exited = False
@@ -381,6 +399,19 @@ async def test_queues_analysis_run_atomically() -> None:
         result,
     ]
 
+    assert len(unit_of_work.execution_jobs.added) == 1
+
+    execution_job = unit_of_work.execution_jobs.added[0]
+
+    assert execution_job.workspace_id == workspace_id
+    assert execution_job.project_id == project_id
+    assert execution_job.analysis_run_id == result.id
+    assert execution_job.created_at == RUN_CREATED_AT
+    assert execution_job.available_at == RUN_CREATED_AT
+    assert execution_job.status is AnalysisExecutionJobStatus.PENDING
+    assert execution_job.attempt_count == 0
+    assert execution_job.max_attempts == 3
+
     assert unit_of_work.commit_count == 1
     assert unit_of_work.entered
     assert unit_of_work.exited
@@ -415,6 +446,7 @@ async def test_queue_rejects_unavailable_dataset() -> None:
         )
 
     assert unit_of_work.analysis_runs.added == []
+    assert unit_of_work.execution_jobs.added == []
     assert unit_of_work.commit_count == 0
 
 
@@ -460,6 +492,7 @@ async def test_queue_requires_ready_dataset() -> None:
 
     assert unit_of_work.semantic_mappings.received_scope is None
     assert unit_of_work.analysis_runs.added == []
+    assert unit_of_work.execution_jobs.added == []
     assert unit_of_work.commit_count == 0
 
 
@@ -505,6 +538,7 @@ async def test_queue_requires_requested_mapping_version() -> None:
     )
 
     assert unit_of_work.analysis_runs.added == []
+    assert unit_of_work.execution_jobs.added == []
     assert unit_of_work.commit_count == 0
 
 

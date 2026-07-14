@@ -10,11 +10,15 @@ from incrementality_api.application.analysis_runs.errors import (
     AnalysisRunPersistenceConflictError,
 )
 from incrementality_api.application.analysis_runs.ports import (
+    AnalysisExecutionJobRepository,
     AnalysisRunRepository,
 )
 from incrementality_api.application.datasets.ports import (
     DatasetRepository,
     DatasetSemanticMappingRepository,
+)
+from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
+    SqlAlchemyAnalysisExecutionJobRepository,
 )
 from incrementality_api.infrastructure.database.repositories.analysis_runs import (
     SqlAlchemyAnalysisRunRepository,
@@ -33,6 +37,7 @@ class SqlAlchemyAnalysisRunUnitOfWork:
     datasets: DatasetRepository
     semantic_mappings: DatasetSemanticMappingRepository
     analysis_runs: AnalysisRunRepository
+    execution_jobs: AnalysisExecutionJobRepository
 
     def __init__(
         self,
@@ -56,6 +61,10 @@ class SqlAlchemyAnalysisRunUnitOfWork:
         )
 
         self.analysis_runs = SqlAlchemyAnalysisRunRepository(
+            session=session,
+        )
+
+        self.execution_jobs = SqlAlchemyAnalysisExecutionJobRepository(
             session=session,
         )
 
