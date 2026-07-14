@@ -5,6 +5,9 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
+from incrementality_api.application.jobs.ports import (
+    DatasetValidationJobRepository,
+)
 from incrementality_api.domain.datasets.entities import Dataset
 from incrementality_api.domain.projects.entities import Project
 
@@ -75,6 +78,7 @@ class DatasetUnitOfWork(Protocol):
 
 class DatasetUploadUnitOfWork(Protocol):
     datasets: DatasetRepository
+    validation_jobs: DatasetValidationJobRepository
 
     async def __aenter__(
         self,

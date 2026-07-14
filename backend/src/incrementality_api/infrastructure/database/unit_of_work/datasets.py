@@ -13,9 +13,15 @@ from incrementality_api.application.datasets.ports import (
     DatasetProjectReader,
     DatasetRepository,
 )
+from incrementality_api.application.jobs.ports import (
+    DatasetValidationJobRepository,
+)
 from incrementality_api.infrastructure.database.repositories.datasets import (
     SqlAlchemyDatasetProjectReader,
     SqlAlchemyDatasetRepository,
+)
+from incrementality_api.infrastructure.database.repositories.jobs import (
+    SqlAlchemyDatasetValidationJobRepository,
 )
 
 
@@ -24,6 +30,7 @@ class SqlAlchemyDatasetUnitOfWork:
 
     datasets: DatasetRepository
     projects: DatasetProjectReader
+    validation_jobs: DatasetValidationJobRepository
 
     def __init__(
         self,
@@ -42,6 +49,9 @@ class SqlAlchemyDatasetUnitOfWork:
             session=session,
         )
         self.projects = SqlAlchemyDatasetProjectReader(
+            session=session,
+        )
+        self.validation_jobs = SqlAlchemyDatasetValidationJobRepository(
             session=session,
         )
 

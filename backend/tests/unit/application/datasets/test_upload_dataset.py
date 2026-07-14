@@ -91,6 +91,17 @@ class FakeUploadRepository:
         self.updated_datasets.append(dataset)
 
 
+class FakeValidationJobRepository:
+    def __init__(self) -> None:
+        self.added_jobs: list[object] = []
+
+    async def add(
+        self,
+        job: object,
+    ) -> None:
+        self.added_jobs.append(job)
+
+
 class FakeUploadUnitOfWork:
     def __init__(
         self,
@@ -99,6 +110,7 @@ class FakeUploadUnitOfWork:
         self.datasets = FakeUploadRepository(dataset)
         self.commit_count = 0
         self.rollback_count = 0
+        self.validation_jobs = FakeValidationJobRepository()
 
     async def __aenter__(
         self,
@@ -372,6 +384,7 @@ class FailingUpdateUnitOfWork(
         self.datasets = FailingUpdateRepository(
             dataset,
         )
+        self.validation_jobs = FakeValidationJobRepository()
 
 
 class FailingCommitUnitOfWork(

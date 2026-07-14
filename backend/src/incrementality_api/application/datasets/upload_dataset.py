@@ -13,6 +13,9 @@ from incrementality_api.application.datasets.ports import (
     DatasetUploadUnitOfWork,
 )
 from incrementality_api.domain.datasets.entities import Dataset
+from incrementality_api.domain.jobs.entities import (
+    DatasetValidationJob,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +27,7 @@ class UploadDatasetCommand:
 
 
 class UploadDataset:
-    """Upload and verify bytes for registered dataset metadata."""
+    """Upload, verify, and enqueue validation for a dataset."""
 
     def __init__(
         self,
@@ -32,10 +35,15 @@ class UploadDataset:
         unit_of_work: DatasetUploadUnitOfWork,
         object_storage: DatasetObjectStorage,
         clock: DatasetClock,
+        validation_job_max_attempts: int = 3,
     ) -> None:
+        if validation_job_max_attempts <= 0:
+            raise ValueError("Validation job maximum attempts must be positive.")
+
         self._unit_of_work = unit_of_work
         self._object_storage = object_storage
         self._clock = clock
+        self._validation_job_max_attempts = validation_job_max_attempts
 
     async def execute(
         self,
@@ -51,8 +59,10 @@ class UploadDataset:
             if dataset is None:
                 raise DatasetUnavailableError("Dataset is unavailable.")
 
+            current_time = self._clock.now()
+
             uploaded_dataset = dataset.mark_uploaded(
-                uploaded_at=self._clock.now(),
+                uploaded_at=current_time,
             )
 
             object_written = False
@@ -74,8 +84,20 @@ class UploadDataset:
                     write_result=write_result,
                 )
 
+                validation_job = DatasetValidationJob.enqueue(
+                    workspace_id=dataset.workspace_id,
+                    project_id=dataset.project_id,
+                    dataset_id=dataset.id,
+                    created_at=current_time,
+                    available_at=current_time,
+                    max_attempts=(self._validation_job_max_attempts),
+                )
+
                 await self._unit_of_work.datasets.update(
                     uploaded_dataset,
+                )
+                await self._unit_of_work.validation_jobs.add(
+                    validation_job,
                 )
                 await self._unit_of_work.commit()
             except Exception:
