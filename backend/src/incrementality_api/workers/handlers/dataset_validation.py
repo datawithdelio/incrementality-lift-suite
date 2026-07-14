@@ -9,6 +9,13 @@ from incrementality_api.domain.jobs.entities import (
 )
 
 
+class RecoverStaleValidationJobAction(Protocol):
+    async def execute(
+        self,
+    ) -> DatasetValidationJob | None:
+        """Recover one expired worker claim when present."""
+
+
 class ClaimNextValidationJobAction(Protocol):
     async def execute(
         self,
@@ -43,7 +50,7 @@ class RecordValidationJobFailureAction(Protocol):
 
 
 class RunNextDatasetValidationJob:
-    """Process at most one durable dataset-validation job."""
+    """Recover stale work and process at most one validation job."""
 
     def __init__(
         self,
@@ -52,7 +59,9 @@ class RunNextDatasetValidationJob:
         validate_dataset: ValidateDatasetAction,
         mark_succeeded: MarkValidationJobSucceededAction,
         record_failure: RecordValidationJobFailureAction,
+        recover_stale: (RecoverStaleValidationJobAction | None) = None,
     ) -> None:
+        self._recover_stale = recover_stale
         self._claim_next = claim_next
         self._validate_dataset = validate_dataset
         self._mark_succeeded = mark_succeeded
@@ -61,6 +70,9 @@ class RunNextDatasetValidationJob:
     async def execute(
         self,
     ) -> DatasetValidationJob | None:
+        if self._recover_stale is not None:
+            await self._recover_stale.execute()
+
         job = await self._claim_next.execute()
 
         if job is None:

@@ -332,3 +332,109 @@ async def test_blank_exception_uses_exception_class_name() -> None:
             "EmptyMessageInfrastructureError",
         )
     ]
+
+
+class FakeRecoverStale:
+    def __init__(
+        self,
+        *,
+        error: Exception | None = None,
+        order: list[str] | None = None,
+    ) -> None:
+        self._error = error
+        self._order = order
+        self.call_count = 0
+
+    async def execute(
+        self,
+    ) -> DatasetValidationJob | None:
+        self.call_count += 1
+
+        if self._order is not None:
+            self._order.append("recover")
+
+        if self._error is not None:
+            raise self._error
+
+        return None
+
+
+class OrderedClaimNext:
+    def __init__(
+        self,
+        order: list[str],
+    ) -> None:
+        self._order = order
+        self.call_count = 0
+
+    async def execute(
+        self,
+    ) -> DatasetValidationJob | None:
+        self.call_count += 1
+        self._order.append("claim")
+        return None
+
+
+@pytest.mark.asyncio
+async def test_recovers_stale_claim_before_normal_claim() -> None:
+    order: list[str] = []
+
+    recover_stale = FakeRecoverStale(
+        order=order,
+    )
+    claim_next = OrderedClaimNext(order)
+
+    result = await RunNextDatasetValidationJob(
+        recover_stale=recover_stale,
+        claim_next=claim_next,
+        validate_dataset=FakeValidateDataset(),
+        mark_succeeded=FakeMarkSucceeded(
+            build_succeeded_job(
+                build_running_job(),
+            )
+        ),
+        record_failure=FakeRecordFailure(
+            build_retry_job(
+                build_running_job(),
+                error="unused",
+            )
+        ),
+    ).execute()
+
+    assert result is None
+    assert order == [
+        "recover",
+        "claim",
+    ]
+    assert recover_stale.call_count == 1
+    assert claim_next.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_stale_recovery_failure_bubbles_to_worker_loop() -> None:
+    recover_stale = FakeRecoverStale(error=RuntimeError("Stale recovery database failure."))
+    claim_next = FakeClaimNext(None)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Stale recovery database failure",
+    ):
+        await RunNextDatasetValidationJob(
+            recover_stale=recover_stale,
+            claim_next=claim_next,
+            validate_dataset=FakeValidateDataset(),
+            mark_succeeded=FakeMarkSucceeded(
+                build_succeeded_job(
+                    build_running_job(),
+                )
+            ),
+            record_failure=FakeRecordFailure(
+                build_retry_job(
+                    build_running_job(),
+                    error="unused",
+                )
+            ),
+        ).execute()
+
+    assert recover_stale.call_count == 1
+    assert claim_next.call_count == 0
