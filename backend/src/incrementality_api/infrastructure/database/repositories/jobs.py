@@ -94,6 +94,25 @@ class SqlAlchemyDatasetValidationJobRepository:
 
         return to_dataset_validation_job_entity(model)
 
+    async def get_by_id_for_update(
+        self,
+        job_id: UUID,
+    ) -> DatasetValidationJob | None:
+        statement = (
+            select(DatasetValidationJobModel)
+            .where(
+                DatasetValidationJobModel.id == job_id,
+            )
+            .with_for_update()
+        )
+
+        model = await self._session.scalar(statement)
+
+        if model is None:
+            return None
+
+        return to_dataset_validation_job_entity(model)
+
     async def get_by_dataset_id(
         self,
         dataset_id: UUID,

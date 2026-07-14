@@ -20,6 +20,12 @@ class DatasetValidationJobRepository(Protocol):
     ) -> DatasetValidationJob | None:
         """Load one durable job by ID."""
 
+    async def get_by_id_for_update(
+        self,
+        job_id: UUID,
+    ) -> DatasetValidationJob | None:
+        """Lock and load one durable job by ID."""
+
     async def get_by_dataset_id(
         self,
         dataset_id: UUID,

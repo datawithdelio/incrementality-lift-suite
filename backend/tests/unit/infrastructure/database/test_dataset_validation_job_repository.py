@@ -222,3 +222,22 @@ async def test_updates_validation_job_lifecycle() -> None:
     assert "UPDATE DATASET_VALIDATION_JOBS" in sql
     assert any(value == "running" for value in parameters.values())
     assert any(value == job.id for value in parameters.values())
+
+
+@pytest.mark.asyncio
+async def test_get_by_id_for_update_locks_job() -> None:
+    job = build_pending_job()
+    model = to_dataset_validation_job_model(job)
+    session = FakeAsyncSession(model)
+
+    result = await build_repository(session).get_by_id_for_update(job.id)
+
+    assert result == job
+
+    sql = compile_postgresql(
+        session.scalar_statements[0],
+    ).upper()
+
+    assert "DATASET_VALIDATION_JOBS.ID" in sql
+    assert "FOR UPDATE" in sql
+    assert "SKIP LOCKED" not in sql
