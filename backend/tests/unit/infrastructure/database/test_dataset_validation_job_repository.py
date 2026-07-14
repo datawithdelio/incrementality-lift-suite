@@ -241,3 +241,31 @@ async def test_get_by_id_for_update_locks_job() -> None:
     assert "DATASET_VALIDATION_JOBS.ID" in sql
     assert "FOR UPDATE" in sql
     assert "SKIP LOCKED" not in sql
+
+
+@pytest.mark.asyncio
+async def test_stale_running_query_uses_skip_locked() -> None:
+    running = build_pending_job().claim(
+        claimed_at=CLAIMED_AT,
+    )
+
+    model = to_dataset_validation_job_model(
+        running,
+    )
+    session = FakeAsyncSession(model)
+
+    result = await build_repository(session).get_stale_running_for_update(
+        claimed_before=CLAIMED_AT,
+    )
+
+    assert result == running
+
+    sql = compile_postgresql(
+        session.scalar_statements[0],
+    ).upper()
+
+    assert "STATUS = 'RUNNING'" in sql
+    assert "CLAIMED_AT <=" in sql
+    assert "ORDER BY" in sql
+    assert "LIMIT 1" in sql
+    assert "FOR UPDATE SKIP LOCKED" in sql

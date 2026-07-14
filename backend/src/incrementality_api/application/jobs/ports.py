@@ -39,6 +39,13 @@ class DatasetValidationJobRepository(Protocol):
     ) -> DatasetValidationJob | None:
         """Lock and return the next claimable job."""
 
+    async def get_stale_running_for_update(
+        self,
+        *,
+        claimed_before: datetime,
+    ) -> DatasetValidationJob | None:
+        """Lock and return one expired running job."""
+
     async def update(
         self,
         job: DatasetValidationJob,

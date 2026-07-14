@@ -158,6 +158,35 @@ class SqlAlchemyDatasetValidationJobRepository:
 
         return to_dataset_validation_job_entity(model)
 
+    async def get_stale_running_for_update(
+        self,
+        *,
+        claimed_before: datetime,
+    ) -> DatasetValidationJob | None:
+        statement = (
+            select(DatasetValidationJobModel)
+            .where(
+                DatasetValidationJobModel.status == DatasetValidationJobStatus.RUNNING.value,
+                DatasetValidationJobModel.claimed_at <= claimed_before,
+            )
+            .order_by(
+                DatasetValidationJobModel.claimed_at,
+                DatasetValidationJobModel.created_at,
+                DatasetValidationJobModel.id,
+            )
+            .limit(1)
+            .with_for_update(
+                skip_locked=True,
+            )
+        )
+
+        model = await self._session.scalar(statement)
+
+        if model is None:
+            return None
+
+        return to_dataset_validation_job_entity(model)
+
     async def update(
         self,
         job: DatasetValidationJob,
