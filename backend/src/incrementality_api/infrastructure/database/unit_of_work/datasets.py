@@ -10,11 +10,15 @@ from incrementality_api.application.datasets.errors import (
     DatasetPersistenceConflictError,
 )
 from incrementality_api.application.datasets.ports import (
+    DatasetColumnRepository,
     DatasetProjectReader,
     DatasetRepository,
 )
 from incrementality_api.application.jobs.ports import (
     DatasetValidationJobRepository,
+)
+from incrementality_api.infrastructure.database.repositories.dataset_columns import (
+    SqlAlchemyDatasetColumnRepository,
 )
 from incrementality_api.infrastructure.database.repositories.datasets import (
     SqlAlchemyDatasetProjectReader,
@@ -29,6 +33,7 @@ class SqlAlchemyDatasetUnitOfWork:
     """Own one SQLAlchemy dataset transaction."""
 
     datasets: DatasetRepository
+    columns: DatasetColumnRepository
     projects: DatasetProjectReader
     validation_jobs: DatasetValidationJobRepository
 
@@ -46,6 +51,9 @@ class SqlAlchemyDatasetUnitOfWork:
         self._session = session
 
         self.datasets = SqlAlchemyDatasetRepository(
+            session=session,
+        )
+        self.columns = SqlAlchemyDatasetColumnRepository(
             session=session,
         )
         self.projects = SqlAlchemyDatasetProjectReader(

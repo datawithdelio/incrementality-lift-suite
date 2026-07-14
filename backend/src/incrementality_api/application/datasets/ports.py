@@ -38,6 +38,31 @@ class DatasetRepository(Protocol):
         """Stage updated dataset lifecycle metadata."""
 
 
+class DatasetColumnRepository(Protocol):
+    async def replace_for_dataset(
+        self,
+        *,
+        dataset_id: UUID,
+        columns: tuple[
+            DatasetColumnProfile,
+            ...,
+        ],
+    ) -> None:
+        """Replace the discovered columns for one dataset."""
+
+    async def list_by_scope(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+    ) -> tuple[
+        DatasetColumnProfile,
+        ...,
+    ]:
+        """List columns within complete dataset tenant scope."""
+
+
 class DatasetProjectReader(Protocol):
     async def get_by_id(
         self,
@@ -139,6 +164,7 @@ class DatasetClock(Protocol):
 
 class DatasetValidationUnitOfWork(Protocol):
     datasets: DatasetRepository
+    columns: DatasetColumnRepository
 
     async def __aenter__(
         self,
