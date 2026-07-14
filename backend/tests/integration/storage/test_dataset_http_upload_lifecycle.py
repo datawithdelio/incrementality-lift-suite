@@ -57,7 +57,16 @@ from incrementality_api.application.datasets.upload_dataset import (
 )
 from incrementality_api.application.datasets.validate_dataset import (
     ValidateDataset,
-    ValidateDatasetCommand,
+)
+from incrementality_api.application.jobs.claim_next_validation_job import (
+    ClaimNextDatasetValidationJob,
+)
+from incrementality_api.application.jobs.recover_stale_validation_job import (
+    RecoverStaleDatasetValidationJob,
+)
+from incrementality_api.application.jobs.settle_validation_job import (
+    MarkDatasetValidationJobSucceeded,
+    RecordDatasetValidationJobFailure,
 )
 from incrementality_api.application.projects.create_project import (
     CreateProject,
@@ -71,6 +80,9 @@ from incrementality_api.domain.authorization.policy import (
 from incrementality_api.infrastructure.database.models.datasets import (
     DatasetModel,
 )
+from incrementality_api.infrastructure.database.models.jobs import (
+    DatasetValidationJobModel,
+)
 from incrementality_api.infrastructure.database.models.tenancy import (
     WorkspaceMembershipModel,
 )
@@ -82,6 +94,9 @@ from incrementality_api.infrastructure.database.unit_of_work.authorization impor
 )
 from incrementality_api.infrastructure.database.unit_of_work.datasets import (
     SqlAlchemyDatasetUnitOfWork,
+)
+from incrementality_api.infrastructure.database.unit_of_work.jobs import (
+    SqlAlchemyDatasetValidationJobUnitOfWork,
 )
 from incrementality_api.infrastructure.database.unit_of_work.projects import (
     SqlAlchemyProjectUnitOfWork,
@@ -108,6 +123,9 @@ from incrementality_api.infrastructure.validation.csv_datasets import (
     CsvDatasetContentValidator,
 )
 from incrementality_api.main import create_app
+from incrementality_api.workers.handlers.dataset_validation import (
+    RunNextDatasetValidationJob,
+)
 
 RUN_S3_INTEGRATION = os.getenv("RUN_S3_INTEGRATION") == "1"
 
@@ -383,6 +401,20 @@ async def test_complete_http_dataset_upload_lifecycle(
         assert persisted_dataset.status == "uploaded"
         assert persisted_dataset.uploaded_at == FIXED_NOW
 
+        async with tenancy_session_factory() as session:
+            pending_job = await session.scalar(
+                select(DatasetValidationJobModel).where(
+                    DatasetValidationJobModel.dataset_id == dataset_id,
+                )
+            )
+
+        assert pending_job is not None
+        assert pending_job.status == "pending"
+        assert pending_job.attempt_count == 0
+        assert pending_job.claimed_at is None
+        assert pending_job.completed_at is None
+        assert pending_job.last_error is None
+
         object_response = await asyncio.to_thread(
             s3_client.get_object,
             Bucket=bucket_name,
@@ -396,48 +428,78 @@ async def test_complete_http_dataset_upload_lifecycle(
         assert stored_content == CONTENT
         assert object_response["ContentType"] == "text/csv"
 
-        validated_dataset = await ValidateDataset(
-            begin_validation=BeginDatasetValidation(
-                unit_of_work=SqlAlchemyDatasetUnitOfWork(
-                    session_factory=tenancy_session_factory,
+        worker_result = await RunNextDatasetValidationJob(
+            recover_stale=RecoverStaleDatasetValidationJob(
+                unit_of_work=(
+                    SqlAlchemyDatasetValidationJobUnitOfWork(
+                        session_factory=tenancy_session_factory,
+                    )
+                ),
+                clock=FixedClock(),
+                claim_timeout_seconds=300,
+            ),
+            claim_next=ClaimNextDatasetValidationJob(
+                unit_of_work=(
+                    SqlAlchemyDatasetValidationJobUnitOfWork(
+                        session_factory=tenancy_session_factory,
+                    )
                 ),
                 clock=FixedClock(),
             ),
-            object_storage=S3DatasetObjectStorage(
-                client=raw_s3_client,
-                bucket_name=bucket_name,
-                spool_max_memory_bytes=8,
+            validate_dataset=ValidateDataset(
+                begin_validation=BeginDatasetValidation(
+                    unit_of_work=SqlAlchemyDatasetUnitOfWork(
+                        session_factory=tenancy_session_factory,
+                    ),
+                    clock=FixedClock(),
+                ),
+                object_storage=S3DatasetObjectStorage(
+                    client=raw_s3_client,
+                    bucket_name=bucket_name,
+                    spool_max_memory_bytes=8,
+                ),
+                content_validator=CsvDatasetContentValidator(
+                    spool_max_memory_bytes=8,
+                ),
+                mark_ready=MarkDatasetReady(
+                    unit_of_work=SqlAlchemyDatasetUnitOfWork(
+                        session_factory=tenancy_session_factory,
+                    ),
+                    clock=FixedClock(),
+                ),
+                mark_failed=MarkDatasetFailed(
+                    unit_of_work=SqlAlchemyDatasetUnitOfWork(
+                        session_factory=tenancy_session_factory,
+                    ),
+                    clock=FixedClock(),
+                ),
+                read_chunk_size=7,
             ),
-            content_validator=CsvDatasetContentValidator(
-                spool_max_memory_bytes=8,
-            ),
-            mark_ready=MarkDatasetReady(
-                unit_of_work=SqlAlchemyDatasetUnitOfWork(
-                    session_factory=tenancy_session_factory,
+            mark_succeeded=MarkDatasetValidationJobSucceeded(
+                unit_of_work=(
+                    SqlAlchemyDatasetValidationJobUnitOfWork(
+                        session_factory=tenancy_session_factory,
+                    )
                 ),
                 clock=FixedClock(),
             ),
-            mark_failed=MarkDatasetFailed(
-                unit_of_work=SqlAlchemyDatasetUnitOfWork(
-                    session_factory=tenancy_session_factory,
+            record_failure=RecordDatasetValidationJobFailure(
+                unit_of_work=(
+                    SqlAlchemyDatasetValidationJobUnitOfWork(
+                        session_factory=tenancy_session_factory,
+                    )
                 ),
                 clock=FixedClock(),
+                retry_delay_seconds=30,
             ),
-            read_chunk_size=7,
-        ).execute(
-            ValidateDatasetCommand(
-                workspace_id=workspace_id,
-                project_id=project_id,
-                dataset_id=dataset_id,
-            )
-        )
+        ).execute()
 
-        assert validated_dataset.status.value == "ready"
-        assert validated_dataset.row_count == 1
-        assert validated_dataset.column_count == 2
-        assert validated_dataset.failure_reason is None
-        assert validated_dataset.validation_started_at == FIXED_NOW
-        assert validated_dataset.validation_completed_at == FIXED_NOW
+        assert worker_result is not None
+        assert worker_result.dataset_id == dataset_id
+        assert worker_result.status.value == "succeeded"
+        assert worker_result.attempt_count == 1
+        assert worker_result.completed_at == FIXED_NOW
+        assert worker_result.last_error is None
 
         async with tenancy_session_factory() as session:
             validated_model = await session.scalar(
@@ -453,6 +515,20 @@ async def test_complete_http_dataset_upload_lifecycle(
         assert validated_model.failure_reason is None
         assert validated_model.validation_started_at == FIXED_NOW
         assert validated_model.validation_completed_at == FIXED_NOW
+
+        async with tenancy_session_factory() as session:
+            completed_job = await session.scalar(
+                select(DatasetValidationJobModel).where(
+                    DatasetValidationJobModel.dataset_id == dataset_id,
+                )
+            )
+
+        assert completed_job is not None
+        assert completed_job.status == "succeeded"
+        assert completed_job.attempt_count == 1
+        assert completed_job.claimed_at == FIXED_NOW
+        assert completed_job.completed_at == FIXED_NOW
+        assert completed_job.last_error is None
     finally:
         if storage_key is not None:
             await asyncio.to_thread(
