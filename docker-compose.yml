@@ -1,5 +1,31 @@
 name: incrementality-lift-suite
 
+x-backend-build: &backend-build
+  context: ./backend
+  dockerfile: Dockerfile
+
+x-backend-environment: &backend-environment
+  APP_ENVIRONMENT: development
+  APP_DEBUG: "false"
+
+  DATABASE_URL: postgresql+asyncpg://incrementality:incrementality@postgres:5432/incrementality
+
+  S3_ENDPOINT_URL: http://moto:5000
+  S3_ACCESS_KEY: incrementality
+  S3_SECRET_KEY: incrementality-secret
+  S3_BUCKET: incrementality-artifacts
+  S3_REGION: us-east-1
+
+  DATASET_VALIDATION_READ_CHUNK_BYTES: "1048576"
+  DATASET_VALIDATION_SPOOL_MAX_MEMORY_BYTES: "8388608"
+
+  DATASET_VALIDATION_JOB_MAX_ATTEMPTS: "3"
+  DATASET_VALIDATION_JOB_RETRY_DELAY_SECONDS: "30"
+  DATASET_VALIDATION_JOB_CLAIM_TIMEOUT_SECONDS: "300"
+
+  DATASET_VALIDATION_WORKER_POLL_INTERVAL_SECONDS: "1.0"
+  DATASET_VALIDATION_WORKER_ERROR_RETRY_SECONDS: "5.0"
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -95,6 +121,65 @@ services:
             client.create_bucket(Bucket=bucket)
 
         print(f"Bucket ready: {bucket}")
+    restart: "no"
+
+  migrate:
+    build: *backend-build
+    command:
+      - alembic
+      - upgrade
+      - head
+    environment: *backend-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: *backend-build
+    command:
+      - uvicorn
+      - incrementality_api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    environment: *backend-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      s3-init:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=3)"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  worker:
+    build: *backend-build
+    command:
+      - incrementality-worker
+    environment: *backend-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      s3-init:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
 
 volumes:
   incrementality_postgres_data:
