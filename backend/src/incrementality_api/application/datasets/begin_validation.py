@@ -9,6 +9,9 @@ from incrementality_api.application.datasets.ports import (
     DatasetValidationUnitOfWork,
 )
 from incrementality_api.domain.datasets.entities import Dataset
+from incrementality_api.domain.datasets.status import (
+    DatasetStatus,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +46,9 @@ class BeginDatasetValidation:
 
             if dataset is None:
                 raise DatasetUnavailableError("Dataset is unavailable.")
+
+            if dataset.status is DatasetStatus.VALIDATING:
+                return dataset
 
             validating_dataset = dataset.begin_validation(
                 validation_started_at=self._clock.now(),

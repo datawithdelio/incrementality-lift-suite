@@ -340,3 +340,27 @@ async def test_mark_failed_rejects_invalid_state() -> None:
     assert unit_of_work.datasets.updated_datasets == []
     assert unit_of_work.commit_count == 0
     assert unit_of_work.rollback_count == 1
+
+
+@pytest.mark.asyncio
+async def test_begin_validation_is_idempotent_when_already_validating() -> None:
+    dataset = build_validating_dataset()
+    unit_of_work = FakeValidationUnitOfWork(dataset)
+
+    result = await BeginDatasetValidation(
+        unit_of_work=unit_of_work,
+        clock=FixedClock(VALIDATION_STARTED_AT),
+    ).execute(
+        BeginDatasetValidationCommand(
+            workspace_id=dataset.workspace_id,
+            project_id=dataset.project_id,
+            dataset_id=dataset.id,
+        )
+    )
+
+    assert result is dataset
+    assert result.status is DatasetStatus.VALIDATING
+
+    assert unit_of_work.datasets.updated_datasets == []
+    assert unit_of_work.commit_count == 0
+    assert unit_of_work.rollback_count == 0
