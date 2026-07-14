@@ -16,6 +16,8 @@ dependencies = [
     "alembic>=1.14,<2.0",
     "argon2-cffi>=25.1,<26.0",
     "boto3>=1.43,<2.0",
+    "numpy>=2.0,<3.0",
+    "statsmodels>=0.14,<1.0",
 ]
 
 [project.scripts]

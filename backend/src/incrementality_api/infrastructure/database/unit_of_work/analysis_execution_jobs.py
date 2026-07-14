@@ -8,12 +8,16 @@ from sqlalchemy.ext.asyncio import (
 from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
     SqlAlchemyAnalysisExecutionJobRepository,
 )
+from incrementality_api.infrastructure.database.repositories.analysis_runs import (
+    SqlAlchemyAnalysisRunRepository,
+)
 
 
 class SqlAlchemyAnalysisExecutionJobUnitOfWork:
     """Own one durable analysis-execution-job transaction."""
 
     execution_jobs: SqlAlchemyAnalysisExecutionJobRepository
+    analysis_runs: SqlAlchemyAnalysisRunRepository
 
     def __init__(
         self,
@@ -29,6 +33,9 @@ class SqlAlchemyAnalysisExecutionJobUnitOfWork:
         self._session = session
 
         self.execution_jobs = SqlAlchemyAnalysisExecutionJobRepository(
+            session=session,
+        )
+        self.analysis_runs = SqlAlchemyAnalysisRunRepository(
             session=session,
         )
 

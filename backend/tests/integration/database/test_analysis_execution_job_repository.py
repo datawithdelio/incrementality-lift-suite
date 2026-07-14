@@ -3,16 +3,32 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
 )
 
+from incrementality_api.application.analysis_execution.claim_next_execution_job import (
+    ClaimNextAnalysisExecutionJob,
+)
+from incrementality_api.application.analysis_execution.retry_policy import (
+    FixedDelayAnalysisExecutionRetryPolicy,
+)
+from incrementality_api.application.analysis_execution.settle_execution import (
+    MarkAnalysisExecutionFailed,
+    MarkAnalysisExecutionSucceeded,
+    RecordAnalysisExecutionFailure,
+)
+from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.execution_job_status import (
     AnalysisExecutionJobStatus,
 )
 from incrementality_api.domain.analysis_runs.execution_jobs import (
     AnalysisExecutionJob,
+)
+from incrementality_api.infrastructure.database.models.analysis_execution_jobs import (
+    AnalysisExecutionJobModel,
 )
 from incrementality_api.infrastructure.database.models.analysis_runs import (
     AnalysisRunModel,
@@ -33,6 +49,9 @@ from incrementality_api.infrastructure.database.models.tenancy import (
     OrganizationModel,
     UserModel,
     WorkspaceModel,
+)
+from incrementality_api.infrastructure.database.repositories.analysis_runs import (
+    SqlAlchemyAnalysisRunRepository,
 )
 from incrementality_api.infrastructure.database.unit_of_work.analysis_execution_jobs import (
     SqlAlchemyAnalysisExecutionJobUnitOfWork,
@@ -98,6 +117,45 @@ class SeededExecutionScope:
     workspace_id: UUID
     project_id: UUID
     analysis_run_ids: tuple[UUID, ...]
+
+
+class FixedClaimClock:
+    def now(self) -> datetime:
+        return CLAIMED_AT
+
+
+class FixedSettlementClock:
+    def now(self) -> datetime:
+        return FAILED_AT
+
+
+class FailingAnalysisRunRepository(SqlAlchemyAnalysisRunRepository):
+    def __init__(self, delegate: SqlAlchemyAnalysisRunRepository) -> None:
+        self._delegate = delegate
+
+    async def get_by_scope_for_update(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        analysis_run_id: UUID,
+    ) -> AnalysisRun | None:
+        return await self._delegate.get_by_scope_for_update(
+            workspace_id=workspace_id,
+            project_id=project_id,
+            analysis_run_id=analysis_run_id,
+        )
+
+    async def update(self, run: AnalysisRun) -> None:
+        del run
+        raise RuntimeError("Analysis run update failed.")
+
+
+class FailingRunUpdateUnitOfWork(SqlAlchemyAnalysisExecutionJobUnitOfWork):
+    async def __aenter__(self) -> "FailingRunUpdateUnitOfWork":
+        await super().__aenter__()
+        self.analysis_runs = FailingAnalysisRunRepository(self.analysis_runs)
+        return self
 
 
 async def seed_execution_scope(
@@ -320,6 +378,35 @@ def build_job(
     )
 
 
+async def seed_and_claim_running_execution(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    max_attempts: int = 3,
+) -> AnalysisExecutionJob:
+    scope = await seed_execution_scope(session_factory, analysis_run_count=1)
+    job = AnalysisExecutionJob.enqueue(
+        workspace_id=scope.workspace_id,
+        project_id=scope.project_id,
+        analysis_run_id=scope.analysis_run_ids[0],
+        created_at=CREATED_AT,
+        available_at=FIRST_AVAILABLE_AT,
+        max_attempts=max_attempts,
+    )
+    unit_of_work = SqlAlchemyAnalysisExecutionJobUnitOfWork(session_factory=session_factory)
+    async with unit_of_work:
+        await unit_of_work.execution_jobs.add(job)
+        await unit_of_work.commit()
+
+    claimed = await ClaimNextAnalysisExecutionJob(
+        unit_of_work=SqlAlchemyAnalysisExecutionJobUnitOfWork(
+            session_factory=session_factory,
+        ),
+        clock=FixedClaimClock(),
+    ).execute()
+    assert claimed is not None
+    return claimed
+
+
 @pytest.mark.asyncio
 async def test_persists_and_retrieves_execution_job(
     tenancy_session_factory: async_sessionmaker[AsyncSession],
@@ -433,6 +520,55 @@ async def test_claims_earliest_available_job_and_persists_running_state(
 
 
 @pytest.mark.asyncio
+async def test_claim_service_persists_job_and_run_as_running_in_one_transaction(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    scope = await seed_execution_scope(
+        tenancy_session_factory,
+        analysis_run_count=1,
+    )
+    job = build_job(
+        scope,
+        run_index=0,
+        available_at=FIRST_AVAILABLE_AT,
+    )
+
+    create_unit_of_work = SqlAlchemyAnalysisExecutionJobUnitOfWork(
+        session_factory=tenancy_session_factory,
+    )
+    async with create_unit_of_work:
+        await create_unit_of_work.execution_jobs.add(job)
+        await create_unit_of_work.commit()
+
+    claimed = await ClaimNextAnalysisExecutionJob(
+        unit_of_work=SqlAlchemyAnalysisExecutionJobUnitOfWork(
+            session_factory=tenancy_session_factory,
+        ),
+        clock=FixedClaimClock(),
+    ).execute()
+
+    async with tenancy_session_factory() as session:
+        persisted_job = await session.get(
+            AnalysisExecutionJobModel,
+            job.id,
+        )
+        persisted_run = await session.scalar(
+            select(AnalysisRunModel).where(
+                AnalysisRunModel.id == job.analysis_run_id,
+            )
+        )
+
+    assert claimed is not None
+    assert persisted_job is not None
+    assert persisted_run is not None
+    assert persisted_job.status == "running"
+    assert persisted_job.attempt_count == 1
+    assert persisted_job.claimed_at == CLAIMED_AT
+    assert persisted_run.status == "running"
+    assert persisted_run.started_at == CLAIMED_AT
+
+
+@pytest.mark.asyncio
 async def test_concurrent_claimers_skip_locked_job(
     tenancy_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -486,6 +622,51 @@ async def test_concurrent_claimers_skip_locked_job(
             assert second_claim is not None
             assert second_claim.id == second.id
 
+            await second_worker.rollback()
+
+        await first_worker.rollback()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_claimers_cannot_claim_the_same_locked_job(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    scope = await seed_execution_scope(
+        tenancy_session_factory,
+        analysis_run_count=1,
+    )
+    job = build_job(
+        scope,
+        run_index=0,
+        available_at=FIRST_AVAILABLE_AT,
+    )
+
+    create_unit_of_work = SqlAlchemyAnalysisExecutionJobUnitOfWork(
+        session_factory=tenancy_session_factory,
+    )
+    async with create_unit_of_work:
+        await create_unit_of_work.execution_jobs.add(job)
+        await create_unit_of_work.commit()
+
+    first_worker = SqlAlchemyAnalysisExecutionJobUnitOfWork(
+        session_factory=tenancy_session_factory,
+    )
+    second_worker = SqlAlchemyAnalysisExecutionJobUnitOfWork(
+        session_factory=tenancy_session_factory,
+    )
+
+    async with first_worker:
+        first_claim = await first_worker.execution_jobs.get_next_available_for_update(
+            available_at=CLAIMED_AT,
+        )
+        assert first_claim is not None
+        assert first_claim.id == job.id
+
+        async with second_worker:
+            second_claim = await second_worker.execution_jobs.get_next_available_for_update(
+                available_at=CLAIMED_AT,
+            )
+            assert second_claim is None
             await second_worker.rollback()
 
         await first_worker.rollback()
@@ -636,3 +817,111 @@ async def test_finds_stale_running_job_for_recovery(
         assert stale == running
 
         await recovery_unit_of_work.rollback()
+
+
+@pytest.mark.asyncio
+async def test_success_settlement_persists_job_and_run_together(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    running = await seed_and_claim_running_execution(tenancy_session_factory)
+
+    settled = await MarkAnalysisExecutionSucceeded(
+        unit_of_work=SqlAlchemyAnalysisExecutionJobUnitOfWork(
+            session_factory=tenancy_session_factory,
+        ),
+        clock=FixedSettlementClock(),
+    ).execute(running.id)
+
+    async with tenancy_session_factory() as session:
+        job = await session.get(AnalysisExecutionJobModel, running.id)
+        run = await session.get(AnalysisRunModel, running.analysis_run_id)
+
+    assert settled.status is AnalysisExecutionJobStatus.SUCCEEDED
+    assert job is not None
+    assert run is not None
+    assert job.status == "succeeded"
+    assert job.completed_at == FAILED_AT
+    assert run.status == "succeeded"
+    assert run.completed_at == FAILED_AT
+
+
+@pytest.mark.asyncio
+async def test_retry_settlement_persists_pending_job_and_running_run_together(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    running = await seed_and_claim_running_execution(tenancy_session_factory)
+
+    settled = await RecordAnalysisExecutionFailure(
+        unit_of_work=SqlAlchemyAnalysisExecutionJobUnitOfWork(
+            session_factory=tenancy_session_factory,
+        ),
+        clock=FixedSettlementClock(),
+        retry_policy=FixedDelayAnalysisExecutionRetryPolicy(
+            retry_delay_seconds=60,
+        ),
+    ).execute(job_id=running.id, error="Warehouse temporarily unavailable.")
+
+    async with tenancy_session_factory() as session:
+        job = await session.get(AnalysisExecutionJobModel, running.id)
+        run = await session.get(AnalysisRunModel, running.analysis_run_id)
+
+    assert settled.status is AnalysisExecutionJobStatus.PENDING
+    assert job is not None
+    assert run is not None
+    assert job.status == "pending"
+    assert job.available_at == RETRY_AT
+    assert job.last_error == "Warehouse temporarily unavailable."
+    assert run.status == "running"
+    assert run.completed_at is None
+
+
+@pytest.mark.asyncio
+async def test_final_failure_persists_dead_lettered_job_and_failed_run_together(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    running = await seed_and_claim_running_execution(tenancy_session_factory)
+
+    settled = await MarkAnalysisExecutionFailed(
+        unit_of_work=SqlAlchemyAnalysisExecutionJobUnitOfWork(
+            session_factory=tenancy_session_factory,
+        ),
+        clock=FixedSettlementClock(),
+    ).execute(job_id=running.id, error="Treatment groups are missing.")
+
+    async with tenancy_session_factory() as session:
+        job = await session.get(AnalysisExecutionJobModel, running.id)
+        run = await session.get(AnalysisRunModel, running.analysis_run_id)
+
+    assert settled.status is AnalysisExecutionJobStatus.DEAD_LETTER
+    assert job is not None
+    assert run is not None
+    assert job.status == "dead_letter"
+    assert job.last_error == "Treatment groups are missing."
+    assert run.status == "failed"
+    assert run.failure_reason == "Treatment groups are missing."
+
+
+@pytest.mark.asyncio
+async def test_settlement_rolls_back_job_when_run_update_fails(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    running = await seed_and_claim_running_execution(tenancy_session_factory)
+
+    with pytest.raises(RuntimeError, match="Analysis run update failed"):
+        await MarkAnalysisExecutionSucceeded(
+            unit_of_work=FailingRunUpdateUnitOfWork(
+                session_factory=tenancy_session_factory,
+            ),
+            clock=FixedSettlementClock(),
+        ).execute(running.id)
+
+    async with tenancy_session_factory() as session:
+        job = await session.get(AnalysisExecutionJobModel, running.id)
+        run = await session.get(AnalysisRunModel, running.analysis_run_id)
+
+    assert job is not None
+    assert run is not None
+    assert job.status == "running"
+    assert job.completed_at is None
+    assert run.status == "running"
+    assert run.completed_at is None

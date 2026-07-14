@@ -116,6 +116,28 @@ class SqlAlchemyAnalysisRunRepository:
 
         return to_analysis_run(model)
 
+    async def get_by_scope_for_update(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        analysis_run_id: UUID,
+    ) -> AnalysisRun | None:
+        model = await self._session.scalar(
+            select(AnalysisRunModel)
+            .where(
+                AnalysisRunModel.id == analysis_run_id,
+                AnalysisRunModel.workspace_id == workspace_id,
+                AnalysisRunModel.project_id == project_id,
+            )
+            .with_for_update()
+        )
+
+        if model is None:
+            return None
+
+        return to_analysis_run(model)
+
     async def update(
         self,
         run: AnalysisRun,

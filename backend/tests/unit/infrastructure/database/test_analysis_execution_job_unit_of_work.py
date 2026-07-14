@@ -1,15 +1,19 @@
 from typing import cast
 
 import pytest
-from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
-    SqlAlchemyAnalysisExecutionJobRepository,
-)
-from incrementality_api.infrastructure.database.unit_of_work.analysis_execution_jobs import (
-    SqlAlchemyAnalysisExecutionJobUnitOfWork,
-)
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
+)
+
+from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
+    SqlAlchemyAnalysisExecutionJobRepository,
+)
+from incrementality_api.infrastructure.database.repositories.analysis_runs import (
+    SqlAlchemyAnalysisRunRepository,
+)
+from incrementality_api.infrastructure.database.unit_of_work.analysis_execution_jobs import (
+    SqlAlchemyAnalysisExecutionJobUnitOfWork,
 )
 
 
@@ -78,6 +82,10 @@ async def test_enters_with_execution_job_repository() -> None:
         assert isinstance(
             unit_of_work.execution_jobs,
             SqlAlchemyAnalysisExecutionJobRepository,
+        )
+        assert isinstance(
+            unit_of_work.analysis_runs,
+            SqlAlchemyAnalysisRunRepository,
         )
 
         await unit_of_work.commit()
