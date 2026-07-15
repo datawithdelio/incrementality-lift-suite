@@ -13,6 +13,7 @@ from incrementality_api.api.v1.routes.datasets import (
 from incrementality_api.api.v1.routes.health import (
     router as health_router,
 )
+from incrementality_api.api.v1.routes.measurement import router as measurement_router
 from incrementality_api.api.v1.routes.projects import (
     router as projects_router,
 )
@@ -28,3 +29,4 @@ api_router.include_router(projects_router)
 api_router.include_router(datasets_router)
 api_router.include_router(analysis_runs_router)
 api_router.include_router(analysis_results_router)
+api_router.include_router(measurement_router)

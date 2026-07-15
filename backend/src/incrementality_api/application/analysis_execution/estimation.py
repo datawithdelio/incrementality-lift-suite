@@ -81,6 +81,21 @@ class MarketingMixInput:
 
 
 @dataclass(frozen=True, slots=True)
+class PolicyEvaluationObservation:
+    reward: float
+    behavior_probability: float
+    target_probability: float
+    expected_reward: float
+
+
+@dataclass(frozen=True, slots=True)
+class OffPolicyEvaluationInput:
+    observations: tuple[PolicyEvaluationObservation, ...]
+    policy_name: str
+    primary_method: str = "doubly_robust"
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisEstimatorInput:
     estimator_type: AnalysisEstimatorType
     payload: object

@@ -17,8 +17,10 @@ from incrementality_api.application.analysis_execution.estimation import (
     GeoHoldoutInput,
     MarketingMixInput,
     MarketingMixObservation,
+    OffPolicyEvaluationInput,
     PanelObservation,
     PermanentEstimationError,
+    PolicyEvaluationObservation,
     RetryableEstimationError,
     SyntheticControlInput,
 )
@@ -459,11 +461,62 @@ class MarketingMixInputBuilder:
                 for period in sorted(grouped_outcomes)
             ),
             adstock_decay={str(key): float(value) for key, value in adstock.items()},
-            saturation_half_spend={
-                str(key): float(value) for key, value in saturation.items()
-            },
+            saturation_half_spend={str(key): float(value) for key, value in saturation.items()},
             seasonality_period=seasonality_period,
             outcome_kind=str(outcome_kind),
+        )
+
+
+class OffPolicyEvaluationInputBuilder:
+    """Build logged-policy observations without coupling policy rules to statistics."""
+
+    def build(
+        self,
+        *,
+        rows: tuple[Mapping[str, str], ...],
+        mapping: DatasetSemanticMapping,
+        run: AnalysisRun,
+    ) -> OffPolicyEvaluationInput:
+        del mapping
+        configuration = _configuration(run)
+        policy_name = configuration.get("policy_name")
+        primary_method = configuration.get("primary_method", "doubly_robust")
+        columns = {
+            key: configuration.get(key)
+            for key in (
+                "reward_column",
+                "behavior_propensity_column",
+                "target_propensity_column",
+                "expected_reward_column",
+            )
+        }
+        if not isinstance(policy_name, str) or not policy_name.strip():
+            raise PermanentEstimationError("Off-policy evaluation requires policy_name.")
+        if not isinstance(primary_method, str) or not all(
+            isinstance(column, str) and column for column in columns.values()
+        ):
+            raise PermanentEstimationError("Off-policy policy columns are incomplete.")
+        observations: list[PolicyEvaluationObservation] = []
+        for row_number, row in enumerate(rows, start=2):
+            try:
+                observations.append(
+                    PolicyEvaluationObservation(
+                        reward=float(row[str(columns["reward_column"])]),
+                        behavior_probability=float(row[str(columns["behavior_propensity_column"])]),
+                        target_probability=float(row[str(columns["target_propensity_column"])]),
+                        expected_reward=float(row[str(columns["expected_reward_column"])]),
+                    )
+                )
+            except (KeyError, ValueError) as error:
+                raise PermanentEstimationError(
+                    f"CSV row {row_number} has invalid off-policy values."
+                ) from error
+        if not observations:
+            raise PermanentEstimationError("Off-policy evaluation requires observations.")
+        return OffPolicyEvaluationInput(
+            observations=tuple(observations),
+            policy_name=policy_name.strip(),
+            primary_method=primary_method,
         )
 
 
@@ -479,9 +532,8 @@ class ProductionAnalysisInputLoader:
         row_loader: CsvAnalysisRowLoader,
         configuration_parser: DifferenceInDifferencesConfigurationParser,
         input_builder: DifferenceInDifferencesInputBuilder,
-        additional_builders: Mapping[
-            AnalysisEstimatorType, AdditionalEstimatorInputBuilder
-        ] | None = None,
+        additional_builders: Mapping[AnalysisEstimatorType, AdditionalEstimatorInputBuilder]
+        | None = None,
     ) -> None:
         self._metadata_reader = metadata_reader
         self._object_storage = object_storage

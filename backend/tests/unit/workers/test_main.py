@@ -156,6 +156,7 @@ def test_builds_complete_analysis_execution_worker(
         AnalysisEstimatorType.SYNTHETIC_CONTROL,
         AnalysisEstimatorType.GEO_HOLDOUT,
         AnalysisEstimatorType.MARKETING_MIX_MODEL,
+        AnalysisEstimatorType.OFF_POLICY_EVALUATION,
     }
     assert isinstance(
         process_next._estimator_selector.select(AnalysisEstimatorType.SYNTHETIC_CONTROL),

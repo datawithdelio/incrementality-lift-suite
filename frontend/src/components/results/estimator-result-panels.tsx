@@ -87,4 +87,16 @@ export function MarketingMixPanels({ diagnostics }: { diagnostics: Record<string
   );
 }
 
+export function OffPolicyEvaluationPanels({ diagnostics }: { diagnostics: Record<string, unknown> }) {
+  const estimates = record(diagnostics.policy_estimates);
+  const overlap = record(diagnostics.propensity_overlap);
+  return (
+    <section className="estimator-grid">
+      <article className="panel estimator-wide"><p className="eyebrow">Policy comparison</p><h2>{String(diagnostics.policy_name ?? "Candidate policy")}</h2><div className="policy-comparison">{Object.entries(estimates).map(([method, estimate]) => <div key={method}><span>{method.replaceAll("_", " ")}</span><strong>{value(estimate, 3)}</strong></div>)}</div></article>
+      <article className="panel"><p className="eyebrow">Reliability evidence</p><h2>Effective sample size</h2><strong className="impact-number">{value(diagnostics.effective_sample_size, 0)}</strong><p>{String(diagnostics.plain_language_warning ?? "Overlap evidence is unavailable.")}</p></article>
+      <article className="panel estimator-full"><p className="eyebrow">Propensity overlap</p><h2>Weight stability</h2><div className="technical-grid"><MiniMetric label="Maximum importance weight" value={value(overlap.maximum_importance_weight, 2)} /><MiniMetric label="Extreme weights" value={value(diagnostics.extreme_weight_count, 0)} /></div></article>
+    </section>
+  );
+}
+
 function MiniMetric({ label, value }: { label: string; value: string }) { return <div className="metric"><span>{label}</span><strong>{value}</strong></div>; }

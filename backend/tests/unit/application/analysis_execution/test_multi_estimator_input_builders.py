@@ -4,11 +4,13 @@ from dataclasses import replace
 from incrementality_api.application.analysis_execution.estimation import (
     GeoHoldoutInput,
     MarketingMixInput,
+    OffPolicyEvaluationInput,
     SyntheticControlInput,
 )
 from incrementality_api.application.analysis_execution.input_loading import (
     GeoHoldoutInputBuilder,
     MarketingMixInputBuilder,
+    OffPolicyEvaluationInputBuilder,
     SyntheticControlInputBuilder,
 )
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
@@ -27,9 +29,7 @@ def test_builds_synthetic_control_panel_from_semantic_mapping() -> None:
     _job, metadata = build_metadata()
     run = replace(metadata.run, estimator_type=AnalysisEstimatorType.SYNTHETIC_CONTROL)
 
-    result = SyntheticControlInputBuilder().build(
-        rows=ROWS, mapping=metadata.mapping, run=run
-    )
+    result = SyntheticControlInputBuilder().build(rows=ROWS, mapping=metadata.mapping, run=run)
 
     assert isinstance(result, SyntheticControlInput)
     assert len(result.observations) == 4
@@ -90,9 +90,35 @@ def test_builds_aggregated_marketing_mix_channels() -> None:
         ),
     )
 
-    result = MarketingMixInputBuilder().build(
-        rows=tuple(rows), mapping=mapping, run=run
-    )
+    result = MarketingMixInputBuilder().build(rows=tuple(rows), mapping=mapping, run=run)
 
     assert isinstance(result, MarketingMixInput)
     assert result.observations[0].channel_spend == {"search": 21.0, "social": 11.0}
+
+
+def test_builds_off_policy_input_from_custom_policy_columns() -> None:
+    _job, metadata = build_metadata()
+    rows = (
+        {"reward": "4", "behavior": "0.5", "target": "0.75", "prediction": "3.5"},
+        {"reward": "2", "behavior": "0.4", "target": "0.25", "prediction": "2.1"},
+    )
+    run = replace(
+        metadata.run,
+        estimator_type=AnalysisEstimatorType.OFF_POLICY_EVALUATION,
+        configuration_json=json.dumps(
+            {
+                "policy_name": "growth_policy",
+                "reward_column": "reward",
+                "behavior_propensity_column": "behavior",
+                "target_propensity_column": "target",
+                "expected_reward_column": "prediction",
+                "primary_method": "doubly_robust",
+            }
+        ),
+    )
+
+    result = OffPolicyEvaluationInputBuilder().build(rows=rows, mapping=metadata.mapping, run=run)
+
+    assert isinstance(result, OffPolicyEvaluationInput)
+    assert result.policy_name == "growth_policy"
+    assert result.observations[0].target_probability == 0.75

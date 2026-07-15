@@ -258,6 +258,10 @@ class BayesianMarketingMixEstimator:
             "causal_claim_allowed": False,
             "recommendations_allowed": recommendations_allowed,
             "channel_contributions": contribution,
+            "channel_spend": {
+                channel: float(np.sum(design.raw_spend[:, index]))
+                for index, channel in enumerate(design.channel_names)
+            },
             "posterior_intervals": intervals,
             "channel_roas": roas,
             "budget_response_curves": curves,

@@ -4,7 +4,7 @@ import type { AnalysisResultResponse, ResultsState } from "@/lib/results/types";
 import Link from "next/link";
 
 import { ComparisonChart, EventStudyChart } from "./result-charts";
-import { GeoHoldoutPanels, MarketingMixPanels, SyntheticControlPanels } from "./estimator-result-panels";
+import { GeoHoldoutPanels, MarketingMixPanels, OffPolicyEvaluationPanels, SyntheticControlPanels } from "./estimator-result-panels";
 import { StatusState } from "./status-state";
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -96,6 +96,7 @@ export function ResultsExperience({ state }: { state: ResultsState }) {
       {data.estimator_type === "synthetic_control" ? <SyntheticControlPanels diagnostics={diagnostics} /> : null}
       {data.estimator_type === "geo_holdout" ? <GeoHoldoutPanels diagnostics={diagnostics} /> : null}
       {data.estimator_type === "marketing_mix_model" ? <MarketingMixPanels diagnostics={diagnostics} /> : null}
+      {data.estimator_type === "off_policy_evaluation" ? <OffPolicyEvaluationPanels diagnostics={diagnostics} /> : null}
 
       {data.estimator_type === "difference_in_differences" ? <><section className="story-grid">
         <article className="panel wide"><div className="panel-heading"><div><p className="eyebrow">What changed</p><h2>Observed versus expected outcome</h2></div><p>The gap after treatment is the estimated incremental impact.</p></div><ComparisonChart points={arrayValue(diagnostics.observed_vs_counterfactual)} /></article>

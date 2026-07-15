@@ -148,4 +148,22 @@ describe("ResultsExperience", () => {
     expect(screen.getByText("Budget scenario")).toBeInTheDocument();
     expect(screen.getAllByText("search")).toHaveLength(2);
   });
+
+  it("renders off-policy comparison and reliability evidence", () => {
+    const ope = structuredClone(base);
+    ope.estimator_type = "off_policy_evaluation";
+    ope.result!.technical_diagnostics = {
+      ...ope.result!.technical_diagnostics,
+      policy_name: "growth_policy",
+      policy_estimates: { importance_sampling: 4.1, self_normalized_importance_sampling: 3.9, doubly_robust: 4.2 },
+      effective_sample_size: 180,
+      reliability: "strong",
+      plain_language_warning: "Historical decisions provide strong overlap.",
+      propensity_overlap: { maximum_importance_weight: 2.4 },
+    };
+    render(<ResultsExperience state={{ kind: "ready", data: ope }} />);
+    expect(screen.getByText("Policy comparison")).toBeInTheDocument();
+    expect(screen.getByText("Effective sample size")).toBeInTheDocument();
+    expect(screen.getByText("growth_policy")).toBeInTheDocument();
+  });
 });

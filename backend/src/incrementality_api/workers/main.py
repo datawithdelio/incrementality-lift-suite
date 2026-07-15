@@ -14,6 +14,7 @@ from incrementality_api.application.analysis_execution.input_loading import (
     DifferenceInDifferencesInputBuilder,
     GeoHoldoutInputBuilder,
     MarketingMixInputBuilder,
+    OffPolicyEvaluationInputBuilder,
     ProductionAnalysisInputLoader,
     SyntheticControlInputBuilder,
 )
@@ -74,6 +75,9 @@ from incrementality_api.infrastructure.estimation.marketing_mix_model import (
     BayesianMarketingMixEstimator,
     MarketingMixTransformer,
     PyMCMarketingMixModelRunner,
+)
+from incrementality_api.infrastructure.estimation.off_policy_evaluation import (
+    StatsmodelsOffPolicyEstimator,
 )
 from incrementality_api.infrastructure.estimation.synthetic_control import (
     ScipySyntheticControlEstimator,
@@ -241,6 +245,7 @@ def build_analysis_execution_worker() -> AnalysisExecutionWorker:
             AnalysisEstimatorType.SYNTHETIC_CONTROL: SyntheticControlInputBuilder(),
             AnalysisEstimatorType.GEO_HOLDOUT: GeoHoldoutInputBuilder(),
             AnalysisEstimatorType.MARKETING_MIX_MODEL: MarketingMixInputBuilder(),
+            AnalysisEstimatorType.OFF_POLICY_EVALUATION: OffPolicyEvaluationInputBuilder(),
         },
     )
     estimator_selector = AnalysisEstimatorRegistry(
@@ -254,6 +259,7 @@ def build_analysis_execution_worker() -> AnalysisExecutionWorker:
                 model_runner=PyMCMarketingMixModelRunner(),
                 transformer=MarketingMixTransformer(),
             ),
+            AnalysisEstimatorType.OFF_POLICY_EVALUATION: StatsmodelsOffPolicyEstimator(),
         }
     )
     process_next = RunNextAnalysisExecutionJob(
