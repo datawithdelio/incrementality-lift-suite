@@ -26,6 +26,7 @@ from incrementality_api.application.analysis_execution.settle_execution import (
     PersistAnalysisExecutionSuccess,
     RecordAnalysisExecutionFailure,
 )
+from incrementality_api.application.data_products.report_jobs import ProcessNextReportJob
 from incrementality_api.application.datasets.begin_validation import (
     BeginDatasetValidation,
 )
@@ -51,6 +52,9 @@ from incrementality_api.core.logging import configure_logging
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 from incrementality_api.infrastructure.database.analysis_input_metadata import (
     SqlAlchemyAnalysisInputMetadataReader,
+)
+from incrementality_api.infrastructure.database.repositories.data_products import (
+    SqlAlchemyReportRepository,
 )
 from incrementality_api.infrastructure.database.session import (
     get_engine,
@@ -100,6 +104,7 @@ from incrementality_api.workers.handlers.dataset_validation import (
 from incrementality_api.workers.loop import (
     AnalysisExecutionWorker,
     DatasetValidationWorker,
+    ReportGenerationWorker,
 )
 
 
@@ -293,6 +298,30 @@ def build_analysis_execution_worker() -> AnalysisExecutionWorker:
     )
 
 
+def build_report_generation_worker() -> ReportGenerationWorker:
+    settings = get_settings()
+    storage = S3DatasetObjectStorage(
+        client=create_s3_compatible_client(
+            endpoint_url=settings.s3_endpoint_url,
+            access_key=settings.s3_access_key,
+            secret_key=settings.s3_secret_key,
+            region=settings.s3_region,
+        ),
+        bucket_name=settings.s3_bucket,
+        spool_max_memory_bytes=settings.dataset_validation_spool_max_memory_bytes,
+    )
+    return ReportGenerationWorker(
+        process_next=ProcessNextReportJob(
+            repository=SqlAlchemyReportRepository(get_session_factory()),
+            storage=storage,
+            clock=SystemWorkerClock(),
+        ),
+        sleep=asyncio.sleep,
+        poll_interval_seconds=settings.analysis_execution_worker_poll_interval_seconds,
+        error_retry_seconds=settings.analysis_execution_worker_error_retry_seconds,
+    )
+
+
 async def main() -> None:
     """Run the production worker until shutdown."""
 
@@ -300,11 +329,13 @@ async def main() -> None:
 
     validation_worker = build_dataset_validation_worker()
     analysis_worker = build_analysis_execution_worker()
+    report_worker = build_report_generation_worker()
 
     try:
         await asyncio.gather(
             validation_worker.run_forever(),
             analysis_worker.run_forever(),
+            report_worker.run_forever(),
         )
     finally:
         await get_engine().dispose()

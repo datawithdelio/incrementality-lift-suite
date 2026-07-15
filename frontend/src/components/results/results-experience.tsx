@@ -1,6 +1,6 @@
 "use client";
 
-import type { AnalysisResultResponse, ResultsState } from "@/lib/results/types";
+import type { ResultsState } from "@/lib/results/types";
 import Link from "next/link";
 
 import { ComparisonChart, EventStudyChart } from "./result-charts";
@@ -16,16 +16,6 @@ function arrayValue(value: unknown): Record<string, unknown>[] {
 function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
 function number(value: number, digits = 1): string { return new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(value); }
 function percent(value: number): string { return `${value >= 0 ? "+" : ""}${number(value * 100, 1)}%`; }
-
-function downloadReport(data: AnalysisResultResponse) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `analysis-${data.analysis_run_id}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 export function ResultsExperience({ state }: { state: ResultsState }) {
   if (state.kind === "loading") return <StatusState status="running" />;
@@ -54,6 +44,7 @@ export function ResultsExperience({ state }: { state: ResultsState }) {
     synthetic_control: "Synthetic control",
     geo_holdout: "Geo holdout",
     marketing_mix_model: "Bayesian marketing mix model",
+    off_policy_evaluation: "Off-policy evaluation",
   };
   const uncertaintyCopy = data.estimator_type === "marketing_mix_model"
     ? `95% posterior interval ${number(result.confidence_interval.low)} to ${number(result.confidence_interval.high)}`
@@ -68,7 +59,7 @@ export function ResultsExperience({ state }: { state: ResultsState }) {
     <main className="results-shell">
       <header className="topbar">
         <Link href="/" className="brand"><span>∆</span> Incrementality</Link>
-        <button className="button secondary" onClick={() => downloadReport(data)}>Download report</button>
+        <Link className="button secondary" href={`/workspaces/${data.workspace_id}/projects/${data.project_id}/analysis-runs/${data.analysis_run_id}/reports`}>Reports</Link>
       </header>
       <section className={`conclusion ${decisionReady ? "trusted" : "caution"}`}>
         <div>

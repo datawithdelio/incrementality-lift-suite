@@ -24,6 +24,11 @@ class ProcessNextAnalysisJobAction(Protocol):
         """Process at most one analysis execution job."""
 
 
+class ProcessNextReportJobAction(Protocol):
+    async def execute(self) -> object | None:
+        """Process at most one durable report job."""
+
+
 class DatasetValidationWorker:
     """Continuously poll and process durable validation jobs."""
 
@@ -97,6 +102,37 @@ class AnalysisExecutionWorker:
             job = await self._process_next.execute()
         except Exception:
             logger.exception("Unexpected analysis execution worker failure.")
+            await self._sleep(self._error_retry_seconds)
+            return None
+        if job is None:
+            await self._sleep(self._poll_interval_seconds)
+        return job
+
+    async def run_forever(self) -> None:
+        while True:
+            await self.run_once()
+
+
+class ReportGenerationWorker:
+    def __init__(
+        self,
+        *,
+        process_next: ProcessNextReportJobAction,
+        sleep: SleepAction,
+        poll_interval_seconds: float = 1.0,
+        error_retry_seconds: float = 5.0,
+    ) -> None:
+        self._process_next, self._sleep = process_next, sleep
+        self._poll_interval_seconds, self._error_retry_seconds = (
+            poll_interval_seconds,
+            error_retry_seconds,
+        )
+
+    async def run_once(self) -> object | None:
+        try:
+            job = await self._process_next.execute()
+        except Exception:
+            logger.exception("Unexpected report generation worker failure.")
             await self._sleep(self._error_retry_seconds)
             return None
         if job is None:

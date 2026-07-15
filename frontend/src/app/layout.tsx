@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import "./globals.css";
+import "./app-shell.css";
 
 export const metadata: Metadata = {
   title: "Analysis Results · Incrementality",

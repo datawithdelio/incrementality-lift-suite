@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from typing import Protocol
 from uuid import UUID
 
 from incrementality_api.application.analysis_runs.errors import (
+    AnalysisRunDataQualityBlockedError,
     AnalysisRunDatasetNotReadyError,
     AnalysisRunDatasetUnavailableError,
     AnalysisRunSemanticMappingUnavailableError,
@@ -45,14 +47,25 @@ class QueueAnalysisRun:
         *,
         unit_of_work: AnalysisRunUnitOfWork,
         clock: AnalysisRunClock,
+        quality_gate: "AnalysisQualityGate | None" = None,
     ) -> None:
         self._unit_of_work = unit_of_work
         self._clock = clock
+        self._quality_gate = quality_gate
 
     async def execute(
         self,
         command: QueueAnalysisRunCommand,
     ) -> AnalysisRun:
+        if self._quality_gate is not None and not await self._quality_gate.allows(
+            workspace_id=command.workspace_id,
+            project_id=command.project_id,
+            dataset_id=command.dataset_id,
+            estimator_type=command.estimator_type.value,
+        ):
+            raise AnalysisRunDataQualityBlockedError(
+                "Resolve blocking data-quality findings before running this method."
+            )
         async with self._unit_of_work:
             dataset = await self._unit_of_work.datasets.get_by_scope(
                 workspace_id=command.workspace_id,
@@ -109,6 +122,17 @@ class QueueAnalysisRun:
             await self._unit_of_work.commit()
 
             return run
+
+
+class AnalysisQualityGate(Protocol):
+    async def allows(
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        dataset_id: UUID,
+        estimator_type: str,
+    ) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)

@@ -183,6 +183,7 @@ async def test_main_runs_worker_and_disposes_engine(
 ) -> None:
     validation_worker = FakeWorker()
     analysis_worker = FakeWorker()
+    report_worker = FakeWorker()
     engine = FakeEngine()
     logging_calls: list[str] = []
 
@@ -195,6 +196,11 @@ async def test_main_runs_worker_and_disposes_engine(
         worker_main,
         "build_analysis_execution_worker",
         lambda: analysis_worker,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "build_report_generation_worker",
+        lambda: report_worker,
     )
     monkeypatch.setattr(
         worker_main,
@@ -214,6 +220,7 @@ async def test_main_runs_worker_and_disposes_engine(
     assert logging_calls == ["configured"]
     assert validation_worker.run_count == 1
     assert analysis_worker.run_count == 1
+    assert report_worker.run_count == 1
     assert engine.dispose_count == 1
 
 

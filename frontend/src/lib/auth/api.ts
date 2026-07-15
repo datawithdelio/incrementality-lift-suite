@@ -36,6 +36,16 @@ export function login(email: string, password: string): Promise<LoginResponse> {
   return post<LoginResponse>("/api/v1/auth/login", { email, password });
 }
 
+export async function logout(token: string): Promise<void> {
+  const response = await fetch("/api/v1/auth/logout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok && response.status !== 401) {
+    throw new AuthenticationError("We couldn't sign you out cleanly.");
+  }
+}
+
 export function register(input: {
   displayName: string;
   organizationName: string;

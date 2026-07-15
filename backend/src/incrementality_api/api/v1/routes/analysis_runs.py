@@ -21,6 +21,7 @@ from incrementality_api.api.v1.schemas.analysis_runs import (
     QueueAnalysisRunRequest,
 )
 from incrementality_api.application.analysis_runs.errors import (
+    AnalysisRunDataQualityBlockedError,
     AnalysisRunDatasetNotReadyError,
     AnalysisRunDatasetUnavailableError,
     AnalysisRunPersistenceConflictError,
@@ -139,6 +140,7 @@ async def queue_project_analysis_run(
         ) from error
     except (
         AnalysisRunDatasetNotReadyError,
+        AnalysisRunDataQualityBlockedError,
         AnalysisRunPersistenceConflictError,
     ) as error:
         raise HTTPException(

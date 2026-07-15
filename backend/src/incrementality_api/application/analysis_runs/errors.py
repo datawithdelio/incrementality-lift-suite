@@ -14,6 +14,10 @@ class AnalysisRunDatasetNotReadyError(
     """Raised when analysis is requested before validation completes."""
 
 
+class AnalysisRunDataQualityBlockedError(AnalysisRunApplicationError):
+    """Raised only when the latest method-specific assessment has blockers."""
+
+
 class AnalysisRunSemanticMappingUnavailableError(
     AnalysisRunApplicationError,
 ):

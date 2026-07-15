@@ -5,6 +5,10 @@ from incrementality_api.infrastructure.database.models.authentication import (
     AuthSessionModel,
     UserCredentialModel,
 )
+from incrementality_api.infrastructure.database.models.data_products import (
+    DataQualityAssessmentModel,
+    ReportGenerationModel,
+)
 from incrementality_api.infrastructure.database.models.dataset_columns import (
     DatasetColumnModel,
 )
@@ -31,6 +35,7 @@ from incrementality_api.infrastructure.database.models.tenancy import (
 __all__ = [
     "AnalysisResultModel",
     "AuthSessionModel",
+    "DataQualityAssessmentModel",
     "DatasetColumnModel",
     "DatasetMappingCovariateModel",
     "DatasetModel",
@@ -38,6 +43,7 @@ __all__ = [
     "DatasetValidationJobModel",
     "OrganizationModel",
     "ProjectModel",
+    "ReportGenerationModel",
     "UserCredentialModel",
     "UserModel",
     "WorkspaceMembershipModel",

@@ -5,6 +5,9 @@ from incrementality_api.application.analysis_runs.manage_analysis_runs import (
     GetAnalysisRun,
     QueueAnalysisRun,
 )
+from incrementality_api.infrastructure.database.repositories.data_products import (
+    SqlAlchemyAnalysisQualityGate,
+)
 from incrementality_api.infrastructure.database.session import (
     get_session_factory,
 )
@@ -23,11 +26,13 @@ class SystemAnalysisRunClock:
 def get_queue_analysis_run_service() -> QueueAnalysisRun:
     """Construct the production analysis-run queue use case."""
 
+    sessions = get_session_factory()
     return QueueAnalysisRun(
         unit_of_work=SqlAlchemyAnalysisRunUnitOfWork(
-            session_factory=get_session_factory(),
+            session_factory=sessions,
         ),
         clock=SystemAnalysisRunClock(),
+        quality_gate=SqlAlchemyAnalysisQualityGate(sessions),
     )
 
 

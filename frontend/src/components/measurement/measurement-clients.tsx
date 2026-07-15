@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 import type { DashboardFilters } from "@/lib/measurement/types";
@@ -34,5 +33,5 @@ export function ChannelClient({ workspaceId }: { workspaceId: string }) {
 }
 
 function Header({ title, subtitle }: { title: string; subtitle: string }) {
-  return <><nav className="topbar"><Link className="brand" href="/"><span>∆</span>Incrementality</Link></nav><header className="measurement-hero"><p className="eyebrow">Decision workspace</p><h1>{title}</h1><p>{subtitle}</p></header></>;
+  return <header className="measurement-hero"><p className="eyebrow">Decision workspace</p><h1>{title}</h1><p>{subtitle}</p></header>;
 }
