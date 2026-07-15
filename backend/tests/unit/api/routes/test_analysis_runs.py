@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+
 from incrementality_api.api.dependencies.analysis_runs import (
     get_analysis_run_service,
     get_queue_analysis_run_service,
@@ -15,7 +16,6 @@ from incrementality_api.api.v1.routes.analysis_runs import (
     _require_view_workspace,
     router,
 )
-
 from incrementality_api.application.analysis_runs.errors import (
     AnalysisRunDatasetNotReadyError,
     AnalysisRunDatasetUnavailableError,

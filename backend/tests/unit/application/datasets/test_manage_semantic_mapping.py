@@ -3,16 +3,16 @@ from types import TracebackType
 from uuid import UUID, uuid4
 
 import pytest
+
+from incrementality_api.application.datasets.errors import (
+    DatasetSemanticMappingUnavailableError,
+    DatasetUnavailableError,
+)
 from incrementality_api.application.datasets.manage_semantic_mapping import (
     CreateDatasetSemanticMapping,
     CreateDatasetSemanticMappingCommand,
     GetDatasetSemanticMapping,
     GetDatasetSemanticMappingQuery,
-)
-
-from incrementality_api.application.datasets.errors import (
-    DatasetSemanticMappingUnavailableError,
-    DatasetUnavailableError,
 )
 from incrementality_api.domain.datasets.columns import (
     DatasetColumnProfile,

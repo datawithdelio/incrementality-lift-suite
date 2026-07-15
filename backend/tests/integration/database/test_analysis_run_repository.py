@@ -3,9 +3,6 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
-from incrementality_api.infrastructure.database.unit_of_work.analysis_runs import (
-    SqlAlchemyAnalysisRunUnitOfWork,
-)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -47,6 +44,9 @@ from incrementality_api.infrastructure.database.models.tenancy import (
     OrganizationModel,
     UserModel,
     WorkspaceModel,
+)
+from incrementality_api.infrastructure.database.unit_of_work.analysis_runs import (
+    SqlAlchemyAnalysisRunUnitOfWork,
 )
 
 CREATED_AT = datetime(

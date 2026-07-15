@@ -3,13 +3,13 @@ from types import TracebackType
 from uuid import UUID, uuid4
 
 import pytest
+
 from incrementality_api.application.analysis_execution.claim_next_execution_job import (
     ClaimNextAnalysisExecutionJob,
 )
 from incrementality_api.application.analysis_execution.errors import (
     AnalysisExecutionRunUnavailableError,
 )
-
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )

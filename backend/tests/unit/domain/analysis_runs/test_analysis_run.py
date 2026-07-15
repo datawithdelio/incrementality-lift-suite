@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )

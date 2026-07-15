@@ -1,6 +1,3 @@
-from incrementality_api.infrastructure.database.models.analysis_execution_jobs import (
-    AnalysisExecutionJobModel,
-)
 from sqlalchemy import (
     DateTime,
     ForeignKeyConstraint,
@@ -10,6 +7,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.types import Uuid
 
+from incrementality_api.infrastructure.database.models.analysis_execution_jobs import (
+    AnalysisExecutionJobModel,
+)
 from incrementality_api.infrastructure.database.models.analysis_runs import (
     AnalysisRunModel,
 )

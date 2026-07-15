@@ -1,6 +1,3 @@
-from incrementality_api.infrastructure.database.models.analysis_runs import (
-    AnalysisRunModel,
-)
 from sqlalchemy import (
     DateTime,
     ForeignKeyConstraint,
@@ -11,6 +8,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.types import Uuid
 
+from incrementality_api.infrastructure.database.models.analysis_runs import (
+    AnalysisRunModel,
+)
 from incrementality_api.infrastructure.database.models.dataset_semantic_mappings import (
     DatasetSemanticMappingModel,
 )

@@ -3,11 +3,6 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
-from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
-    SqlAlchemyAnalysisExecutionJobRepository,
-    to_analysis_execution_job_entity,
-    to_analysis_execution_job_model,
-)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +14,11 @@ from incrementality_api.domain.analysis_runs.execution_jobs import (
 )
 from incrementality_api.infrastructure.database.models.analysis_execution_jobs import (
     AnalysisExecutionJobModel,
+)
+from incrementality_api.infrastructure.database.repositories.analysis_execution_jobs import (
+    SqlAlchemyAnalysisExecutionJobRepository,
+    to_analysis_execution_job_entity,
+    to_analysis_execution_job_model,
 )
 
 CREATED_AT = datetime(
