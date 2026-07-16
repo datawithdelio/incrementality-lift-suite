@@ -73,6 +73,7 @@ def queue_run(
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version=estimator_version,
+        random_seed=1_729,
         configuration_json=configuration_json,
         created_at=created_at,
     )
@@ -102,6 +103,7 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
+        random_seed=1_729,
         configuration_json=CONFIGURATION_JSON,
         created_at=CREATED_AT,
     )

@@ -20,10 +20,7 @@ EXECUTED_AT = datetime(
     tzinfo=UTC,
 )
 
-LOGGER_NAME = (
-    "incrementality_api.infrastructure.observability."
-    "report_reconciliation"
-)
+LOGGER_NAME = "incrementality_api.infrastructure.observability.report_reconciliation"
 
 
 @pytest.mark.asyncio
@@ -54,9 +51,7 @@ async def test_logs_warning_when_reconciliation_finds_inconsistencies(
     record = cast(Any, caplog.records[0])
 
     assert record.levelno == logging.WARNING
-    assert record.getMessage() == (
-        "Report artifact reconciliation found inconsistencies."
-    )
+    assert record.getMessage() == ("Report artifact reconciliation found inconsistencies.")
     assert record.executed_at == EXECUTED_AT.isoformat()
     assert record.report_artifacts_checked == 5
     assert record.report_artifacts_missing == 1
@@ -92,9 +87,7 @@ async def test_logs_info_when_reconciliation_is_clean(
     record = cast(Any, caplog.records[0])
 
     assert record.levelno == logging.INFO
-    assert record.getMessage() == (
-        "Report artifact reconciliation completed."
-    )
+    assert record.getMessage() == ("Report artifact reconciliation completed.")
     assert record.report_artifacts_checked == 4
     assert record.report_artifacts_missing == 0
     assert record.report_artifacts_orphaned == 0

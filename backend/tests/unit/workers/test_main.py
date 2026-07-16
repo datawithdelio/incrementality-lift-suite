@@ -276,7 +276,6 @@ def test_builds_report_worker_with_stale_recovery(
     assert process_next._recover_stale._claim_timeout == timedelta(seconds=180)
 
 
-
 def test_builds_report_artifact_reconciliation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -322,10 +321,7 @@ def test_builds_report_artifact_reconciliation(
         recorder._recorders[0],
         SqlAlchemyReportArtifactReconciliationRecorder,
     )
-    assert (
-        recorder._recorders[0]._sessions
-        is fake_session_factory
-    )
+    assert recorder._recorders[0]._sessions is fake_session_factory
     assert isinstance(
         recorder._recorders[1],
         LoggingReportArtifactReconciliationRecorder,

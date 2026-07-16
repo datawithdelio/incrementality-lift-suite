@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    BigInteger,
     DateTime,
     ForeignKeyConstraint,
     Integer,
@@ -50,6 +51,7 @@ def test_analysis_run_table_and_columns() -> None:
         "created_by_user_id",
         "estimator_type",
         "estimator_version",
+        "random_seed",
         "configuration_json",
         "status",
         "started_at",
@@ -113,6 +115,12 @@ def test_analysis_run_table_and_columns() -> None:
     )
     assert table.c.estimator_version.type.length == 255
     assert not table.c.estimator_version.nullable
+
+    assert isinstance(
+        table.c.random_seed.type,
+        BigInteger,
+    )
+    assert table.c.random_seed.nullable
 
     assert isinstance(
         table.c.configuration_json.type,

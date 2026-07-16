@@ -42,6 +42,7 @@ def build_view(*, succeeded: bool = False, failed: bool = False) -> AnalysisResu
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v2",
+        random_seed=1_729,
         configuration_json='{"intervention_time":"2026-01-01T00:00:00+00:00"}',
         created_at=NOW,
     )

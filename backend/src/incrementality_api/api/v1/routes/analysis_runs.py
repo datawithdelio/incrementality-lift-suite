@@ -1,4 +1,5 @@
 import json
+import secrets
 from typing import Annotated, cast
 from uuid import UUID
 
@@ -125,6 +126,7 @@ async def queue_project_analysis_run(
                 created_by_user_id=(principal.user_id),
                 estimator_type=(request.estimator_type),
                 estimator_version=(request.estimator_version),
+                random_seed=secrets.randbits(32),
                 configuration_json=json.dumps(
                     request.configuration,
                 ),

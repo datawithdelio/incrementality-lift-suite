@@ -36,6 +36,7 @@ class QueueAnalysisRunCommand:
     created_by_user_id: UUID
     estimator_type: AnalysisEstimatorType
     estimator_version: str
+    random_seed: int
     configuration_json: str
 
 
@@ -104,6 +105,7 @@ class QueueAnalysisRun:
                 created_by_user_id=(command.created_by_user_id),
                 estimator_type=command.estimator_type,
                 estimator_version=(command.estimator_version),
+                random_seed=command.random_seed,
                 configuration_json=(command.configuration_json),
                 created_at=queued_at,
             )

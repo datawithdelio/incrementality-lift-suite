@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKeyConstraint,
@@ -267,6 +268,11 @@ class AnalysisRunModel(
     estimator_version: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
+    )
+
+    random_seed: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
     )
 
     configuration_json: Mapped[str] = mapped_column(

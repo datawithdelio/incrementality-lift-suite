@@ -29,15 +29,9 @@ async def test_persists_completed_report_artifact_reconciliation(
     tenancy_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with tenancy_session_factory() as session, session.begin():
-        await session.execute(
-            delete(
-                ReportArtifactReconciliationRecordModel
-            )
-        )
+        await session.execute(delete(ReportArtifactReconciliationRecordModel))
 
-    recorder = SqlAlchemyReportArtifactReconciliationRecorder(
-        tenancy_session_factory
-    )
+    recorder = SqlAlchemyReportArtifactReconciliationRecorder(tenancy_session_factory)
 
     await recorder.record(
         ReportArtifactReconciliationRecord(
@@ -53,13 +47,7 @@ async def test_persists_completed_report_artifact_reconciliation(
     )
 
     async with tenancy_session_factory() as session:
-        records = (
-            await session.scalars(
-                select(
-                    ReportArtifactReconciliationRecordModel
-                )
-            )
-        ).all()
+        records = (await session.scalars(select(ReportArtifactReconciliationRecordModel))).all()
 
     assert len(records) == 1
 

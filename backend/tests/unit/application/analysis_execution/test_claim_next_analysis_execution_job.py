@@ -77,6 +77,7 @@ def build_queued_run(
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
+        random_seed=1_729,
         configuration_json='{"alpha":0.05}',
         created_at=CREATED_AT,
     )

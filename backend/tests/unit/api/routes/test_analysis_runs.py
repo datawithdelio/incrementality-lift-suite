@@ -112,6 +112,7 @@ def build_run(
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
+        random_seed=1_729,
         configuration_json="""
         {
           "cluster_by": "unit",

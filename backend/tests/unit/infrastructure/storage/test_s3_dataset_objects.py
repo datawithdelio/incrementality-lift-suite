@@ -168,7 +168,6 @@ async def test_deletes_object_from_configured_bucket() -> None:
     ]
 
 
-
 class FakeHeadS3Client:
     def __init__(
         self,
@@ -263,12 +262,9 @@ async def test_does_not_hide_permission_or_storage_failures() -> None:
         )
 
 
-
 class FakeListS3Client:
     def __init__(self) -> None:
-        self.list_calls: list[
-            tuple[str, str, str | None]
-        ] = []
+        self.list_calls: list[tuple[str, str, str | None]] = []
 
     def list_objects_v2(
         self,
@@ -309,16 +305,12 @@ class FakeListS3Client:
                 "IsTruncated": False,
             }
 
-        raise AssertionError(
-            f"Unexpected continuation token: {ContinuationToken}"
-        )
+        raise AssertionError(f"Unexpected continuation token: {ContinuationToken}")
 
 
 class FakeEmptyListS3Client:
     def __init__(self) -> None:
-        self.list_calls: list[
-            tuple[str, str, str | None]
-        ] = []
+        self.list_calls: list[tuple[str, str, str | None]] = []
 
     def list_objects_v2(
         self,

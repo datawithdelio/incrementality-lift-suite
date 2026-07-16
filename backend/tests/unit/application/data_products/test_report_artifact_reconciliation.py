@@ -39,11 +39,7 @@ class FakeReportRepository:
         return self._jobs
 
     async def list_storage_keys(self) -> frozenset[str]:
-        return frozenset(
-            job.storage_key
-            for job in self._jobs
-            if job.storage_key is not None
-        )
+        return frozenset(job.storage_key for job in self._jobs if job.storage_key is not None)
 
     async def mark_artifact_missing(
         self,
@@ -69,13 +65,7 @@ class FakeReportStorage:
         *,
         prefix: str,
     ) -> tuple[str, ...]:
-        return tuple(
-            sorted(
-                key
-                for key in self._existing_keys
-                if key.startswith(prefix)
-            )
-        )
+        return tuple(sorted(key for key in self._existing_keys if key.startswith(prefix)))
 
 
 def succeeded_report(storage_key: str | None) -> ReportJob:
@@ -144,7 +134,6 @@ async def test_treats_succeeded_report_without_storage_key_as_missing() -> None:
             NOW,
         )
     ]
-
 
 
 class MutableClock:
@@ -250,7 +239,6 @@ def test_periodic_reconciliation_interval_must_be_positive() -> None:
         )
 
 
-
 class EmptyReportRepository:
     def __init__(self, events: list[str]) -> None:
         self._events = events
@@ -270,9 +258,7 @@ class EmptyReportRepository:
         now: datetime,
     ) -> ReportJob:
         del job_id, storage_key, now
-        raise AssertionError(
-            "succeed must not be called when the queue is empty."
-        )
+        raise AssertionError("succeed must not be called when the queue is empty.")
 
     async def fail(
         self,
@@ -281,9 +267,7 @@ class EmptyReportRepository:
         now: datetime,
     ) -> ReportJob:
         del job_id, error, now
-        raise AssertionError(
-            "fail must not be called when the queue is empty."
-        )
+        raise AssertionError("fail must not be called when the queue is empty.")
 
 
 class RecordingPeriodicReconciliation:
@@ -303,9 +287,7 @@ class UnusedReportStorage:
         chunks: AsyncIterator[bytes],
     ) -> DatasetObjectWriteResult:
         del storage_key, media_type, chunks
-        raise AssertionError(
-            "write must not be called when the queue is empty."
-        )
+        raise AssertionError("write must not be called when the queue is empty.")
 
     def read(
         self,
@@ -314,9 +296,7 @@ class UnusedReportStorage:
         chunk_size: int = 1024 * 1024,
     ) -> AsyncIterator[bytes]:
         del storage_key, chunk_size
-        raise AssertionError(
-            "read must not be called when the queue is empty."
-        )
+        raise AssertionError("read must not be called when the queue is empty.")
 
     async def delete(
         self,
@@ -324,9 +304,7 @@ class UnusedReportStorage:
         storage_key: str,
     ) -> None:
         del storage_key
-        raise AssertionError(
-            "delete must not be called when the queue is empty."
-        )
+        raise AssertionError("delete must not be called when the queue is empty.")
 
 
 async def test_processes_due_reconciliation_before_claiming_report() -> None:
@@ -344,7 +322,6 @@ async def test_processes_due_reconciliation_before_claiming_report() -> None:
         "reconcile",
         "claim",
     ]
-
 
 
 class FakeOrphanReportRepository:
@@ -392,9 +369,7 @@ class FakeOrphanReportStorage:
         storage_key: str,
     ) -> bool:
         del storage_key
-        raise AssertionError(
-            "No succeeded report artifacts should be checked."
-        )
+        raise AssertionError("No succeeded report artifacts should be checked.")
 
     async def list_keys(
         self,
@@ -413,12 +388,8 @@ class FakeOrphanReportStorage:
 
 
 async def test_reports_orphaned_storage_objects_without_deleting_them() -> None:
-    referenced_key = (
-        "reports/workspace/run/v1.pdf"
-    )
-    orphaned_key = (
-        "reports/workspace/run/v2.pdf"
-    )
+    referenced_key = "reports/workspace/run/v1.pdf"
+    orphaned_key = "reports/workspace/run/v2.pdf"
 
     repository = FakeOrphanReportRepository(
         {
@@ -444,12 +415,9 @@ async def test_reports_orphaned_storage_objects_without_deleting_them() -> None:
     assert result.checked == 0
     assert result.missing == 0
     assert result.orphaned == 1
-    assert result.orphaned_keys == (
-        orphaned_key,
-    )
+    assert result.orphaned_keys == (orphaned_key,)
     assert storage.deleted_keys == []
     assert repository.missing_artifacts == []
-
 
 
 class RecordingReconciliationAudit:
@@ -504,10 +472,7 @@ async def test_records_completed_reconciliation_for_audit() -> None:
     assert record.checked == 2
     assert record.missing == 1
     assert record.orphaned == 1
-    assert record.orphaned_keys == (
-        orphaned_key,
-    )
-
+    assert record.orphaned_keys == (orphaned_key,)
 
 
 async def test_composite_recorder_forwards_record_to_every_recorder() -> None:
@@ -569,9 +534,7 @@ async def test_marks_existing_report_with_corrupt_artifact() -> None:
     report = replace(
         succeeded_report(storage_key),
         artifact_byte_size=len(expected_payload),
-        artifact_checksum_sha256=sha256(
-            expected_payload
-        ).hexdigest(),
+        artifact_checksum_sha256=sha256(expected_payload).hexdigest(),
     )
 
     repository = FakeReportRepository((report,))
@@ -610,9 +573,7 @@ async def test_records_corrupt_report_artifact_count() -> None:
     report = replace(
         succeeded_report(storage_key),
         artifact_byte_size=len(expected_payload),
-        artifact_checksum_sha256=sha256(
-            expected_payload
-        ).hexdigest(),
+        artifact_checksum_sha256=sha256(expected_payload).hexdigest(),
     )
 
     recorder = RecordingReconciliationAudit()

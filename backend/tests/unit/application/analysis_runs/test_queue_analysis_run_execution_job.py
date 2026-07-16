@@ -190,6 +190,7 @@ def build_command() -> QueueAnalysisRunCommand:
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType("difference_in_differences"),
         estimator_version="did-v1",
+        random_seed=1_729,
         configuration_json=('{"alpha":0.05}'),
     )
 

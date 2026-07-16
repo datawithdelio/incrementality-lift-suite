@@ -21,6 +21,7 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v1",
+        random_seed=1_729,
         configuration_json='{"alpha":0.05}',
         created_at=datetime(2026, 7, 16, 18, 30, tzinfo=UTC),
     )
@@ -29,6 +30,7 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
 
     assert model.dataset_checksum_sha256 == run.dataset_checksum_sha256
     assert model.dataset_byte_size == run.dataset_byte_size
+    assert model.random_seed == run.random_seed
 
     reconstructed = to_analysis_run(model)
 

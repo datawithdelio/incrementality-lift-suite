@@ -249,9 +249,7 @@ async def test_requeues_stale_running_report_when_attempts_remain(
         max_attempts=3,
     )
 
-    recovered = await SqlAlchemyReportRepository(
-        tenancy_session_factory
-    ).recover_stale(
+    recovered = await SqlAlchemyReportRepository(tenancy_session_factory).recover_stale(
         claimed_before=CLAIMED_BEFORE,
         recovered_at=RECOVERED_AT,
         error=RECOVERY_ERROR,
@@ -283,9 +281,7 @@ async def test_fails_stale_report_after_final_attempt(
         max_attempts=3,
     )
 
-    recovered = await SqlAlchemyReportRepository(
-        tenancy_session_factory
-    ).recover_stale(
+    recovered = await SqlAlchemyReportRepository(tenancy_session_factory).recover_stale(
         claimed_before=CLAIMED_BEFORE,
         recovered_at=RECOVERED_AT,
         error=RECOVERY_ERROR,
@@ -316,9 +312,7 @@ async def test_recent_running_report_is_not_recovered(
         started_at=RECENT_STARTED_AT,
     )
 
-    recovered = await SqlAlchemyReportRepository(
-        tenancy_session_factory
-    ).recover_stale(
+    recovered = await SqlAlchemyReportRepository(tenancy_session_factory).recover_stale(
         claimed_before=CLAIMED_BEFORE,
         recovered_at=RECOVERED_AT,
         error=RECOVERY_ERROR,
@@ -371,7 +365,6 @@ async def test_concurrent_recovery_cannot_recover_same_report_twice(
     assert persisted.failure_reason == RECOVERY_ERROR
 
 
-
 ARTIFACT_MISSING_ERROR = "Report artifact is missing from object storage."
 
 
@@ -400,9 +393,7 @@ async def test_lists_only_succeeded_reports_for_artifact_reconciliation(
         succeeded.completed_at = RECOVERED_AT
         succeeded.updated_at = RECOVERED_AT
 
-    reports = await SqlAlchemyReportRepository(
-        tenancy_session_factory
-    ).list_succeeded()
+    reports = await SqlAlchemyReportRepository(tenancy_session_factory).list_succeeded()
 
     assert len(reports) == 1
     assert reports[0].id == succeeded_report_id
@@ -433,9 +424,7 @@ async def test_marks_succeeded_report_artifact_missing_and_preserves_key(
         report.failure_reason = None
         report.updated_at = CLAIMED_BEFORE
 
-    await SqlAlchemyReportRepository(
-        tenancy_session_factory
-    ).mark_artifact_missing(
+    await SqlAlchemyReportRepository(tenancy_session_factory).mark_artifact_missing(
         job_id=report_id,
         error=ARTIFACT_MISSING_ERROR,
         now=RECOVERED_AT,
@@ -453,7 +442,6 @@ async def test_marks_succeeded_report_artifact_missing_and_preserves_key(
     assert persisted.failure_reason == ARTIFACT_MISSING_ERROR
     assert persisted.completed_at == RECOVERED_AT
     assert persisted.updated_at == RECOVERED_AT
-
 
 
 @pytest.mark.asyncio
@@ -499,9 +487,7 @@ async def test_lists_every_non_null_report_storage_key(
         failed.completed_at = RECOVERED_AT
         failed.updated_at = RECOVERED_AT
 
-    keys = await SqlAlchemyReportRepository(
-        tenancy_session_factory
-    ).list_storage_keys()
+    keys = await SqlAlchemyReportRepository(tenancy_session_factory).list_storage_keys()
 
     assert keys == frozenset(
         {
@@ -515,16 +501,12 @@ async def test_lists_every_non_null_report_storage_key(
 async def test_succeed_persists_report_artifact_integrity_metadata(
     tenancy_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    report_id = await seed_running_report(
-        tenancy_session_factory
-    )
+    report_id = await seed_running_report(tenancy_session_factory)
     storage_key = f"reports/{report_id}/v1.pdf"
     artifact_byte_size = 2125
     artifact_checksum_sha256 = "a" * 64
 
-    succeeded = await SqlAlchemyReportRepository(
-        tenancy_session_factory
-    ).succeed(
+    succeeded = await SqlAlchemyReportRepository(tenancy_session_factory).succeed(
         report_id,
         storage_key,
         RECOVERED_AT,
@@ -544,14 +526,8 @@ async def test_succeed_persists_report_artifact_integrity_metadata(
     assert persisted is not None
     assert persisted.status == "succeeded"
     assert persisted.storage_key == storage_key
-    assert (
-        persisted.artifact_byte_size
-        == artifact_byte_size
-    )
-    assert (
-        persisted.artifact_checksum_sha256
-        == artifact_checksum_sha256
-    )
+    assert persisted.artifact_byte_size == artifact_byte_size
+    assert persisted.artifact_checksum_sha256 == artifact_checksum_sha256
     assert persisted.completed_at == RECOVERED_AT
 
 
@@ -559,16 +535,12 @@ async def test_succeed_persists_report_artifact_integrity_metadata(
 async def test_list_succeeded_exposes_report_artifact_integrity_metadata(
     tenancy_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    report_id = await seed_running_report(
-        tenancy_session_factory
-    )
+    report_id = await seed_running_report(tenancy_session_factory)
     storage_key = f"reports/{report_id}/v1.pdf"
     artifact_byte_size = 2125
     artifact_checksum_sha256 = "b" * 64
 
-    repository = SqlAlchemyReportRepository(
-        tenancy_session_factory
-    )
+    repository = SqlAlchemyReportRepository(tenancy_session_factory)
 
     await repository.succeed(
         report_id,
@@ -580,15 +552,8 @@ async def test_list_succeeded_exposes_report_artifact_integrity_metadata(
 
     succeeded_reports = await repository.list_succeeded()
 
-    report = next(
-        item
-        for item in succeeded_reports
-        if item.id == report_id
-    )
+    report = next(item for item in succeeded_reports if item.id == report_id)
 
     assert report.storage_key == storage_key
     assert report.artifact_byte_size == artifact_byte_size
-    assert (
-        report.artifact_checksum_sha256
-        == artifact_checksum_sha256
-    )
+    assert report.artifact_checksum_sha256 == artifact_checksum_sha256

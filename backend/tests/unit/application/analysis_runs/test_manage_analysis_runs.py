@@ -314,6 +314,7 @@ def build_command(
     dataset_id: UUID,
     user_id: UUID,
     mapping_version: int = 3,
+    random_seed: int = 1_729,
 ) -> QueueAnalysisRunCommand:
     return QueueAnalysisRunCommand(
         workspace_id=workspace_id,
@@ -323,6 +324,7 @@ def build_command(
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
+        random_seed=random_seed,
         configuration_json="""
         {
           "include_unit_fixed_effects": true,
@@ -379,6 +381,7 @@ async def test_queues_analysis_run_atomically() -> None:
 
     assert result.estimator_type is (AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES)
     assert result.estimator_version == "did-v1"
+    assert result.random_seed == 1_729
 
     assert result.configuration_json == ('{"alpha":0.05,"include_unit_fixed_effects":true}')
 
@@ -572,6 +575,7 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
+        random_seed=1_729,
         configuration_json='{"alpha":0.05}',
         created_at=RUN_CREATED_AT,
     )

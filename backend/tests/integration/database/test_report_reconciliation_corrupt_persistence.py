@@ -30,22 +30,15 @@ async def test_persists_corrupt_report_artifact_count(
         missing=1,
         corrupt=2,
         orphaned=1,
-        orphaned_keys=(
-            "reports/orphaned.pdf",
-        ),
+        orphaned_keys=("reports/orphaned.pdf",),
     )
 
-    await SqlAlchemyReportArtifactReconciliationRecorder(
-        tenancy_session_factory
-    ).record(record)
+    await SqlAlchemyReportArtifactReconciliationRecorder(tenancy_session_factory).record(record)
 
     async with tenancy_session_factory() as session:
         persisted = await session.scalar(
-            select(
-                ReportArtifactReconciliationRecordModel
-            ).where(
-                ReportArtifactReconciliationRecordModel.executed_at
-                == EXECUTED_AT
+            select(ReportArtifactReconciliationRecordModel).where(
+                ReportArtifactReconciliationRecordModel.executed_at == EXECUTED_AT
             )
         )
 

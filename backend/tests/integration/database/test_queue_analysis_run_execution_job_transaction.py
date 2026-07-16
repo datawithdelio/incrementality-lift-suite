@@ -261,6 +261,7 @@ def build_command(
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
+        random_seed=1_729,
         configuration_json='{"alpha":0.05}',
     )
 

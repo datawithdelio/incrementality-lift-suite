@@ -60,6 +60,7 @@ def build_run() -> AnalysisRun:
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v2",
+        random_seed=1_729,
         configuration_json='{"intervention_time":"2026-01-01T00:00:00+00:00"}',
         created_at=NOW,
     )
@@ -77,9 +78,7 @@ async def test_returns_pending_run_without_result() -> None:
     )
     service = GetAnalysisResult(unit_of_work=FakeUnitOfWork(run, job, None))
 
-    view = await service.execute(
-        GetAnalysisResultQuery(run.workspace_id, run.project_id, run.id)
-    )
+    view = await service.execute(GetAnalysisResultQuery(run.workspace_id, run.project_id, run.id))
 
     assert view.lifecycle_status == "queued"
     assert view.result is None
@@ -89,21 +88,25 @@ async def test_returns_pending_run_without_result() -> None:
 @pytest.mark.asyncio
 async def test_returns_retrying_when_running_run_has_pending_attempted_job() -> None:
     run = build_run().start(started_at=NOW)
-    job = AnalysisExecutionJob.enqueue(
-        workspace_id=run.workspace_id,
-        project_id=run.project_id,
-        analysis_run_id=run.id,
-        created_at=NOW,
-        available_at=NOW,
-    ).claim(claimed_at=NOW).retry(
-        failed_at=NOW,
-        available_at=NOW,
-        error="temporary service outage",
+    job = (
+        AnalysisExecutionJob.enqueue(
+            workspace_id=run.workspace_id,
+            project_id=run.project_id,
+            analysis_run_id=run.id,
+            created_at=NOW,
+            available_at=NOW,
+        )
+        .claim(claimed_at=NOW)
+        .retry(
+            failed_at=NOW,
+            available_at=NOW,
+            error="temporary service outage",
+        )
     )
 
-    view = await GetAnalysisResult(
-        unit_of_work=FakeUnitOfWork(run, job, None)
-    ).execute(GetAnalysisResultQuery(run.workspace_id, run.project_id, run.id))
+    view = await GetAnalysisResult(unit_of_work=FakeUnitOfWork(run, job, None)).execute(
+        GetAnalysisResultQuery(run.workspace_id, run.project_id, run.id)
+    )
 
     assert view.lifecycle_status == "retrying"
     assert view.failure_information == (
@@ -116,6 +119,4 @@ async def test_returns_retrying_when_running_run_has_pending_attempted_job() -> 
 async def test_missing_or_cross_tenant_run_is_not_found() -> None:
     query = GetAnalysisResultQuery(uuid4(), uuid4(), uuid4())
     with pytest.raises(AnalysisResultUnavailableError):
-        await GetAnalysisResult(
-            unit_of_work=FakeUnitOfWork(None, None, None)
-        ).execute(query)
+        await GetAnalysisResult(unit_of_work=FakeUnitOfWork(None, None, None)).execute(query)

@@ -32,6 +32,7 @@ class AnalysisRun:
     created_by_user_id: UUID
     estimator_type: AnalysisEstimatorType
     estimator_version: str
+    random_seed: int | None
     configuration_json: str
     status: AnalysisRunStatus
     created_at: datetime
@@ -54,6 +55,7 @@ class AnalysisRun:
         created_by_user_id: UUID,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
+        random_seed: int,
         configuration_json: str,
         created_at: datetime,
     ) -> Self:
@@ -80,6 +82,7 @@ class AnalysisRun:
             created_by_user_id=created_by_user_id,
             estimator_type=estimator_type,
             estimator_version=(normalized_estimator_version),
+            random_seed=random_seed,
             configuration_json=(canonical_configuration),
             status=AnalysisRunStatus.QUEUED,
             created_at=created_at,

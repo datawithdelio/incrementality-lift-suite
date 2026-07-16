@@ -151,9 +151,7 @@ class FakeClock:
 class FakeReportRepository:
     def __init__(self, job: ReportJob) -> None:
         self.job, self.succeeded, self.failed = job, False, False
-        self.succeeded_artifact: (
-            tuple[str, int | None, str | None] | None
-        ) = None
+        self.succeeded_artifact: tuple[str, int | None, str | None] | None = None
 
     async def claim_next(self, now: datetime) -> ReportJob | None:
         return self.job
@@ -207,9 +205,7 @@ class FakeReportStorage:
 
         return DatasetObjectWriteResult(
             byte_size=len(self.payload),
-            checksum_sha256=sha256(
-                self.payload
-            ).hexdigest(),
+            checksum_sha256=sha256(self.payload).hexdigest(),
         )
 
 

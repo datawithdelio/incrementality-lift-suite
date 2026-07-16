@@ -20,7 +20,6 @@ async def test_dataset_preview_requires_authentication() -> None:
     assert response.status_code == 401
 
 
-
 class FakeDownloadReportRepository:
     def __init__(self, job: ReportJob) -> None:
         self._job = job
