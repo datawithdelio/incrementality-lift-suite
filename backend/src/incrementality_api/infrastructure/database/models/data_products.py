@@ -84,3 +84,61 @@ class ReportGenerationModel(TimestampMixin, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
+
+
+class ReportArtifactReconciliationRecordModel(Base):
+    """Persist one append-only report artifact reconciliation result."""
+
+    __tablename__ = "report_artifact_reconciliation_records"
+    __table_args__ = (
+        CheckConstraint(
+            "checked >= 0",
+            name="ck_report_reconciliation_checked_nonnegative",
+        ),
+        CheckConstraint(
+            "missing >= 0 AND missing <= checked",
+            name="ck_report_reconciliation_missing_range",
+        ),
+        CheckConstraint(
+            "orphaned >= 0",
+            name="ck_report_reconciliation_orphaned_nonnegative",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(orphaned_keys) = 'array'",
+            name="ck_report_reconciliation_orphaned_keys_array",
+        ),
+        CheckConstraint(
+            "jsonb_array_length(orphaned_keys) = orphaned",
+            name="ck_report_reconciliation_orphaned_count",
+        ),
+        Index(
+            "ix_report_reconciliation_executed_at",
+            "executed_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    executed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    checked: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    missing: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    orphaned: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    orphaned_keys: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )

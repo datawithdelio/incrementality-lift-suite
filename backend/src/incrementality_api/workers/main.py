@@ -27,6 +27,7 @@ from incrementality_api.application.analysis_execution.settle_execution import (
     RecordAnalysisExecutionFailure,
 )
 from incrementality_api.application.data_products.reconciliation import (
+    CompositeReportArtifactReconciliationRecorder,
     ReconcileReportArtifacts,
     ReconcileReportArtifactsPeriodically,
 )
@@ -62,6 +63,9 @@ from incrementality_api.infrastructure.database.analysis_input_metadata import (
 )
 from incrementality_api.infrastructure.database.repositories.data_products import (
     SqlAlchemyReportRepository,
+)
+from incrementality_api.infrastructure.database.repositories.report_reconciliation import (
+    SqlAlchemyReportArtifactReconciliationRecorder,
 )
 from incrementality_api.infrastructure.database.session import (
     get_engine,
@@ -338,7 +342,14 @@ def build_report_generation_worker() -> ReportGenerationWorker:
             repository=repository,
             storage=storage,
             clock=clock,
-            recorder=LoggingReportArtifactReconciliationRecorder(),
+            recorder=CompositeReportArtifactReconciliationRecorder(
+                (
+                    SqlAlchemyReportArtifactReconciliationRecorder(
+                        session_factory
+                    ),
+                    LoggingReportArtifactReconciliationRecorder(),
+                )
+            ),
         ),
         clock=clock,
         interval_seconds=(

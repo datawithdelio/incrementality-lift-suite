@@ -6,6 +6,7 @@ import pytest
 
 from incrementality_api.application.data_products.reconciliation import (
     MISSING_REPORT_ARTIFACT_ERROR,
+    CompositeReportArtifactReconciliationRecorder,
     ReconcileReportArtifacts,
     ReconcileReportArtifactsPeriodically,
     ReportArtifactReconciliationRecord,
@@ -504,3 +505,30 @@ async def test_records_completed_reconciliation_for_audit() -> None:
     assert record.orphaned_keys == (
         orphaned_key,
     )
+
+
+
+async def test_composite_recorder_forwards_record_to_every_recorder() -> None:
+    first = RecordingReconciliationAudit()
+    second = RecordingReconciliationAudit()
+
+    record = ReportArtifactReconciliationRecord(
+        executed_at=NOW,
+        checked=6,
+        missing=1,
+        orphaned=2,
+        orphaned_keys=(
+            "reports/workspace/run/v2.pdf",
+            "reports/workspace/run/v3.csv",
+        ),
+    )
+
+    await CompositeReportArtifactReconciliationRecorder(
+        (
+            first,
+            second,
+        )
+    ).record(record)
+
+    assert first.records == [record]
+    assert second.records == [record]

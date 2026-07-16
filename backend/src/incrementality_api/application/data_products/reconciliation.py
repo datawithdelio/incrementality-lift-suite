@@ -73,6 +73,26 @@ class ReportArtifactReconciliationRecorder(Protocol):
         """Persist or emit a completed reconciliation record."""
 
 
+class CompositeReportArtifactReconciliationRecorder:
+    """Forward reconciliation records to every configured recorder."""
+
+    def __init__(
+        self,
+        recorders: tuple[
+            ReportArtifactReconciliationRecorder,
+            ...,
+        ],
+    ) -> None:
+        self._recorders = recorders
+
+    async def record(
+        self,
+        record: ReportArtifactReconciliationRecord,
+    ) -> None:
+        for recorder in self._recorders:
+            await recorder.record(record)
+
+
 class ReconcileReportArtifacts:
     """Find succeeded reports whose object-storage artifact is missing."""
 

@@ -5,8 +5,14 @@ from typing import Any
 
 import pytest
 
+from incrementality_api.application.data_products.reconciliation import (
+    CompositeReportArtifactReconciliationRecorder,
+)
 from incrementality_api.core.config import Settings
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.infrastructure.database.repositories.report_reconciliation import (
+    SqlAlchemyReportArtifactReconciliationRecorder,
+)
 from incrementality_api.infrastructure.estimation.geo_holdout import (
     StatsmodelsGeoHoldoutEstimator,
 )
@@ -305,8 +311,23 @@ def test_builds_report_artifact_reconciliation(
     assert periodic._clock is process_next._clock
     assert periodic._reconciliation._repository is process_next._repository
     assert periodic._reconciliation._storage is process_next._storage
+    recorder = periodic._reconciliation._recorder
+
     assert isinstance(
-        periodic._reconciliation._recorder,
+        recorder,
+        CompositeReportArtifactReconciliationRecorder,
+    )
+    assert len(recorder._recorders) == 2
+    assert isinstance(
+        recorder._recorders[0],
+        SqlAlchemyReportArtifactReconciliationRecorder,
+    )
+    assert (
+        recorder._recorders[0]._sessions
+        is fake_session_factory
+    )
+    assert isinstance(
+        recorder._recorders[1],
         LoggingReportArtifactReconciliationRecorder,
     )
     assert process_next._storage._client is fake_client
