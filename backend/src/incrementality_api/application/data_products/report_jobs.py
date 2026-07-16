@@ -29,6 +29,8 @@ class ReportJob:
     storage_key: str | None
     failure_reason: str | None
     created_at: datetime
+    artifact_byte_size: int | None = None
+    artifact_checksum_sha256: str | None = None
 
 
 class ReportJobRepository(Protocol):

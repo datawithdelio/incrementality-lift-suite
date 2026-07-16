@@ -1,5 +1,7 @@
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from uuid import UUID, uuid4
 
 import pytest
@@ -532,3 +534,100 @@ async def test_composite_recorder_forwards_record_to_every_recorder() -> None:
 
     assert first.records == [record]
     assert second.records == [record]
+
+
+class IntegrityReportStorage(FakeReportStorage):
+    def __init__(
+        self,
+        contents: dict[str, bytes],
+    ) -> None:
+        super().__init__(set(contents))
+        self._contents = contents
+        self.read_keys: list[str] = []
+
+    async def read(
+        self,
+        *,
+        storage_key: str,
+        chunk_size: int = 1024 * 1024,
+    ) -> AsyncIterator[bytes]:
+        del chunk_size
+
+        self.read_keys.append(storage_key)
+        payload = self._contents[storage_key]
+        midpoint = max(1, len(payload) // 2)
+
+        yield payload[:midpoint]
+        yield payload[midpoint:]
+
+
+async def test_marks_existing_report_with_corrupt_artifact() -> None:
+    storage_key = "reports/corrupt.pdf"
+    expected_payload = b"expected report artifact"
+    stored_payload = b"corrupted report artifact"
+
+    report = replace(
+        succeeded_report(storage_key),
+        artifact_byte_size=len(expected_payload),
+        artifact_checksum_sha256=sha256(
+            expected_payload
+        ).hexdigest(),
+    )
+
+    repository = FakeReportRepository((report,))
+    storage = IntegrityReportStorage(
+        {
+            storage_key: stored_payload,
+        }
+    )
+
+    result = await ReconcileReportArtifacts(
+        repository=repository,
+        storage=storage,
+        clock=FakeClock(),
+    ).execute()
+
+    assert storage.read_keys == [
+        storage_key,
+    ]
+    assert repository.missing_artifacts == [
+        (
+            report.id,
+            "Report artifact failed integrity verification.",
+            NOW,
+        )
+    ]
+    assert result.checked == 1
+    assert result.missing == 0
+    assert result.corrupt == 1
+
+
+async def test_records_corrupt_report_artifact_count() -> None:
+    storage_key = "reports/recorded-corrupt.pdf"
+    expected_payload = b"expected durable report"
+    stored_payload = b"corrupted durable report"
+
+    report = replace(
+        succeeded_report(storage_key),
+        artifact_byte_size=len(expected_payload),
+        artifact_checksum_sha256=sha256(
+            expected_payload
+        ).hexdigest(),
+    )
+
+    recorder = RecordingReconciliationAudit()
+
+    result = await ReconcileReportArtifacts(
+        repository=FakeReportRepository((report,)),
+        storage=IntegrityReportStorage(
+            {
+                storage_key: stored_payload,
+            }
+        ),
+        clock=FakeClock(),
+        recorder=recorder,
+    ).execute()
+
+    assert result.corrupt == 1
+    assert len(recorder.records) == 1
+    assert recorder.records[0].corrupt == 1

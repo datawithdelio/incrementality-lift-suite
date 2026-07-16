@@ -30,6 +30,7 @@ class SqlAlchemyReportArtifactReconciliationRecorder:
                     executed_at=record.executed_at,
                     checked=record.checked,
                     missing=record.missing,
+                    corrupt=record.corrupt,
                     orphaned=record.orphaned,
                     orphaned_keys=list(record.orphaned_keys),
                 )

@@ -119,6 +119,14 @@ class ReportArtifactReconciliationRecordModel(Base):
             name="ck_report_reconciliation_missing_range",
         ),
         CheckConstraint(
+            "corrupt >= 0",
+            name="ck_report_reconciliation_corrupt_nonnegative",
+        ),
+        CheckConstraint(
+            "missing + corrupt <= checked",
+            name="ck_report_reconciliation_inconsistency_range",
+        ),
+        CheckConstraint(
             "orphaned >= 0",
             name="ck_report_reconciliation_orphaned_nonnegative",
         ),
@@ -152,6 +160,12 @@ class ReportArtifactReconciliationRecordModel(Base):
     missing: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
+    )
+    corrupt: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
     )
     orphaned: Mapped[int] = mapped_column(
         Integer,

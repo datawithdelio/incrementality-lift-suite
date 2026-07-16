@@ -551,3 +551,42 @@ async def test_succeed_persists_report_artifact_integrity_metadata(
         == artifact_checksum_sha256
     )
     assert persisted.completed_at == RECOVERED_AT
+
+
+@pytest.mark.asyncio
+async def test_list_succeeded_exposes_report_artifact_integrity_metadata(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    report_id = await seed_running_report(
+        tenancy_session_factory
+    )
+    storage_key = f"reports/{report_id}/v1.pdf"
+    artifact_byte_size = 2125
+    artifact_checksum_sha256 = "b" * 64
+
+    repository = SqlAlchemyReportRepository(
+        tenancy_session_factory
+    )
+
+    await repository.succeed(
+        report_id,
+        storage_key,
+        RECOVERED_AT,
+        byte_size=artifact_byte_size,
+        checksum_sha256=artifact_checksum_sha256,
+    )
+
+    succeeded_reports = await repository.list_succeeded()
+
+    report = next(
+        item
+        for item in succeeded_reports
+        if item.id == report_id
+    )
+
+    assert report.storage_key == storage_key
+    assert report.artifact_byte_size == artifact_byte_size
+    assert (
+        report.artifact_checksum_sha256
+        == artifact_checksum_sha256
+    )

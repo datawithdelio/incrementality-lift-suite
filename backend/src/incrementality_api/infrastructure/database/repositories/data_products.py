@@ -32,6 +32,8 @@ def _job(model: ReportGenerationModel) -> ReportJob:
         model.storage_key,
         model.failure_reason,
         model.created_at,
+        model.artifact_byte_size,
+        model.artifact_checksum_sha256,
     )
 
 

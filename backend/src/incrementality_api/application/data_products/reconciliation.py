@@ -1,5 +1,7 @@
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from hashlib import sha256
 from typing import Protocol
 from uuid import UUID
 
@@ -7,6 +9,10 @@ from incrementality_api.application.data_products.report_jobs import ReportJob
 
 MISSING_REPORT_ARTIFACT_ERROR = (
     "Report artifact is missing from object storage."
+)
+
+CORRUPT_REPORT_ARTIFACT_ERROR = (
+    "Report artifact failed integrity verification."
 )
 
 
@@ -35,6 +41,14 @@ class ReportArtifactStorage(Protocol):
     ) -> bool:
         """Return whether an object exists in durable storage."""
 
+    def read(
+        self,
+        *,
+        storage_key: str,
+        chunk_size: int = 1024 * 1024,
+    ) -> AsyncIterator[bytes]:
+        """Read an object through bounded asynchronous chunks."""
+
     async def list_keys(
         self,
         *,
@@ -54,6 +68,7 @@ class ReportArtifactReconciliationResult:
     missing: int
     orphaned: int = 0
     orphaned_keys: tuple[str, ...] = ()
+    corrupt: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +78,7 @@ class ReportArtifactReconciliationRecord:
     missing: int
     orphaned: int
     orphaned_keys: tuple[str, ...]
+    corrupt: int = 0
 
 
 class ReportArtifactReconciliationRecorder(Protocol):
@@ -113,24 +129,63 @@ class ReconcileReportArtifacts:
         jobs = await self._repository.list_succeeded()
         current_time = self._clock.now()
         missing_count = 0
+        corrupt_count = 0
 
         for job in jobs:
-            artifact_exists = (
-                job.storage_key is not None
-                and await self._storage.exists(
-                    storage_key=job.storage_key,
+            if job.storage_key is None:
+                await self._repository.mark_artifact_missing(
+                    job_id=job.id,
+                    error=MISSING_REPORT_ARTIFACT_ERROR,
+                    now=current_time,
                 )
+                missing_count += 1
+                continue
+
+            artifact_exists = await self._storage.exists(
+                storage_key=job.storage_key,
             )
 
-            if artifact_exists:
+            if not artifact_exists:
+                await self._repository.mark_artifact_missing(
+                    job_id=job.id,
+                    error=MISSING_REPORT_ARTIFACT_ERROR,
+                    now=current_time,
+                )
+                missing_count += 1
+                continue
+
+            if (
+                job.artifact_byte_size is None
+                or job.artifact_checksum_sha256 is None
+            ):
+                continue
+
+            actual_byte_size = 0
+            actual_checksum = sha256()
+
+            async for chunk in self._storage.read(
+                storage_key=job.storage_key,
+                chunk_size=1024 * 1024,
+            ):
+                actual_byte_size += len(chunk)
+                actual_checksum.update(chunk)
+
+            integrity_matches = (
+                actual_byte_size
+                == job.artifact_byte_size
+                and actual_checksum.hexdigest()
+                == job.artifact_checksum_sha256.casefold()
+            )
+
+            if integrity_matches:
                 continue
 
             await self._repository.mark_artifact_missing(
                 job_id=job.id,
-                error=MISSING_REPORT_ARTIFACT_ERROR,
+                error=CORRUPT_REPORT_ARTIFACT_ERROR,
                 now=current_time,
             )
-            missing_count += 1
+            corrupt_count += 1
 
         referenced_keys = await self._repository.list_storage_keys()
         stored_keys = await self._storage.list_keys(
@@ -145,6 +200,7 @@ class ReconcileReportArtifacts:
         result = ReportArtifactReconciliationResult(
             checked=len(jobs),
             missing=missing_count,
+            corrupt=corrupt_count,
             orphaned=len(orphaned_keys),
             orphaned_keys=orphaned_keys,
         )
@@ -155,6 +211,8 @@ class ReconcileReportArtifacts:
                     executed_at=current_time,
                     checked=result.checked,
                     missing=result.missing,
+
+                    corrupt=result.corrupt,
                     orphaned=result.orphaned,
                     orphaned_keys=result.orphaned_keys,
                 )
