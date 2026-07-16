@@ -53,6 +53,7 @@ def build_settings() -> Settings:
         analysis_execution_retry_delay_seconds=45,
         analysis_execution_worker_poll_interval_seconds=0.5,
         analysis_execution_worker_error_retry_seconds=3.0,
+        report_artifact_reconciliation_interval_seconds=900,
         s3_endpoint_url="http://localhost:5001",
         s3_access_key="test-access",
         s3_secret_key="test-secret",
@@ -264,3 +265,41 @@ def test_builds_report_worker_with_stale_recovery(
 
     assert process_next._recover_stale is not None
     assert process_next._recover_stale._claim_timeout == timedelta(seconds=180)
+
+
+
+def test_builds_report_artifact_reconciliation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = build_settings()
+    fake_client = FakeS3Client()
+    fake_session_factory = object()
+
+    monkeypatch.setattr(
+        worker_main,
+        "get_settings",
+        lambda: settings,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "get_session_factory",
+        lambda: fake_session_factory,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "create_s3_compatible_client",
+        lambda **_arguments: fake_client,
+    )
+
+    worker = worker_main.build_report_generation_worker()
+    process_next = worker._process_next
+
+    assert process_next._reconcile_artifacts is not None
+
+    periodic = process_next._reconcile_artifacts
+
+    assert periodic._interval == timedelta(seconds=900)
+    assert periodic._clock is process_next._clock
+    assert periodic._reconciliation._repository is process_next._repository
+    assert periodic._reconciliation._storage is process_next._storage
+    assert process_next._storage._client is fake_client

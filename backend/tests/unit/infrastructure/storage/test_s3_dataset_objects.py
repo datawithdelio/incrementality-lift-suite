@@ -3,6 +3,7 @@ from hashlib import sha256
 from typing import BinaryIO
 
 import pytest
+from botocore.exceptions import ClientError
 
 from incrementality_api.infrastructure.storage.s3_dataset_objects import (
     S3DatasetObjectStorage,
@@ -165,3 +166,98 @@ async def test_deletes_object_from_configured_bucket() -> None:
             "datasets/results.csv",
         )
     ]
+
+
+
+class FakeHeadS3Client:
+    def __init__(
+        self,
+        *,
+        error_code: str | None = None,
+        http_status: int | None = None,
+    ) -> None:
+        self._error_code = error_code
+        self._http_status = http_status
+        self.head_calls: list[tuple[str, str]] = []
+
+    def head_object(
+        self,
+        *,
+        Bucket: str,
+        Key: str,
+    ) -> object:
+        self.head_calls.append((Bucket, Key))
+
+        if self._error_code is not None:
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": self._error_code,
+                        "Message": "Head object failed.",
+                    },
+                    "ResponseMetadata": {
+                        "HTTPStatusCode": self._http_status or 500,
+                    },
+                },
+                "HeadObject",
+            )
+
+        return {
+            "ContentLength": len(CONTENT),
+        }
+
+
+@pytest.mark.asyncio
+async def test_reports_existing_object() -> None:
+    client = FakeHeadS3Client()
+    storage = S3DatasetObjectStorage(
+        client=client,
+        bucket_name="incrementality-artifacts",
+    )
+
+    exists = await storage.exists(
+        storage_key="reports/result.pdf",
+    )
+
+    assert exists is True
+    assert client.head_calls == [
+        (
+            "incrementality-artifacts",
+            "reports/result.pdf",
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reports_missing_object_for_not_found_response() -> None:
+    client = FakeHeadS3Client(
+        error_code="404",
+        http_status=404,
+    )
+    storage = S3DatasetObjectStorage(
+        client=client,
+        bucket_name="incrementality-artifacts",
+    )
+
+    exists = await storage.exists(
+        storage_key="reports/missing.pdf",
+    )
+
+    assert exists is False
+
+
+@pytest.mark.asyncio
+async def test_does_not_hide_permission_or_storage_failures() -> None:
+    client = FakeHeadS3Client(
+        error_code="AccessDenied",
+        http_status=403,
+    )
+    storage = S3DatasetObjectStorage(
+        client=client,
+        bucket_name="incrementality-artifacts",
+    )
+
+    with pytest.raises(ClientError):
+        await storage.exists(
+            storage_key="reports/restricted.pdf",
+        )

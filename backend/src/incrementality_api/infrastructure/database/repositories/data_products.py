@@ -235,6 +235,40 @@ class SqlAlchemyReportRepository:
             )
             return None if model is None else _job(model)
 
+    async def list_succeeded(self) -> tuple[ReportJob, ...]:
+        async with self._sessions() as session:
+            models = (
+                await session.scalars(
+                    select(ReportGenerationModel)
+                    .where(ReportGenerationModel.status == "succeeded")
+                    .order_by(ReportGenerationModel.created_at)
+                )
+            ).all()
+
+            return tuple(_job(model) for model in models)
+
+    async def mark_artifact_missing(
+        self,
+        *,
+        job_id: UUID,
+        error: str,
+        now: datetime,
+    ) -> None:
+        async with self._sessions() as session, session.begin():
+            model = await session.get(
+                ReportGenerationModel,
+                job_id,
+                with_for_update=True,
+            )
+
+            if model is None or model.status != "succeeded":
+                return
+
+            model.status = "failed"
+            model.failure_reason = error
+            model.completed_at = now
+            model.updated_at = now
+
     async def claim_next(self, now: datetime) -> ReportJob | None:
         async with self._sessions() as session, session.begin():
             model = await session.scalar(

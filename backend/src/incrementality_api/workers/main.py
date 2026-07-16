@@ -26,6 +26,10 @@ from incrementality_api.application.analysis_execution.settle_execution import (
     PersistAnalysisExecutionSuccess,
     RecordAnalysisExecutionFailure,
 )
+from incrementality_api.application.data_products.reconciliation import (
+    ReconcileReportArtifacts,
+    ReconcileReportArtifactsPeriodically,
+)
 from incrementality_api.application.data_products.report_jobs import (
     ProcessNextReportJob,
     RecoverStaleReportJob,
@@ -326,12 +330,25 @@ def build_report_generation_worker() -> ReportGenerationWorker:
         ),
     )
 
+    reconcile_artifacts = ReconcileReportArtifactsPeriodically(
+        reconciliation=ReconcileReportArtifacts(
+            repository=repository,
+            storage=storage,
+            clock=clock,
+        ),
+        clock=clock,
+        interval_seconds=(
+            settings.report_artifact_reconciliation_interval_seconds
+        ),
+    )
+
     return ReportGenerationWorker(
         process_next=ProcessNextReportJob(
             repository=repository,
             storage=storage,
             clock=clock,
             recover_stale=recover_stale,
+            reconcile_artifacts=reconcile_artifacts,
         ),
         sleep=asyncio.sleep,
         poll_interval_seconds=settings.analysis_execution_worker_poll_interval_seconds,

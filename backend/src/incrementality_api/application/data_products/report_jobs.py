@@ -67,6 +67,10 @@ class RecoverStaleReportJobAction(Protocol):
     async def execute(self) -> ReportJob | None: ...
 
 
+class ReportArtifactReconciliationAction(Protocol):
+    async def execute(self) -> object | None: ...
+
+
 class RecoverStaleReportJob:
     """Recover one report job abandoned by a worker."""
 
@@ -106,13 +110,18 @@ class ProcessNextReportJob:
         storage: DatasetObjectStorage,
         clock: ReportClock,
         recover_stale: RecoverStaleReportJobAction | None = None,
+        reconcile_artifacts: ReportArtifactReconciliationAction | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._clock = clock
         self._recover_stale = recover_stale
+        self._reconcile_artifacts = reconcile_artifacts
 
     async def execute(self) -> ReportJob | None:
+        if self._reconcile_artifacts is not None:
+            await self._reconcile_artifacts.execute()
+
         if self._recover_stale is not None:
             await self._recover_stale.execute()
 

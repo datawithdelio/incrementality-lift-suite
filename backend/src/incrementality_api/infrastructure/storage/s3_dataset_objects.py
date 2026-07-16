@@ -4,6 +4,8 @@ from hashlib import sha256
 from tempfile import SpooledTemporaryFile
 from typing import BinaryIO, Protocol, cast
 
+from botocore.exceptions import ClientError
+
 from incrementality_api.application.datasets.ports import (
     DatasetObjectWriteResult,
 )
@@ -34,6 +36,14 @@ class S3CompatibleClient(Protocol):
         ContentType: str,
     ) -> object:
         """Store an object."""
+
+    def head_object(
+        self,
+        *,
+        Bucket: str,
+        Key: str,
+    ) -> Mapping[str, object]:
+        """Retrieve object metadata without downloading its content."""
 
     def get_object(
         self,
@@ -108,6 +118,35 @@ class S3DatasetObjectStorage:
             byte_size=byte_size,
             checksum_sha256=checksum.hexdigest(),
         )
+
+    async def exists(
+        self,
+        *,
+        storage_key: str,
+    ) -> bool:
+        try:
+            await asyncio.to_thread(
+                self._client.head_object,
+                Bucket=self._bucket_name,
+                Key=storage_key,
+            )
+        except ClientError as error:
+            error_details = error.response.get("Error", {})
+            response_metadata = error.response.get("ResponseMetadata", {})
+
+            error_code = str(error_details.get("Code", ""))
+            http_status = response_metadata.get("HTTPStatusCode")
+
+            if http_status == 404 or error_code in {
+                "404",
+                "NoSuchKey",
+                "NotFound",
+            }:
+                return False
+
+            raise
+
+        return True
 
     async def read(
         self,

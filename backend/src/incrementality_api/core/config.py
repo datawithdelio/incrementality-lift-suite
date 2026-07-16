@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
     report_generation_job_claim_timeout_seconds: int = 300
 
+
+    report_artifact_reconciliation_interval_seconds: int = 900
     s3_endpoint_url: str = "http://localhost:5001"
     s3_access_key: str = "incrementality"
     s3_secret_key: str = "incrementality-secret"

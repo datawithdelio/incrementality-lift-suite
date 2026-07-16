@@ -367,3 +367,87 @@ async def test_concurrent_recovery_cannot_recover_same_report_twice(
     assert persisted is not None
     assert persisted.status == "pending"
     assert persisted.failure_reason == RECOVERY_ERROR
+
+
+
+ARTIFACT_MISSING_ERROR = "Report artifact is missing from object storage."
+
+
+@pytest.mark.asyncio
+async def test_lists_only_succeeded_reports_for_artifact_reconciliation(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    succeeded_report_id = await seed_running_report(
+        tenancy_session_factory,
+    )
+    await seed_running_report(
+        tenancy_session_factory,
+    )
+    storage_key = f"reports/{succeeded_report_id}/v1.pdf"
+
+    async with tenancy_session_factory() as session, session.begin():
+        succeeded = await session.get(
+            ReportGenerationModel,
+            succeeded_report_id,
+            with_for_update=True,
+        )
+        assert succeeded is not None
+
+        succeeded.status = "succeeded"
+        succeeded.storage_key = storage_key
+        succeeded.completed_at = RECOVERED_AT
+        succeeded.updated_at = RECOVERED_AT
+
+    reports = await SqlAlchemyReportRepository(
+        tenancy_session_factory
+    ).list_succeeded()
+
+    assert len(reports) == 1
+    assert reports[0].id == succeeded_report_id
+    assert reports[0].status == "succeeded"
+    assert reports[0].storage_key == storage_key
+
+
+@pytest.mark.asyncio
+async def test_marks_succeeded_report_artifact_missing_and_preserves_key(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    report_id = await seed_running_report(
+        tenancy_session_factory,
+    )
+    storage_key = f"reports/{report_id}/v1.pdf"
+
+    async with tenancy_session_factory() as session, session.begin():
+        report = await session.get(
+            ReportGenerationModel,
+            report_id,
+            with_for_update=True,
+        )
+        assert report is not None
+
+        report.status = "succeeded"
+        report.storage_key = storage_key
+        report.completed_at = CLAIMED_BEFORE
+        report.failure_reason = None
+        report.updated_at = CLAIMED_BEFORE
+
+    await SqlAlchemyReportRepository(
+        tenancy_session_factory
+    ).mark_artifact_missing(
+        job_id=report_id,
+        error=ARTIFACT_MISSING_ERROR,
+        now=RECOVERED_AT,
+    )
+
+    async with tenancy_session_factory() as session:
+        persisted = await session.get(
+            ReportGenerationModel,
+            report_id,
+        )
+
+    assert persisted is not None
+    assert persisted.status == "failed"
+    assert persisted.storage_key == storage_key
+    assert persisted.failure_reason == ARTIFACT_MISSING_ERROR
+    assert persisted.completed_at == RECOVERED_AT
+    assert persisted.updated_at == RECOVERED_AT
