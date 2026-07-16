@@ -39,6 +39,9 @@ class ReportJobRepository(Protocol):
         job_id: UUID,
         storage_key: str,
         now: datetime,
+        *,
+        byte_size: int | None = None,
+        checksum_sha256: str | None = None,
     ) -> ReportJob: ...
 
     async def fail(
@@ -149,7 +152,7 @@ class ProcessNextReportJob:
                 f"v{job.version}.{renderer.extension}"
             )
 
-            await self._storage.write(
+            write_result = await self._storage.write(
                 storage_key=key,
                 media_type=renderer.media_type,
                 chunks=_one_chunk(payload),
@@ -159,6 +162,8 @@ class ProcessNextReportJob:
                 job.id,
                 key,
                 self._clock.now(),
+                byte_size=write_result.byte_size,
+                checksum_sha256=write_result.checksum_sha256,
             )
         except Exception:
             return await self._repository.fail(

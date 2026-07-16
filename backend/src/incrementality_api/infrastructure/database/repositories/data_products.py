@@ -339,14 +339,31 @@ class SqlAlchemyReportRepository:
 
         return _job(model)
 
-    async def succeed(self, job_id: UUID, storage_key: str, now: datetime) -> ReportJob:
+    async def succeed(
+        self,
+        job_id: UUID,
+        storage_key: str,
+        now: datetime,
+        *,
+        byte_size: int | None = None,
+        checksum_sha256: str | None = None,
+    ) -> ReportJob:
         async with self._sessions() as session:
             model = await session.get(ReportGenerationModel, job_id, with_for_update=True)
             if model is None:
                 raise LookupError("Report job is unavailable.")
-            model.status, model.storage_key, model.completed_at, model.updated_at = (
+            (
+                model.status,
+                model.storage_key,
+                model.artifact_byte_size,
+                model.artifact_checksum_sha256,
+                model.completed_at,
+                model.updated_at,
+            ) = (
                 "succeeded",
                 storage_key,
+                byte_size,
+                checksum_sha256,
                 now,
                 now,
             )

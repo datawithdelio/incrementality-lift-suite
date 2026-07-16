@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -65,6 +66,16 @@ class ReportGenerationModel(TimestampMixin, Base):
             "attempt_count >= 0 AND attempt_count <= max_attempts", name="ck_report_attempts"
         ),
         CheckConstraint("jsonb_typeof(snapshot) = 'object'", name="ck_report_snapshot_object"),
+        CheckConstraint(
+            "("
+            "artifact_byte_size IS NULL "
+            "AND artifact_checksum_sha256 IS NULL"
+            ") OR ("
+            "artifact_byte_size > 0 "
+            "AND artifact_checksum_sha256 ~ '^[0-9a-f]{64}$'"
+            ")",
+            name="ck_report_artifact_integrity",
+        ),
         Index("ix_reports_scope_created", "workspace_id", "project_id", "created_at"),
         Index("ix_reports_pending", "status", "created_at"),
     )
@@ -79,6 +90,14 @@ class ReportGenerationModel(TimestampMixin, Base):
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     storage_key: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    artifact_byte_size: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+    artifact_checksum_sha256: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from uuid import uuid4
 
 import pytest
@@ -24,6 +25,7 @@ from incrementality_api.application.data_products.services import (
     ProductionDataProducts,
 )
 from incrementality_api.application.datasets.errors import DatasetUnavailableError
+from incrementality_api.application.datasets.ports import DatasetObjectWriteResult
 
 
 def clean_rows(size: int = 40) -> tuple[dict[str, str], ...]:
@@ -149,12 +151,30 @@ class FakeClock:
 class FakeReportRepository:
     def __init__(self, job: ReportJob) -> None:
         self.job, self.succeeded, self.failed = job, False, False
+        self.succeeded_artifact: (
+            tuple[str, int | None, str | None] | None
+        ) = None
 
     async def claim_next(self, now: datetime) -> ReportJob | None:
         return self.job
 
-    async def succeed(self, job_id: object, storage_key: str, now: datetime) -> ReportJob:
+    async def succeed(
+        self,
+        job_id: object,
+        storage_key: str,
+        now: datetime,
+        *,
+        byte_size: int | None = None,
+        checksum_sha256: str | None = None,
+    ) -> ReportJob:
+        del job_id, now
+
         self.succeeded = True
+        self.succeeded_artifact = (
+            storage_key,
+            byte_size,
+            checksum_sha256,
+        )
         return self.job
 
     async def fail(self, job_id: object, error: str, now: datetime) -> ReportJob:
@@ -166,11 +186,31 @@ class FakeReportStorage:
     def __init__(self, fail: bool = False) -> None:
         self.fail, self.payload = fail, b""
 
-    async def write(self, *, storage_key: str, media_type: str, chunks: object) -> object:
+    async def write(
+        self,
+        *,
+        storage_key: str,
+        media_type: str,
+        chunks: object,
+    ) -> DatasetObjectWriteResult:
+        del storage_key, media_type
+
         if self.fail:
             raise OSError("temporary storage outage")
-        self.payload = b"".join([item async for item in chunks])  # type: ignore[attr-defined]
-        return object()
+
+        self.payload = b"".join(
+            [
+                item
+                async for item in chunks  # type: ignore[attr-defined]
+            ]
+        )
+
+        return DatasetObjectWriteResult(
+            byte_size=len(self.payload),
+            checksum_sha256=sha256(
+                self.payload
+            ).hexdigest(),
+        )
 
 
 def queued_report() -> ReportJob:
@@ -217,6 +257,18 @@ async def test_report_job_generates_durable_output_and_retries_safe_failure() ->
     await ProcessNextReportJob(repository=repository, storage=storage, clock=FakeClock()).execute()  # type: ignore[arg-type]
     assert repository.succeeded is True
     assert storage.payload.startswith(b"%PDF")
+
+    expected_key = (
+        f"reports/{repository.job.workspace_id}/"
+        f"{repository.job.analysis_run_id}/"
+        f"v{repository.job.version}.pdf"
+    )
+
+    assert repository.succeeded_artifact == (
+        expected_key,
+        len(storage.payload),
+        sha256(storage.payload).hexdigest(),
+    )
 
     failed_repository = FakeReportRepository(queued_report())
     await ProcessNextReportJob(
