@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -7,11 +8,15 @@ from incrementality_api.application.data_products.reconciliation import (
     MISSING_REPORT_ARTIFACT_ERROR,
     ReconcileReportArtifacts,
     ReconcileReportArtifactsPeriodically,
+    ReportArtifactReconciliationRecord,
     ReportArtifactReconciliationResult,
 )
 from incrementality_api.application.data_products.report_jobs import (
     ProcessNextReportJob,
     ReportJob,
+)
+from incrementality_api.application.datasets.ports import (
+    DatasetObjectWriteResult,
 )
 
 NOW = datetime(2026, 7, 16, 14, 30, tzinfo=UTC)
@@ -247,10 +252,35 @@ class EmptyReportRepository:
     def __init__(self, events: list[str]) -> None:
         self._events = events
 
-    async def claim_next(self, now: datetime) -> None:
+    async def claim_next(
+        self,
+        now: datetime,
+    ) -> ReportJob | None:
         del now
         self._events.append("claim")
         return None
+
+    async def succeed(
+        self,
+        job_id: UUID,
+        storage_key: str,
+        now: datetime,
+    ) -> ReportJob:
+        del job_id, storage_key, now
+        raise AssertionError(
+            "succeed must not be called when the queue is empty."
+        )
+
+    async def fail(
+        self,
+        job_id: UUID,
+        error: str,
+        now: datetime,
+    ) -> ReportJob:
+        del job_id, error, now
+        raise AssertionError(
+            "fail must not be called when the queue is empty."
+        )
 
 
 class RecordingPeriodicReconciliation:
@@ -262,7 +292,38 @@ class RecordingPeriodicReconciliation:
 
 
 class UnusedReportStorage:
-    pass
+    async def write(
+        self,
+        *,
+        storage_key: str,
+        media_type: str,
+        chunks: AsyncIterator[bytes],
+    ) -> DatasetObjectWriteResult:
+        del storage_key, media_type, chunks
+        raise AssertionError(
+            "write must not be called when the queue is empty."
+        )
+
+    def read(
+        self,
+        *,
+        storage_key: str,
+        chunk_size: int = 1024 * 1024,
+    ) -> AsyncIterator[bytes]:
+        del storage_key, chunk_size
+        raise AssertionError(
+            "read must not be called when the queue is empty."
+        )
+
+    async def delete(
+        self,
+        *,
+        storage_key: str,
+    ) -> None:
+        del storage_key
+        raise AssertionError(
+            "delete must not be called when the queue is empty."
+        )
 
 
 async def test_processes_due_reconciliation_before_claiming_report() -> None:
@@ -385,3 +446,61 @@ async def test_reports_orphaned_storage_objects_without_deleting_them() -> None:
     )
     assert storage.deleted_keys == []
     assert repository.missing_artifacts == []
+
+
+
+class RecordingReconciliationAudit:
+    def __init__(self) -> None:
+        self.records: list[ReportArtifactReconciliationRecord] = []
+
+    async def record(
+        self,
+        record: ReportArtifactReconciliationRecord,
+    ) -> None:
+        self.records.append(record)
+
+
+async def test_records_completed_reconciliation_for_audit() -> None:
+    existing_key = "reports/workspace/run/v1.pdf"
+    missing_key = "reports/workspace/run/v2.pdf"
+    orphaned_key = "reports/workspace/run/v3.pdf"
+
+    existing = succeeded_report(existing_key)
+    missing = succeeded_report(missing_key)
+
+    repository = FakeReportRepository(
+        (
+            existing,
+            missing,
+        )
+    )
+    storage = FakeReportStorage(
+        {
+            existing_key,
+            orphaned_key,
+        }
+    )
+    audit = RecordingReconciliationAudit()
+
+    result = await ReconcileReportArtifacts(
+        repository=repository,
+        storage=storage,
+        clock=FakeClock(),
+        recorder=audit,
+    ).execute()
+
+    assert result.checked == 2
+    assert result.missing == 1
+    assert result.orphaned == 1
+
+    assert len(audit.records) == 1
+
+    record = audit.records[0]
+
+    assert record.executed_at == NOW
+    assert record.checked == 2
+    assert record.missing == 1
+    assert record.orphaned == 1
+    assert record.orphaned_keys == (
+        orphaned_key,
+    )

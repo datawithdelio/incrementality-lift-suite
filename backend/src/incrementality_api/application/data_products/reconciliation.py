@@ -56,6 +56,23 @@ class ReportArtifactReconciliationResult:
     orphaned_keys: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class ReportArtifactReconciliationRecord:
+    executed_at: datetime
+    checked: int
+    missing: int
+    orphaned: int
+    orphaned_keys: tuple[str, ...]
+
+
+class ReportArtifactReconciliationRecorder(Protocol):
+    async def record(
+        self,
+        record: ReportArtifactReconciliationRecord,
+    ) -> None:
+        """Persist or emit a completed reconciliation record."""
+
+
 class ReconcileReportArtifacts:
     """Find succeeded reports whose object-storage artifact is missing."""
 
@@ -65,10 +82,12 @@ class ReconcileReportArtifacts:
         repository: ReportArtifactRepository,
         storage: ReportArtifactStorage,
         clock: ReconciliationClock,
+        recorder: ReportArtifactReconciliationRecorder | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._clock = clock
+        self._recorder = recorder
 
     async def execute(self) -> ReportArtifactReconciliationResult:
         jobs = await self._repository.list_succeeded()
@@ -103,12 +122,25 @@ class ReconcileReportArtifacts:
             )
         )
 
-        return ReportArtifactReconciliationResult(
+        result = ReportArtifactReconciliationResult(
             checked=len(jobs),
             missing=missing_count,
             orphaned=len(orphaned_keys),
             orphaned_keys=orphaned_keys,
         )
+
+        if self._recorder is not None:
+            await self._recorder.record(
+                ReportArtifactReconciliationRecord(
+                    executed_at=current_time,
+                    checked=result.checked,
+                    missing=result.missing,
+                    orphaned=result.orphaned,
+                    orphaned_keys=result.orphaned_keys,
+                )
+            )
+
+        return result
 
 
 

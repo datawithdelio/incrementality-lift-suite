@@ -16,6 +16,9 @@ from incrementality_api.infrastructure.estimation.marketing_mix_model import (
 from incrementality_api.infrastructure.estimation.synthetic_control import (
     ScipySyntheticControlEstimator,
 )
+from incrementality_api.infrastructure.observability.report_reconciliation import (
+    LoggingReportArtifactReconciliationRecorder,
+)
 from incrementality_api.workers import main as worker_main
 
 
@@ -302,4 +305,8 @@ def test_builds_report_artifact_reconciliation(
     assert periodic._clock is process_next._clock
     assert periodic._reconciliation._repository is process_next._repository
     assert periodic._reconciliation._storage is process_next._storage
+    assert isinstance(
+        periodic._reconciliation._recorder,
+        LoggingReportArtifactReconciliationRecorder,
+    )
     assert process_next._storage._client is fake_client

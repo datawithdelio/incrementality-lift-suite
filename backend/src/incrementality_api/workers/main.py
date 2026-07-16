@@ -93,6 +93,9 @@ from incrementality_api.infrastructure.estimation.off_policy_evaluation import (
 from incrementality_api.infrastructure.estimation.synthetic_control import (
     ScipySyntheticControlEstimator,
 )
+from incrementality_api.infrastructure.observability.report_reconciliation import (
+    LoggingReportArtifactReconciliationRecorder,
+)
 from incrementality_api.infrastructure.storage.s3_clients import (
     create_s3_compatible_client,
 )
@@ -335,6 +338,7 @@ def build_report_generation_worker() -> ReportGenerationWorker:
             repository=repository,
             storage=storage,
             clock=clock,
+            recorder=LoggingReportArtifactReconciliationRecorder(),
         ),
         clock=clock,
         interval_seconds=(
