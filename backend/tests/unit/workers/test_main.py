@@ -231,3 +231,36 @@ def test_pyproject_exposes_worker_console_script() -> None:
         configuration["project"]["scripts"]["incrementality-worker"]
         == "incrementality_api.workers.main:run"
     )
+
+
+def test_builds_report_worker_with_stale_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        report_generation_job_claim_timeout_seconds=180,
+    )
+    fake_client = FakeS3Client()
+    fake_session_factory = object()
+
+    monkeypatch.setattr(
+        worker_main,
+        "get_settings",
+        lambda: settings,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "get_session_factory",
+        lambda: fake_session_factory,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "create_s3_compatible_client",
+        lambda **_arguments: fake_client,
+    )
+
+    worker = worker_main.build_report_generation_worker()
+    process_next = worker._process_next
+
+    assert process_next._recover_stale is not None
+    assert process_next._recover_stale._claim_timeout == timedelta(seconds=180)

@@ -26,7 +26,10 @@ from incrementality_api.application.analysis_execution.settle_execution import (
     PersistAnalysisExecutionSuccess,
     RecordAnalysisExecutionFailure,
 )
-from incrementality_api.application.data_products.report_jobs import ProcessNextReportJob
+from incrementality_api.application.data_products.report_jobs import (
+    ProcessNextReportJob,
+    RecoverStaleReportJob,
+)
 from incrementality_api.application.datasets.begin_validation import (
     BeginDatasetValidation,
 )
@@ -300,6 +303,10 @@ def build_analysis_execution_worker() -> AnalysisExecutionWorker:
 
 def build_report_generation_worker() -> ReportGenerationWorker:
     settings = get_settings()
+    session_factory = get_session_factory()
+    clock = SystemWorkerClock()
+    repository = SqlAlchemyReportRepository(session_factory)
+
     storage = S3DatasetObjectStorage(
         client=create_s3_compatible_client(
             endpoint_url=settings.s3_endpoint_url,
@@ -310,11 +317,21 @@ def build_report_generation_worker() -> ReportGenerationWorker:
         bucket_name=settings.s3_bucket,
         spool_max_memory_bytes=settings.dataset_validation_spool_max_memory_bytes,
     )
+
+    recover_stale = RecoverStaleReportJob(
+        repository=repository,
+        clock=clock,
+        claim_timeout_seconds=(
+            settings.report_generation_job_claim_timeout_seconds
+        ),
+    )
+
     return ReportGenerationWorker(
         process_next=ProcessNextReportJob(
-            repository=SqlAlchemyReportRepository(get_session_factory()),
+            repository=repository,
             storage=storage,
-            clock=SystemWorkerClock(),
+            clock=clock,
+            recover_stale=recover_stale,
         ),
         sleep=asyncio.sleep,
         poll_interval_seconds=settings.analysis_execution_worker_poll_interval_seconds,
