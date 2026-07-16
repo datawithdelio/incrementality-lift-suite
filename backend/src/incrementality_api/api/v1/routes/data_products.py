@@ -2,6 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from starlette.responses import StreamingResponse
 
 from incrementality_api.api.dependencies.authorization import RequireWorkspacePermission
 from incrementality_api.api.dependencies.data_products import (
@@ -228,10 +229,9 @@ async def download_report(
     )
     if job is None or job.status != "succeeded" or job.storage_key is None:
         raise HTTPException(404, "Completed report is unavailable.")
-    payload = b"".join([chunk async for chunk in storage.read(storage_key=job.storage_key)])
     media_type = "application/pdf" if job.format == "pdf" else "text/csv"
-    return Response(
-        payload,
+    return StreamingResponse(
+        storage.read(storage_key=job.storage_key),
         media_type=media_type,
         headers={
             "Content-Disposition": (
