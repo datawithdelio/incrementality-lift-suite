@@ -30,6 +30,13 @@ class FakeReportRepository:
     async def list_succeeded(self) -> tuple[ReportJob, ...]:
         return self._jobs
 
+    async def list_storage_keys(self) -> frozenset[str]:
+        return frozenset(
+            job.storage_key
+            for job in self._jobs
+            if job.storage_key is not None
+        )
+
     async def mark_artifact_missing(
         self,
         *,
@@ -48,6 +55,19 @@ class FakeReportStorage:
     async def exists(self, *, storage_key: str) -> bool:
         self.checked_keys.append(storage_key)
         return storage_key in self._existing_keys
+
+    async def list_keys(
+        self,
+        *,
+        prefix: str,
+    ) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                key
+                for key in self._existing_keys
+                if key.startswith(prefix)
+            )
+        )
 
 
 def succeeded_report(storage_key: str | None) -> ReportJob:
@@ -260,3 +280,108 @@ async def test_processes_due_reconciliation_before_claiming_report() -> None:
         "reconcile",
         "claim",
     ]
+
+
+
+class FakeOrphanReportRepository:
+    def __init__(
+        self,
+        referenced_storage_keys: set[str],
+    ) -> None:
+        self._referenced_storage_keys = referenced_storage_keys
+        self.missing_artifacts: list[tuple[UUID, str, datetime]] = []
+
+    async def list_succeeded(self) -> tuple[ReportJob, ...]:
+        return ()
+
+    async def list_storage_keys(self) -> frozenset[str]:
+        return frozenset(self._referenced_storage_keys)
+
+    async def mark_artifact_missing(
+        self,
+        *,
+        job_id: UUID,
+        error: str,
+        now: datetime,
+    ) -> None:
+        self.missing_artifacts.append(
+            (
+                job_id,
+                error,
+                now,
+            )
+        )
+
+
+class FakeOrphanReportStorage:
+    def __init__(
+        self,
+        stored_keys: tuple[str, ...],
+    ) -> None:
+        self._stored_keys = stored_keys
+        self.listed_prefixes: list[str] = []
+        self.deleted_keys: list[str] = []
+
+    async def exists(
+        self,
+        *,
+        storage_key: str,
+    ) -> bool:
+        del storage_key
+        raise AssertionError(
+            "No succeeded report artifacts should be checked."
+        )
+
+    async def list_keys(
+        self,
+        *,
+        prefix: str,
+    ) -> tuple[str, ...]:
+        self.listed_prefixes.append(prefix)
+        return self._stored_keys
+
+    async def delete(
+        self,
+        *,
+        storage_key: str,
+    ) -> None:
+        self.deleted_keys.append(storage_key)
+
+
+async def test_reports_orphaned_storage_objects_without_deleting_them() -> None:
+    referenced_key = (
+        "reports/workspace/run/v1.pdf"
+    )
+    orphaned_key = (
+        "reports/workspace/run/v2.pdf"
+    )
+
+    repository = FakeOrphanReportRepository(
+        {
+            referenced_key,
+        }
+    )
+    storage = FakeOrphanReportStorage(
+        (
+            referenced_key,
+            orphaned_key,
+        )
+    )
+
+    result = await ReconcileReportArtifacts(
+        repository=repository,
+        storage=storage,
+        clock=FakeClock(),
+    ).execute()
+
+    assert storage.listed_prefixes == [
+        "reports/",
+    ]
+    assert result.checked == 0
+    assert result.missing == 0
+    assert result.orphaned == 1
+    assert result.orphaned_keys == (
+        orphaned_key,
+    )
+    assert storage.deleted_keys == []
+    assert repository.missing_artifacts == []

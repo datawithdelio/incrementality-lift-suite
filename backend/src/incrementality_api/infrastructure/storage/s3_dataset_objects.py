@@ -37,6 +37,15 @@ class S3CompatibleClient(Protocol):
     ) -> object:
         """Store an object."""
 
+    def list_objects_v2(
+        self,
+        *,
+        Bucket: str,
+        Prefix: str,
+        ContinuationToken: str | None = None,
+    ) -> Mapping[str, object]:
+        """List objects beneath a prefix."""
+
     def head_object(
         self,
         *,
@@ -118,6 +127,57 @@ class S3DatasetObjectStorage:
             byte_size=byte_size,
             checksum_sha256=checksum.hexdigest(),
         )
+
+    async def list_keys(
+        self,
+        *,
+        prefix: str,
+    ) -> tuple[str, ...]:
+        keys: list[str] = []
+        continuation_token: str | None = None
+
+        while True:
+            if continuation_token is None:
+                response = await asyncio.to_thread(
+                    self._client.list_objects_v2,
+                    Bucket=self._bucket_name,
+                    Prefix=prefix,
+                )
+            else:
+                response = await asyncio.to_thread(
+                    self._client.list_objects_v2,
+                    Bucket=self._bucket_name,
+                    Prefix=prefix,
+                    ContinuationToken=continuation_token,
+                )
+
+            contents = response.get("Contents", ())
+
+            if isinstance(contents, list):
+                for item in contents:
+                    if not isinstance(item, Mapping):
+                        continue
+
+                    key = item.get("Key")
+
+                    if isinstance(key, str):
+                        keys.append(key)
+
+            if response.get("IsTruncated") is not True:
+                break
+
+            next_token = response.get(
+                "NextContinuationToken"
+            )
+
+            if not isinstance(next_token, str) or not next_token:
+                raise RuntimeError(
+                    "S3 listing was truncated without a continuation token."
+                )
+
+            continuation_token = next_token
+
+        return tuple(keys)
 
     async def exists(
         self,

@@ -14,6 +14,9 @@ class ReportArtifactRepository(Protocol):
     async def list_succeeded(self) -> tuple[ReportJob, ...]:
         """Return reports that claim to have durable artifacts."""
 
+    async def list_storage_keys(self) -> frozenset[str]:
+        """Return every report storage key referenced by PostgreSQL."""
+
     async def mark_artifact_missing(
         self,
         *,
@@ -32,6 +35,13 @@ class ReportArtifactStorage(Protocol):
     ) -> bool:
         """Return whether an object exists in durable storage."""
 
+    async def list_keys(
+        self,
+        *,
+        prefix: str,
+    ) -> tuple[str, ...]:
+        """Return object keys stored beneath the requested prefix."""
+
 
 class ReconciliationClock(Protocol):
     def now(self) -> datetime:
@@ -42,6 +52,8 @@ class ReconciliationClock(Protocol):
 class ReportArtifactReconciliationResult:
     checked: int
     missing: int
+    orphaned: int = 0
+    orphaned_keys: tuple[str, ...] = ()
 
 
 class ReconcileReportArtifacts:
@@ -81,9 +93,21 @@ class ReconcileReportArtifacts:
             )
             missing_count += 1
 
+        referenced_keys = await self._repository.list_storage_keys()
+        stored_keys = await self._storage.list_keys(
+            prefix="reports/",
+        )
+        orphaned_keys = tuple(
+            sorted(
+                set(stored_keys) - set(referenced_keys)
+            )
+        )
+
         return ReportArtifactReconciliationResult(
             checked=len(jobs),
             missing=missing_count,
+            orphaned=len(orphaned_keys),
+            orphaned_keys=orphaned_keys,
         )
 
 

@@ -235,6 +235,22 @@ class SqlAlchemyReportRepository:
             )
             return None if model is None else _job(model)
 
+    async def list_storage_keys(self) -> frozenset[str]:
+        async with self._sessions() as session:
+            storage_keys = (
+                await session.scalars(
+                    select(ReportGenerationModel.storage_key).where(
+                        ReportGenerationModel.storage_key.is_not(None)
+                    )
+                )
+            ).all()
+
+            return frozenset(
+                storage_key
+                for storage_key in storage_keys
+                if storage_key is not None
+            )
+
     async def list_succeeded(self) -> tuple[ReportJob, ...]:
         async with self._sessions() as session:
             models = (

@@ -261,3 +261,133 @@ async def test_does_not_hide_permission_or_storage_failures() -> None:
         await storage.exists(
             storage_key="reports/restricted.pdf",
         )
+
+
+
+class FakeListS3Client:
+    def __init__(self) -> None:
+        self.list_calls: list[
+            tuple[str, str, str | None]
+        ] = []
+
+    def list_objects_v2(
+        self,
+        *,
+        Bucket: str,
+        Prefix: str,
+        ContinuationToken: str | None = None,
+    ) -> object:
+        self.list_calls.append(
+            (
+                Bucket,
+                Prefix,
+                ContinuationToken,
+            )
+        )
+
+        if ContinuationToken is None:
+            return {
+                "Contents": [
+                    {
+                        "Key": "reports/workspace/run/v1.pdf",
+                    },
+                    {
+                        "Key": "reports/workspace/run/v2.pdf",
+                    },
+                ],
+                "IsTruncated": True,
+                "NextContinuationToken": "page-2",
+            }
+
+        if ContinuationToken == "page-2":
+            return {
+                "Contents": [
+                    {
+                        "Key": "reports/workspace/run/v3.csv",
+                    },
+                ],
+                "IsTruncated": False,
+            }
+
+        raise AssertionError(
+            f"Unexpected continuation token: {ContinuationToken}"
+        )
+
+
+class FakeEmptyListS3Client:
+    def __init__(self) -> None:
+        self.list_calls: list[
+            tuple[str, str, str | None]
+        ] = []
+
+    def list_objects_v2(
+        self,
+        *,
+        Bucket: str,
+        Prefix: str,
+        ContinuationToken: str | None = None,
+    ) -> object:
+        self.list_calls.append(
+            (
+                Bucket,
+                Prefix,
+                ContinuationToken,
+            )
+        )
+
+        return {
+            "IsTruncated": False,
+        }
+
+
+@pytest.mark.asyncio
+async def test_lists_all_object_keys_across_s3_pages() -> None:
+    client = FakeListS3Client()
+    storage = S3DatasetObjectStorage(
+        client=client,
+        bucket_name="incrementality-artifacts",
+    )
+
+    keys = await storage.list_keys(
+        prefix="reports/",
+    )
+
+    assert keys == (
+        "reports/workspace/run/v1.pdf",
+        "reports/workspace/run/v2.pdf",
+        "reports/workspace/run/v3.csv",
+    )
+    assert client.list_calls == [
+        (
+            "incrementality-artifacts",
+            "reports/",
+            None,
+        ),
+        (
+            "incrementality-artifacts",
+            "reports/",
+            "page-2",
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_lists_empty_prefix_without_objects() -> None:
+    client = FakeEmptyListS3Client()
+    storage = S3DatasetObjectStorage(
+        client=client,
+        bucket_name="incrementality-artifacts",
+    )
+
+    keys = await storage.list_keys(
+        prefix="reports/",
+    )
+
+    assert keys == ()
+    assert client.list_calls == [
+        (
+            "incrementality-artifacts",
+            "reports/",
+            None,
+        )
+    ]

@@ -451,3 +451,59 @@ async def test_marks_succeeded_report_artifact_missing_and_preserves_key(
     assert persisted.failure_reason == ARTIFACT_MISSING_ERROR
     assert persisted.completed_at == RECOVERED_AT
     assert persisted.updated_at == RECOVERED_AT
+
+
+
+@pytest.mark.asyncio
+async def test_lists_every_non_null_report_storage_key(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    succeeded_id = await seed_running_report(
+        tenancy_session_factory,
+    )
+    failed_id = await seed_running_report(
+        tenancy_session_factory,
+    )
+    await seed_running_report(
+        tenancy_session_factory,
+    )
+
+    succeeded_key = f"reports/{succeeded_id}/v1.pdf"
+    failed_key = f"reports/{failed_id}/v1.pdf"
+
+    async with tenancy_session_factory() as session, session.begin():
+        succeeded = await session.get(
+            ReportGenerationModel,
+            succeeded_id,
+            with_for_update=True,
+        )
+        failed = await session.get(
+            ReportGenerationModel,
+            failed_id,
+            with_for_update=True,
+        )
+
+        assert succeeded is not None
+        assert failed is not None
+
+        succeeded.status = "succeeded"
+        succeeded.storage_key = succeeded_key
+        succeeded.completed_at = RECOVERED_AT
+        succeeded.updated_at = RECOVERED_AT
+
+        failed.status = "failed"
+        failed.storage_key = failed_key
+        failed.failure_reason = ARTIFACT_MISSING_ERROR
+        failed.completed_at = RECOVERED_AT
+        failed.updated_at = RECOVERED_AT
+
+    keys = await SqlAlchemyReportRepository(
+        tenancy_session_factory
+    ).list_storage_keys()
+
+    assert keys == frozenset(
+        {
+            succeeded_key,
+            failed_key,
+        }
+    )
