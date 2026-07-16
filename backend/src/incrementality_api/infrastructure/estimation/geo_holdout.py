@@ -62,7 +62,12 @@ class StatsmodelsGeoHoldoutEstimator:
         self._policy = policy or GeoHoldoutDiagnosticPolicy()
         self._estimator = StatsmodelsDifferenceInDifferencesEstimator()
 
-    def estimate(self, estimator_input: object) -> AnalysisEstimationResult:
+    def estimate(
+        self,
+        estimator_input: object,
+        *,
+        random_seed: int,
+    ) -> AnalysisEstimationResult:
         if not isinstance(estimator_input, GeoHoldoutInput):
             raise PermanentEstimationError("Geo-holdout input has an invalid shape.")
         observations = estimator_input.observations
@@ -84,7 +89,10 @@ class StatsmodelsGeoHoldoutEstimator:
                 for item in observations
             )
         )
-        base = self._estimator.estimate(did_input)
+        base = self._estimator.estimate(
+            did_input,
+            random_seed=random_seed,
+        )
         base_diagnostics = dict(base.diagnostics)
         parallel = base_diagnostics.get("parallel_trends")
         parallel_mapping = parallel if isinstance(parallel, dict) else {}
@@ -101,9 +109,8 @@ class StatsmodelsGeoHoldoutEstimator:
         pooled_standard_deviation = math.sqrt(
             (float(np.var(treated_pre)) + float(np.var(control_pre))) / 2
         )
-        standardized_difference = (
-            float(np.mean(treated_pre) - np.mean(control_pre))
-            / max(pooled_standard_deviation, 1e-9)
+        standardized_difference = float(np.mean(treated_pre) - np.mean(control_pre)) / max(
+            pooled_standard_deviation, 1e-9
         )
         treated_units = len({item.unit for item in observations if item.treated})
         control_units = len({item.unit for item in observations if not item.treated})

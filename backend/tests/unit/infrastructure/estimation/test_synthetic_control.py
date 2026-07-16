@@ -43,7 +43,7 @@ def build_panel(*, poor_fit: bool = False) -> SyntheticControlInput:
 
 
 def test_selects_constrained_donors_and_estimates_effect_over_time() -> None:
-    result = ScipySyntheticControlEstimator().estimate(build_panel())
+    result = ScipySyntheticControlEstimator().estimate(build_panel(), random_seed=1_729)
     diagnostics = result.diagnostics
 
     weights = diagnostics["donor_weights"]
@@ -57,7 +57,9 @@ def test_selects_constrained_donors_and_estimates_effect_over_time() -> None:
 
 
 def test_poor_pre_period_fit_is_invalid_and_blocks_causal_claim() -> None:
-    result = ScipySyntheticControlEstimator().estimate(build_panel(poor_fit=True))
+    result = ScipySyntheticControlEstimator().estimate(
+        build_panel(poor_fit=True), random_seed=1_729
+    )
 
     assert result.diagnostics["design_assessment"] == "invalid"
     assert result.diagnostics["causal_claim_allowed"] is False

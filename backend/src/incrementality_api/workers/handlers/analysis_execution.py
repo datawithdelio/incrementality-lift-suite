@@ -79,6 +79,7 @@ class RunNextAnalysisExecutionJob:
             result = await asyncio.to_thread(
                 estimator.estimate,
                 estimator_input.payload,
+                random_seed=estimator_input.random_seed,
             )
         except RetryableEstimationError as error:
             logger.warning(

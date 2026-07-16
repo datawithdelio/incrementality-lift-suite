@@ -15,10 +15,17 @@ from incrementality_api.infrastructure.estimation.marketing_mix_model import (
 class FakeModelRunner:
     def __init__(self, *, max_r_hat: float = 1.01) -> None:
         self.design: MarketingMixDesign | None = None
+        self.random_seeds: list[int] = []
         self.max_r_hat = max_r_hat
 
-    def fit(self, design: MarketingMixDesign) -> MarketingMixPosterior:
+    def fit(
+        self,
+        design: MarketingMixDesign,
+        *,
+        random_seed: int,
+    ) -> MarketingMixPosterior:
         self.design = design
+        self.random_seeds.append(random_seed)
         return MarketingMixPosterior(
             channel_coefficients={
                 "search": (2.0, 1.5, 2.5),
@@ -60,9 +67,13 @@ def test_fake_model_contract_produces_contributions_roas_and_scenarios() -> None
     result = BayesianMarketingMixEstimator(
         model_runner=runner,
         transformer=MarketingMixTransformer(),
-    ).estimate(mmm_input())
+    ).estimate(
+        mmm_input(),
+        random_seed=1_729,
+    )
 
     assert runner.design is not None
+    assert runner.random_seeds == [1_729]
     assert result.library_name == "pymc"
     assert result.diagnostics["channel_contributions"]  # type: ignore[index]
     assert result.diagnostics["posterior_intervals"]  # type: ignore[index]
@@ -76,7 +87,7 @@ def test_convergence_failure_blocks_recommendations() -> None:
     result = BayesianMarketingMixEstimator(
         model_runner=FakeModelRunner(max_r_hat=1.2),
         transformer=MarketingMixTransformer(),
-    ).estimate(mmm_input())
+    ).estimate(mmm_input(), random_seed=1_729)
 
     assert result.diagnostics["design_assessment"] == "invalid"
     assert result.diagnostics["causal_claim_allowed"] is False
@@ -87,7 +98,7 @@ def test_short_history_receives_weak_data_warning() -> None:
     result = BayesianMarketingMixEstimator(
         model_runner=FakeModelRunner(),
         transformer=MarketingMixTransformer(),
-    ).estimate(mmm_input(periods=16))
+    ).estimate(mmm_input(periods=16), random_seed=1_729)
 
     assert result.diagnostics["design_assessment"] == "weak"
     assert result.diagnostics["warnings"]

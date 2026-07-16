@@ -36,7 +36,7 @@ def panel(*, pretrend: float = 0.0, units: int = 12) -> DifferenceInDifferencesI
 
 
 def test_valid_design_persists_structured_diagnostics_and_causal_conclusion() -> None:
-    result = StatsmodelsDifferenceInDifferencesEstimator().estimate(panel())
+    result = StatsmodelsDifferenceInDifferencesEstimator().estimate(panel(), random_seed=1_729)
     diagnostics = result.diagnostics
 
     assert diagnostics["design_assessment"] == "valid"
@@ -50,7 +50,9 @@ def test_valid_design_persists_structured_diagnostics_and_causal_conclusion() ->
 
 
 def test_invalid_parallel_trends_blocks_causal_language() -> None:
-    result = StatsmodelsDifferenceInDifferencesEstimator().estimate(panel(pretrend=5.0))
+    result = StatsmodelsDifferenceInDifferencesEstimator().estimate(
+        panel(pretrend=5.0), random_seed=1_729
+    )
     diagnostics = result.diagnostics
 
     assert diagnostics["design_assessment"] == "invalid"
@@ -60,7 +62,9 @@ def test_invalid_parallel_trends_blocks_causal_language() -> None:
 
 
 def test_small_design_is_weak_and_does_not_allow_causal_claim() -> None:
-    result = StatsmodelsDifferenceInDifferencesEstimator().estimate(panel(units=8))
+    result = StatsmodelsDifferenceInDifferencesEstimator().estimate(
+        panel(units=8), random_seed=1_729
+    )
 
     assert result.diagnostics["design_assessment"] == "weak"
     assert result.diagnostics["causal_claim_allowed"] is False

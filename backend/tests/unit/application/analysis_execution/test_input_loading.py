@@ -162,6 +162,7 @@ async def test_loads_tenant_scoped_csv_and_constructs_did_input() -> None:
     ).load(job)
 
     assert loaded.estimator_type is AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
+    assert loaded.random_seed == 1_729
     assert storage.keys == [metadata.dataset.storage_key]
     assert isinstance(loaded.payload, DifferenceInDifferencesInput)
     assert [

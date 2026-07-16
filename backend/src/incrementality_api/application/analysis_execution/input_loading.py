@@ -554,6 +554,10 @@ class ProductionAnalysisInputLoader:
             raise
         except Exception as error:
             raise RetryableEstimationError("Dataset object storage is unavailable.") from error
+        random_seed = metadata.run.random_seed
+        if random_seed is None:
+            raise PermanentEstimationError("Analysis run random seed is unavailable.")
+
         if metadata.run.estimator_type is not AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES:
             builder = self._additional_builders.get(metadata.run.estimator_type)
             if builder is None:
@@ -562,11 +566,17 @@ class ProductionAnalysisInputLoader:
                 )
             return AnalysisEstimatorInput(
                 estimator_type=metadata.run.estimator_type,
-                payload=builder.build(rows=rows, mapping=metadata.mapping, run=metadata.run),
+                random_seed=random_seed,
+                payload=builder.build(
+                    rows=rows,
+                    mapping=metadata.mapping,
+                    run=metadata.run,
+                ),
             )
         configuration = self._configuration_parser.parse(metadata.run)
         return AnalysisEstimatorInput(
             estimator_type=metadata.run.estimator_type,
+            random_seed=random_seed,
             payload=self._input_builder.build(
                 rows=rows,
                 mapping=metadata.mapping,

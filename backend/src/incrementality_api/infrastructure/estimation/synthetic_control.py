@@ -64,7 +64,14 @@ class ScipySyntheticControlEstimator:
     def __init__(self, policy: SyntheticControlDiagnosticPolicy | None = None) -> None:
         self._policy = policy or SyntheticControlDiagnosticPolicy()
 
-    def estimate(self, estimator_input: object) -> AnalysisEstimationResult:
+    def estimate(
+        self,
+        estimator_input: object,
+        *,
+        random_seed: int,
+    ) -> AnalysisEstimationResult:
+        del random_seed
+
         if not isinstance(estimator_input, SyntheticControlInput):
             raise PermanentEstimationError("Synthetic-control input has an invalid shape.")
         matrix, units, periods, treated_unit, first_post = self._balanced_panel(

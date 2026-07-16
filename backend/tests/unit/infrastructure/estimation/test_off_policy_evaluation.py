@@ -28,7 +28,7 @@ def policy_input(*, weak_overlap: bool = False) -> OffPolicyEvaluationInput:
 
 
 def test_strong_overlap_reports_all_estimators_and_effective_sample_size() -> None:
-    result = StatsmodelsOffPolicyEstimator().estimate(policy_input())
+    result = StatsmodelsOffPolicyEstimator().estimate(policy_input(), random_seed=1_729)
 
     estimates = result.diagnostics["policy_estimates"]
     assert set(estimates) == {
@@ -42,7 +42,9 @@ def test_strong_overlap_reports_all_estimators_and_effective_sample_size() -> No
 
 
 def test_weak_overlap_warns_about_extreme_weights() -> None:
-    result = StatsmodelsOffPolicyEstimator().estimate(policy_input(weak_overlap=True))
+    result = StatsmodelsOffPolicyEstimator().estimate(
+        policy_input(weak_overlap=True), random_seed=1_729
+    )
 
     assert result.diagnostics["reliability"] == "weak"
     assert result.diagnostics["extreme_weight_count"] == 1
@@ -61,7 +63,7 @@ def test_invalid_propensities_are_rejected(behavior: float, target: float) -> No
     )
 
     with pytest.raises(PermanentEstimationError, match="propensit"):
-        StatsmodelsOffPolicyEstimator().estimate(estimator_input)
+        StatsmodelsOffPolicyEstimator().estimate(estimator_input, random_seed=1_729)
 
 
 def test_unsupported_primary_method_is_rejected() -> None:
@@ -72,4 +74,4 @@ def test_unsupported_primary_method_is_rejected() -> None:
     )
 
     with pytest.raises(PermanentEstimationError, match="Unsupported off-policy method"):
-        StatsmodelsOffPolicyEstimator().estimate(estimator_input)
+        StatsmodelsOffPolicyEstimator().estimate(estimator_input, random_seed=1_729)

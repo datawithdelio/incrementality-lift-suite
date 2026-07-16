@@ -98,6 +98,7 @@ class OffPolicyEvaluationInput:
 @dataclass(frozen=True, slots=True)
 class AnalysisEstimatorInput:
     estimator_type: AnalysisEstimatorType
+    random_seed: int
     payload: object
 
 
@@ -119,7 +120,12 @@ class AnalysisEstimationResult:
 
 
 class AnalysisEstimator(Protocol):
-    def estimate(self, estimator_input: object) -> AnalysisEstimationResult:
+    def estimate(
+        self,
+        estimator_input: object,
+        *,
+        random_seed: int,
+    ) -> AnalysisEstimationResult:
         """Execute CPU-bound statistical estimation synchronously."""
 
 

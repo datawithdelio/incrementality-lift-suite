@@ -68,7 +68,14 @@ class StatsmodelsDifferenceInDifferencesEstimator:
     def __init__(self, policy: DifferenceInDifferencesDiagnosticPolicy | None = None) -> None:
         self._policy = policy or DifferenceInDifferencesDiagnosticPolicy()
 
-    def estimate(self, estimator_input: object) -> AnalysisEstimationResult:
+    def estimate(
+        self,
+        estimator_input: object,
+        *,
+        random_seed: int,
+    ) -> AnalysisEstimationResult:
+        del random_seed
+
         if not isinstance(estimator_input, DifferenceInDifferencesInput):
             raise PermanentEstimationError("Difference-in-differences input has an invalid shape.")
         observations = estimator_input.observations
@@ -80,9 +87,7 @@ class StatsmodelsDifferenceInDifferencesEstimator:
         groups = np.asarray([item.unit for item in observations])
 
         try:
-            fitted = sm.OLS(outcomes, design).fit(
-                cov_type="cluster", cov_kwds={"groups": groups}
-            )
+            fitted = sm.OLS(outcomes, design).fit(cov_type="cluster", cov_kwds={"groups": groups})
             interval = fitted.conf_int(alpha=0.05)[3]
             effect = float(fitted.params[3])
             standard_error = float(fitted.bse[3])
@@ -242,8 +247,7 @@ class StatsmodelsDifferenceInDifferencesEstimator:
             grouped[(period, item.treated)].append(item.outcome)
         return {
             period: {
-                treated: float(np.mean(grouped[(period, treated)]))
-                for treated in (False, True)
+                treated: float(np.mean(grouped[(period, treated)])) for treated in (False, True)
             }
             for period in sorted(set(periods))
         }
@@ -253,9 +257,7 @@ class StatsmodelsDifferenceInDifferencesEstimator:
     ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
         means = self._group_means(observations, periods)
         first_post = min(
-            period
-            for item, period in zip(observations, periods, strict=True)
-            if item.post_period
+            period for item, period in zip(observations, periods, strict=True) if item.post_period
         )
         baseline_period = max(period for period in means if period < first_post)
         baseline_gap = means[baseline_period][True] - means[baseline_period][False]

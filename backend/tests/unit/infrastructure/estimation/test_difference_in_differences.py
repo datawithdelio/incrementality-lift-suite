@@ -31,7 +31,10 @@ def build_panel() -> DifferenceInDifferencesInput:
 
 
 def test_estimates_difference_in_differences_effect_with_statsmodels() -> None:
-    result = StatsmodelsDifferenceInDifferencesEstimator().estimate(build_panel())
+    result = StatsmodelsDifferenceInDifferencesEstimator().estimate(
+        build_panel(),
+        random_seed=1_729,
+    )
 
     assert result.effect == pytest.approx(5.0)
     assert result.observation_count == 32
@@ -58,4 +61,7 @@ def test_rejects_input_without_treated_and_control_groups() -> None:
     )
 
     with pytest.raises(PermanentEstimationError, match="treated and control"):
-        StatsmodelsDifferenceInDifferencesEstimator().estimate(invalid)
+        StatsmodelsDifferenceInDifferencesEstimator().estimate(
+            invalid,
+            random_seed=1_729,
+        )

@@ -21,7 +21,14 @@ _METHODS = {
 class StatsmodelsOffPolicyEstimator:
     """Estimate logged-policy value while keeping reliability rules explicit."""
 
-    def estimate(self, estimator_input: object) -> AnalysisEstimationResult:
+    def estimate(
+        self,
+        estimator_input: object,
+        *,
+        random_seed: int,
+    ) -> AnalysisEstimationResult:
+        del random_seed
+
         if not isinstance(estimator_input, OffPolicyEvaluationInput):
             raise PermanentEstimationError("Off-policy estimator input is invalid.")
         if estimator_input.primary_method not in _METHODS:

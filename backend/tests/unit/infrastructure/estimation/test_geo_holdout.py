@@ -49,7 +49,7 @@ def geo_panel(*, units: int = 12, pretrend: float = 0.0) -> GeoHoldoutInput:
 
 
 def test_valid_geo_design_reports_balance_map_and_business_impact() -> None:
-    result = StatsmodelsGeoHoldoutEstimator().estimate(geo_panel())
+    result = StatsmodelsGeoHoldoutEstimator().estimate(geo_panel(), random_seed=1_729)
 
     assert result.effect == pytest.approx(5.0)
     assert result.incremental_revenue == pytest.approx(60.0)
@@ -60,14 +60,14 @@ def test_valid_geo_design_reports_balance_map_and_business_impact() -> None:
 
 
 def test_small_geo_design_is_weak() -> None:
-    result = StatsmodelsGeoHoldoutEstimator().estimate(geo_panel(units=6))
+    result = StatsmodelsGeoHoldoutEstimator().estimate(geo_panel(units=6), random_seed=1_729)
 
     assert result.diagnostics["design_assessment"] == "weak"
     assert result.diagnostics["causal_claim_allowed"] is False
 
 
 def test_noncomparable_pretrends_make_geo_design_invalid() -> None:
-    result = StatsmodelsGeoHoldoutEstimator().estimate(geo_panel(pretrend=5.0))
+    result = StatsmodelsGeoHoldoutEstimator().estimate(geo_panel(pretrend=5.0), random_seed=1_729)
 
     assert result.diagnostics["design_assessment"] == "invalid"
     assert result.diagnostics["causal_claim_allowed"] is False

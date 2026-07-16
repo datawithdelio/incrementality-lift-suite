@@ -33,8 +33,13 @@ class MarketingMixPosterior:
 
 
 class MarketingMixModelRunner(Protocol):
-    def fit(self, design: MarketingMixDesign) -> MarketingMixPosterior:
-        """Fit one Bayesian model and return library-independent posterior summaries."""
+    def fit(
+        self,
+        design: MarketingMixDesign,
+        *,
+        random_seed: int,
+    ) -> MarketingMixPosterior:
+        """Fit one Bayesian model using the supplied execution seed."""
 
 
 class MarketingMixTransformer:
@@ -96,14 +101,22 @@ class PyMCMarketingMixModelRunner:
     """Thin PyMC infrastructure adapter; all feature policy stays outside."""
 
     def __init__(
-        self, *, draws: int = 500, tune: int = 500, chains: int = 2, random_seed: int = 41
+        self,
+        *,
+        draws: int = 500,
+        tune: int = 500,
+        chains: int = 2,
     ) -> None:
         self._draws = draws
         self._tune = tune
         self._chains = chains
-        self._random_seed = random_seed
 
-    def fit(self, design: MarketingMixDesign) -> MarketingMixPosterior:
+    def fit(
+        self,
+        design: MarketingMixDesign,
+        *,
+        random_seed: int,
+    ) -> MarketingMixPosterior:
         try:
             import pymc as pm  # type: ignore[import-untyped]
         except ImportError as error:
@@ -133,7 +146,7 @@ class PyMCMarketingMixModelRunner:
                 chains=self._chains,
                 cores=1,
                 target_accept=0.9,
-                random_seed=self._random_seed,
+                random_seed=random_seed,
                 progressbar=False,
                 return_inferencedata=True,
             )
@@ -219,11 +232,19 @@ class BayesianMarketingMixEstimator:
         self._transformer = transformer
         self._policy = policy or MarketingMixDiagnosticPolicy()
 
-    def estimate(self, estimator_input: object) -> AnalysisEstimationResult:
+    def estimate(
+        self,
+        estimator_input: object,
+        *,
+        random_seed: int,
+    ) -> AnalysisEstimationResult:
         if not isinstance(estimator_input, MarketingMixInput):
             raise PermanentEstimationError("Marketing-mix input has an invalid shape.")
         design = self._transformer.transform(estimator_input)
-        posterior = self._model_runner.fit(design)
+        posterior = self._model_runner.fit(
+            design,
+            random_seed=random_seed,
+        )
         assessment, recommendations_allowed, warnings, conclusion = self._policy.assess(
             periods=len(design.outcomes),
             channels=len(design.channel_names),
@@ -266,9 +287,7 @@ class BayesianMarketingMixEstimator:
             "channel_roas": roas,
             "budget_response_curves": curves,
             "scenario_plan": (
-                self._scenario_plan(design=design, roas=roas)
-                if recommendations_allowed
-                else []
+                self._scenario_plan(design=design, roas=roas) if recommendations_allowed else []
             ),
             "convergence": {
                 "max_r_hat": posterior.max_r_hat,

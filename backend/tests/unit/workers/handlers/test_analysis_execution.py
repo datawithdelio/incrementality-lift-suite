@@ -90,8 +90,13 @@ class FakeEstimator:
         self._error = error
         self.inputs: list[object] = []
 
-    def estimate(self, estimator_input: object) -> AnalysisEstimationResult:
-        self.inputs.append(estimator_input)
+    def estimate(
+        self,
+        estimator_input: object,
+        *,
+        random_seed: int,
+    ) -> AnalysisEstimationResult:
+        self.inputs.append((estimator_input, random_seed))
         if self._error is not None:
             raise self._error
         assert self._result is not None
@@ -158,6 +163,7 @@ class FakeMarkFailed:
 def build_input() -> AnalysisEstimatorInput:
     return AnalysisEstimatorInput(
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        random_seed=1_729,
         payload=object(),
     )
 
@@ -217,7 +223,9 @@ async def test_successful_estimation_saves_result_then_settles_success(
 
     assert settled is not None
     assert settled.status is AnalysisExecutionJobStatus.SUCCEEDED
-    assert estimator.inputs == [estimator_input.payload]
+    assert estimator.inputs == [
+        (estimator_input.payload, 1_729),
+    ]
     assert persist_success.calls == [(job.id, result)]
     assert record_retry.calls == []
     assert mark_failed.calls == []
