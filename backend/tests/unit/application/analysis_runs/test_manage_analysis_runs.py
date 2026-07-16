@@ -370,6 +370,8 @@ async def test_queues_analysis_run_atomically() -> None:
     assert result.workspace_id == workspace_id
     assert result.project_id == project_id
     assert result.dataset_id == dataset.id
+    assert result.dataset_checksum_sha256 == dataset.checksum_sha256
+    assert result.dataset_byte_size == dataset.byte_size
 
     assert result.semantic_mapping_id == (mapping.id)
     assert result.semantic_mapping_version == 3
@@ -563,6 +565,8 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
         workspace_id=workspace_id,
         project_id=project_id,
         dataset_id=dataset.id,
+        dataset_checksum_sha256=dataset.checksum_sha256,
+        dataset_byte_size=dataset.byte_size,
         semantic_mapping_id=mapping.id,
         semantic_mapping_version=(mapping.version),
         created_by_user_id=user_id,

@@ -38,6 +38,8 @@ NOW = datetime(
 @dataclass(frozen=True, slots=True)
 class StubDataset:
     status: DatasetStatus
+    checksum_sha256: str = "b" * 64
+    byte_size: int = 4_096
 
 
 @dataclass(frozen=True, slots=True)

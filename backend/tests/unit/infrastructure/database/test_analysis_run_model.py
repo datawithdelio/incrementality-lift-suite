@@ -43,6 +43,8 @@ def test_analysis_run_table_and_columns() -> None:
         "workspace_id",
         "project_id",
         "dataset_id",
+        "dataset_checksum_sha256",
+        "dataset_byte_size",
         "semantic_mapping_id",
         "semantic_mapping_version",
         "created_by_user_id",
@@ -78,6 +80,19 @@ def test_analysis_run_table_and_columns() -> None:
             Uuid,
         )
         assert not column.nullable
+
+    assert isinstance(
+        table.c.dataset_checksum_sha256.type,
+        String,
+    )
+    assert table.c.dataset_checksum_sha256.type.length == 64
+    assert not table.c.dataset_checksum_sha256.nullable
+
+    assert isinstance(
+        table.c.dataset_byte_size.type,
+        Integer,
+    )
+    assert not table.c.dataset_byte_size.nullable
 
     assert isinstance(
         table.c.semantic_mapping_version.type,
@@ -149,6 +164,8 @@ def test_analysis_run_has_named_integrity_constraints() -> None:
     assert constraint_names(AnalysisRunModel).issuperset(
         {
             "ck_analysis_runs_mapping_version_positive",
+            "ck_analysis_runs_dataset_checksum_sha256_format",
+            "ck_analysis_runs_dataset_byte_size_positive",
             "ck_analysis_runs_estimator_type",
             "ck_analysis_runs_estimator_version_not_blank",
             "ck_analysis_runs_configuration_not_blank",

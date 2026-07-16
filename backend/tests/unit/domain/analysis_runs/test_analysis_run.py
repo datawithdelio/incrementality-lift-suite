@@ -51,6 +51,10 @@ CONFIGURATION_JSON = """
 """
 
 
+DATASET_CHECKSUM_SHA256 = "a" * 64
+DATASET_BYTE_SIZE = 4_096
+
+
 def queue_run(
     *,
     semantic_mapping_version: int = 1,
@@ -62,6 +66,8 @@ def queue_run(
         workspace_id=uuid4(),
         project_id=uuid4(),
         dataset_id=uuid4(),
+        dataset_checksum_sha256=DATASET_CHECKSUM_SHA256,
+        dataset_byte_size=DATASET_BYTE_SIZE,
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=(semantic_mapping_version),
         created_by_user_id=uuid4(),
@@ -89,6 +95,8 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
         workspace_id=workspace_id,
         project_id=project_id,
         dataset_id=dataset_id,
+        dataset_checksum_sha256=DATASET_CHECKSUM_SHA256,
+        dataset_byte_size=DATASET_BYTE_SIZE,
         semantic_mapping_id=mapping_id,
         semantic_mapping_version=3,
         created_by_user_id=user_id,

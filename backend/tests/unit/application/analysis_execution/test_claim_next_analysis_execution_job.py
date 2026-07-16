@@ -70,6 +70,8 @@ def build_queued_run(
         workspace_id=workspace_id,
         project_id=project_id,
         dataset_id=uuid4(),
+        dataset_checksum_sha256="c" * 64,
+        dataset_byte_size=4_096,
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=1,
         created_by_user_id=uuid4(),

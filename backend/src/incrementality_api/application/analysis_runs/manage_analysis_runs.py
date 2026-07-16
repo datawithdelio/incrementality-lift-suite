@@ -97,6 +97,8 @@ class QueueAnalysisRun:
                 workspace_id=command.workspace_id,
                 project_id=command.project_id,
                 dataset_id=command.dataset_id,
+                dataset_checksum_sha256=dataset.checksum_sha256,
+                dataset_byte_size=dataset.byte_size,
                 semantic_mapping_id=mapping.id,
                 semantic_mapping_version=mapping.version,
                 created_by_user_id=(command.created_by_user_id),

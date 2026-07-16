@@ -242,6 +242,8 @@ def build_queued_run(
         workspace_id=(scope.workspace_id if workspace_id is None else workspace_id),
         project_id=(scope.project_id if project_id is None else project_id),
         dataset_id=scope.dataset_id,
+        dataset_checksum_sha256="c" * 64,
+        dataset_byte_size=4_096,
         semantic_mapping_id=scope.mapping_id,
         semantic_mapping_version=mapping_version,
         created_by_user_id=scope.user_id,

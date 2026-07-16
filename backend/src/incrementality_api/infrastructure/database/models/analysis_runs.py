@@ -41,6 +41,14 @@ class AnalysisRunModel(
             name=("ck_analysis_runs_mapping_version_positive"),
         ),
         CheckConstraint(
+            "dataset_checksum_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_analysis_runs_dataset_checksum_sha256_format",
+        ),
+        CheckConstraint(
+            "dataset_byte_size > 0",
+            name="ck_analysis_runs_dataset_byte_size_positive",
+        ),
+        CheckConstraint(
             """
             estimator_type IN (
                 'difference_in_differences',
@@ -223,6 +231,16 @@ class AnalysisRunModel(
 
     dataset_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
+        nullable=False,
+    )
+
+    dataset_checksum_sha256: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    dataset_byte_size: Mapped[int] = mapped_column(
+        Integer,
         nullable=False,
     )
 

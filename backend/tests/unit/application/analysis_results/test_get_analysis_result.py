@@ -53,6 +53,8 @@ def build_run() -> AnalysisRun:
         workspace_id=uuid4(),
         project_id=uuid4(),
         dataset_id=uuid4(),
+        dataset_checksum_sha256="c" * 64,
+        dataset_byte_size=4_096,
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=1,
         created_by_user_id=uuid4(),

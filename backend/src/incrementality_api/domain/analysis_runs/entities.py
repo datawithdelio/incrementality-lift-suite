@@ -25,6 +25,8 @@ class AnalysisRun:
     workspace_id: UUID
     project_id: UUID
     dataset_id: UUID
+    dataset_checksum_sha256: str
+    dataset_byte_size: int
     semantic_mapping_id: UUID
     semantic_mapping_version: int
     created_by_user_id: UUID
@@ -45,6 +47,8 @@ class AnalysisRun:
         workspace_id: UUID,
         project_id: UUID,
         dataset_id: UUID,
+        dataset_checksum_sha256: str,
+        dataset_byte_size: int,
         semantic_mapping_id: UUID,
         semantic_mapping_version: int,
         created_by_user_id: UUID,
@@ -69,6 +73,8 @@ class AnalysisRun:
             workspace_id=workspace_id,
             project_id=project_id,
             dataset_id=dataset_id,
+            dataset_checksum_sha256=dataset_checksum_sha256,
+            dataset_byte_size=dataset_byte_size,
             semantic_mapping_id=semantic_mapping_id,
             semantic_mapping_version=(semantic_mapping_version),
             created_by_user_id=created_by_user_id,
