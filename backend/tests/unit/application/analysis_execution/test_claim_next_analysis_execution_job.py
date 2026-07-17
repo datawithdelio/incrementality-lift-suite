@@ -24,6 +24,9 @@ from incrementality_api.domain.analysis_runs.status import (
     AnalysisRunStatus,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 CREATED_AT = datetime(
     2026,
     7,
@@ -80,6 +83,8 @@ def build_queued_run(
         random_seed=1_729,
         configuration_json='{"alpha":0.05}',
         created_at=CREATED_AT,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     )
 
 

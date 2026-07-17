@@ -6,6 +6,9 @@ from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 
 def test_analysis_run_records_random_seed() -> None:
     run = AnalysisRun.queue(
@@ -29,6 +32,8 @@ def test_analysis_run_records_random_seed() -> None:
             0,
             tzinfo=UTC,
         ),
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     )
 
     assert run.random_seed == 1_729

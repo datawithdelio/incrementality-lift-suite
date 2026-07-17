@@ -91,6 +91,9 @@ from incrementality_api.infrastructure.security.session_tokens import (
 )
 from incrementality_api.main import create_app
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 FIXED_NOW = datetime(
     2026,
     7,
@@ -356,6 +359,8 @@ async def test_complete_authenticated_analysis_run_api_lifecycle(
                 )
             ),
             clock=FixedClock(),
+            application_version=APPLICATION_VERSION,
+            source_revision=SOURCE_REVISION,
         )
 
     def override_get_analysis_run() -> GetAnalysisRun:

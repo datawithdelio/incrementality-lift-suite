@@ -45,6 +45,9 @@ from incrementality_api.infrastructure.database.unit_of_work.analysis_runs impor
     SqlAlchemyAnalysisRunUnitOfWork,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 FIXED_NOW = datetime(
     2026,
     7,
@@ -285,6 +288,8 @@ async def test_queue_analysis_run_persists_execution_job_in_same_transaction(
             session_factory=tenancy_session_factory,
         ),
         clock=FixedClock(),
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     ).execute(
         build_command(
             workspace_id=workspace_id,
@@ -361,6 +366,8 @@ async def test_execution_job_failure_rolls_back_analysis_run_insert(
                 session_factory=tenancy_session_factory,
             ),
             clock=FixedClock(),
+            application_version=APPLICATION_VERSION,
+            source_revision=SOURCE_REVISION,
         ).execute(
             build_command(
                 workspace_id=workspace_id,

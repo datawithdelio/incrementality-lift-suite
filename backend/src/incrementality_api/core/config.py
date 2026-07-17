@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     app_name: str = "Incrementality & Lift Measurement Suite"
     app_environment: str = "development"
+    app_version: str = "0.1.0"
+    source_revision: str = "development"
     app_debug: bool = False
     app_api_v1_prefix: str = "/api/v1"
 
@@ -42,7 +44,6 @@ class Settings(BaseSettings):
     analysis_execution_worker_error_retry_seconds: float = 5.0
 
     report_generation_job_claim_timeout_seconds: int = 300
-
 
     report_artifact_reconciliation_interval_seconds: int = 900
     s3_endpoint_url: str = "http://localhost:5001"

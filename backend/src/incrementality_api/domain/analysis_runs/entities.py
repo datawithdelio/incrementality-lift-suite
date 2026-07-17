@@ -33,6 +33,8 @@ class AnalysisRun:
     created_by_user_id: UUID
     estimator_type: AnalysisEstimatorType
     estimator_version: str
+    application_version: str | None
+    source_revision: str | None
     random_seed: int | None
     input_fingerprint_sha256: str | None
     configuration_json: str
@@ -57,6 +59,8 @@ class AnalysisRun:
         created_by_user_id: UUID,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
+        application_version: str,
+        source_revision: str,
         random_seed: int,
         configuration_json: str,
         created_at: datetime,
@@ -70,6 +74,14 @@ class AnalysisRun:
 
         normalized_estimator_version = cls._normalize_estimator_version(estimator_version)
 
+        normalized_application_version = cls._normalize_runtime_version(
+            application_version,
+            field_name="Application version",
+        )
+        normalized_source_revision = cls._normalize_runtime_version(
+            source_revision,
+            field_name="Source revision",
+        )
         canonical_configuration = cls._canonicalize_configuration(configuration_json)
 
         input_fingerprint_sha256 = cls._build_input_fingerprint_sha256(
@@ -79,6 +91,8 @@ class AnalysisRun:
             semantic_mapping_version=semantic_mapping_version,
             estimator_type=estimator_type,
             estimator_version=normalized_estimator_version,
+            application_version=normalized_application_version,
+            source_revision=normalized_source_revision,
             random_seed=random_seed,
             configuration_json=canonical_configuration,
         )
@@ -95,6 +109,8 @@ class AnalysisRun:
             created_by_user_id=created_by_user_id,
             estimator_type=estimator_type,
             estimator_version=(normalized_estimator_version),
+            application_version=normalized_application_version,
+            source_revision=normalized_source_revision,
             random_seed=random_seed,
             input_fingerprint_sha256=input_fingerprint_sha256,
             configuration_json=(canonical_configuration),
@@ -235,6 +251,22 @@ class AnalysisRun:
             )
 
     @staticmethod
+    def _normalize_runtime_version(
+        value: str,
+        *,
+        field_name: str,
+    ) -> str:
+        normalized = value.strip()
+
+        if not normalized:
+            raise InvalidAnalysisRunError(f"{field_name} must not be blank.")
+
+        if len(normalized) > 255:
+            raise InvalidAnalysisRunError(f"{field_name} must not exceed 255 characters.")
+
+        return normalized
+
+    @staticmethod
     def _build_input_fingerprint_sha256(
         *,
         dataset_checksum_sha256: str,
@@ -243,6 +275,8 @@ class AnalysisRun:
         semantic_mapping_version: int,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
+        application_version: str,
+        source_revision: str,
         random_seed: int,
         configuration_json: str,
     ) -> str:
@@ -253,6 +287,8 @@ class AnalysisRun:
                 "dataset_checksum_sha256": dataset_checksum_sha256,
                 "estimator_type": estimator_type.value,
                 "estimator_version": estimator_version,
+                "application_version": application_version,
+                "source_revision": source_revision,
                 "random_seed": random_seed,
                 "semantic_mapping_id": str(semantic_mapping_id),
                 "semantic_mapping_version": semantic_mapping_version,

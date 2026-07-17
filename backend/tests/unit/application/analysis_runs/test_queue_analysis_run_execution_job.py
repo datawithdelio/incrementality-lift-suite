@@ -25,6 +25,9 @@ from incrementality_api.domain.datasets.status import (
     DatasetStatus,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 NOW = datetime(
     2026,
     7,
@@ -204,6 +207,8 @@ async def test_queues_run_and_execution_job_atomically() -> None:
     run = await QueueAnalysisRun(
         unit_of_work=unit_of_work,
         clock=clock,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     ).execute(command)
 
     assert unit_of_work.analysis_runs.added == [run]
@@ -241,6 +246,8 @@ async def test_execution_job_failure_prevents_commit() -> None:
         await QueueAnalysisRun(
             unit_of_work=unit_of_work,
             clock=FixedClock(),
+            application_version=APPLICATION_VERSION,
+            source_revision=SOURCE_REVISION,
         ).execute(build_command())
 
     assert len(unit_of_work.analysis_runs.added) == 1

@@ -290,6 +290,35 @@ async def test_persists_valid_queued_analysis_run(
     assert persisted.semantic_mapping_id == (scope.mapping_id)
     assert persisted.semantic_mapping_version == 1
     assert persisted.status == "queued"
+    assert persisted.application_version is None
+    assert persisted.source_revision is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "application_version",
+        "source_revision",
+    ],
+)
+async def test_rejects_blank_runtime_lineage(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+    field_name: str,
+) -> None:
+    scope = await seed_analysis_scope(tenancy_session_factory)
+    run = build_queued_run(scope)
+    run.application_version = "0.1.0"
+    run.source_revision = "a" * 40
+    setattr(run, field_name, "   ")
+
+    async with tenancy_session_factory() as session:
+        session.add(run)
+
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+        await session.rollback()
 
 
 @pytest.mark.asyncio

@@ -28,6 +28,9 @@ from incrementality_api.domain.datasets.entities import Dataset
 from incrementality_api.domain.datasets.semantic_mapping import DatasetSemanticMapping
 from incrementality_api.domain.datasets.status import DatasetStatus
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 NOW = datetime(2026, 7, 20, 10, 0, tzinfo=UTC)
 
 
@@ -55,6 +58,8 @@ def build_metadata(
         random_seed=1_729,
         configuration_json=configuration_json,
         created_at=NOW,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     ).start(started_at=NOW)
     job = AnalysisExecutionJob.enqueue(
         workspace_id=workspace_id,

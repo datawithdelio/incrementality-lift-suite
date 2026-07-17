@@ -16,6 +16,9 @@ from incrementality_api.domain.analysis_results.entities import AnalysisResult
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 NOW = datetime(2026, 7, 14, 20, 0, tzinfo=UTC)
 
 
@@ -45,6 +48,8 @@ def build_view(*, succeeded: bool = False, failed: bool = False) -> AnalysisResu
         random_seed=1_729,
         configuration_json='{"intervention_time":"2026-01-01T00:00:00+00:00"}',
         created_at=NOW,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     )
     result = None
     lifecycle = "queued"

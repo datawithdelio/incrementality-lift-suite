@@ -49,6 +49,9 @@ from incrementality_api.infrastructure.database.unit_of_work.analysis_runs impor
     SqlAlchemyAnalysisRunUnitOfWork,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 CREATED_AT = datetime(
     2026,
     7,
@@ -300,6 +303,8 @@ async def test_queues_and_reads_analysis_run_in_tenant_scope(
             session_factory=tenancy_session_factory,
         ),
         clock=FixedClock(),
+        application_version="0.1.0",
+        source_revision="a" * 40,
     ).execute(build_queue_command(scope))
 
     persisted = await GetAnalysisRun(
@@ -318,6 +323,8 @@ async def test_queues_and_reads_analysis_run_in_tenant_scope(
     assert persisted.status is AnalysisRunStatus.QUEUED
     assert persisted.semantic_mapping_id == (scope.mapping_id)
     assert persisted.semantic_mapping_version == 1
+    assert persisted.application_version == "0.1.0"
+    assert persisted.source_revision == "a" * 40
     assert persisted.random_seed == 1_729
     assert persisted.input_fingerprint_sha256 == queued.input_fingerprint_sha256
     assert persisted.configuration_json == ('{"alpha":0.05,"cluster_by":"unit"}')
@@ -341,6 +348,8 @@ async def test_persists_analysis_run_lifecycle_update(
             session_factory=tenancy_session_factory,
         ),
         clock=FixedClock(),
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     ).execute(build_queue_command(scope))
 
     unit_of_work = SqlAlchemyAnalysisRunUnitOfWork(
@@ -394,6 +403,8 @@ async def test_analysis_run_read_is_rejected_outside_workspace_scope(
             session_factory=tenancy_session_factory,
         ),
         clock=FixedClock(),
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     ).execute(build_queue_command(scope))
 
     with pytest.raises(

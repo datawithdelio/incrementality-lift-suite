@@ -31,6 +31,8 @@ def queue_run(
     semantic_mapping_version: int = 3,
     estimator_type: AnalysisEstimatorType = (AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
     estimator_version: str = "did-v1",
+    application_version: str = "0.1.0",
+    source_revision: str = "a" * 40,
     random_seed: int = 1_729,
 ) -> AnalysisRun:
     return AnalysisRun.queue(
@@ -44,6 +46,8 @@ def queue_run(
         created_by_user_id=USER_ID,
         estimator_type=estimator_type,
         estimator_version=estimator_version,
+        application_version=application_version,
+        source_revision=source_revision,
         random_seed=random_seed,
         configuration_json=configuration_json,
         created_at=created_at,
@@ -110,3 +114,86 @@ def test_each_estimation_input_changes_the_fingerprint(
     )
 
     assert changed.input_fingerprint_sha256 != baseline.input_fingerprint_sha256
+
+
+def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
+    baseline = AnalysisRun.queue(
+        workspace_id=WORKSPACE_ID,
+        project_id=PROJECT_ID,
+        dataset_id=DATASET_ID,
+        dataset_checksum_sha256="a" * 64,
+        dataset_byte_size=4_096,
+        semantic_mapping_id=SEMANTIC_MAPPING_ID,
+        semantic_mapping_version=3,
+        created_by_user_id=USER_ID,
+        estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
+        estimator_version="did-v1",
+        application_version="0.1.0",
+        source_revision="a" * 40,
+        random_seed=1_729,
+        configuration_json=('{"alpha":0.05,"include_unit_fixed_effects":true}'),
+        created_at=datetime(
+            2026,
+            7,
+            16,
+            12,
+            0,
+            tzinfo=UTC,
+        ),
+    )
+
+    changed_application = AnalysisRun.queue(
+        workspace_id=WORKSPACE_ID,
+        project_id=PROJECT_ID,
+        dataset_id=DATASET_ID,
+        dataset_checksum_sha256="a" * 64,
+        dataset_byte_size=4_096,
+        semantic_mapping_id=SEMANTIC_MAPPING_ID,
+        semantic_mapping_version=3,
+        created_by_user_id=USER_ID,
+        estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
+        estimator_version="did-v1",
+        application_version="0.2.0",
+        source_revision="a" * 40,
+        random_seed=1_729,
+        configuration_json=('{"alpha":0.05,"include_unit_fixed_effects":true}'),
+        created_at=datetime(
+            2026,
+            7,
+            16,
+            12,
+            0,
+            tzinfo=UTC,
+        ),
+    )
+
+    changed_source = AnalysisRun.queue(
+        workspace_id=WORKSPACE_ID,
+        project_id=PROJECT_ID,
+        dataset_id=DATASET_ID,
+        dataset_checksum_sha256="a" * 64,
+        dataset_byte_size=4_096,
+        semantic_mapping_id=SEMANTIC_MAPPING_ID,
+        semantic_mapping_version=3,
+        created_by_user_id=USER_ID,
+        estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
+        estimator_version="did-v1",
+        application_version="0.1.0",
+        source_revision="b" * 40,
+        random_seed=1_729,
+        configuration_json=('{"alpha":0.05,"include_unit_fixed_effects":true}'),
+        created_at=datetime(
+            2026,
+            7,
+            16,
+            12,
+            0,
+            tzinfo=UTC,
+        ),
+    )
+
+    assert baseline.application_version == "0.1.0"
+    assert baseline.source_revision == "a" * 40
+
+    assert changed_application.input_fingerprint_sha256 != baseline.input_fingerprint_sha256
+    assert changed_source.input_fingerprint_sha256 != baseline.input_fingerprint_sha256

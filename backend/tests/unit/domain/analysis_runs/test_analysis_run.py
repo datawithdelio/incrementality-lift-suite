@@ -15,6 +15,9 @@ from incrementality_api.domain.analysis_runs.status import (
     AnalysisRunStatus,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 CREATED_AT = datetime(
     2026,
     7,
@@ -76,6 +79,8 @@ def queue_run(
         random_seed=1_729,
         configuration_json=configuration_json,
         created_at=created_at,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     )
 
 
@@ -106,6 +111,8 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
         random_seed=1_729,
         configuration_json=CONFIGURATION_JSON,
         created_at=CREATED_AT,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     )
 
     assert run.workspace_id == workspace_id
@@ -198,6 +205,44 @@ def test_estimator_version_must_not_be_blank(
         )
 
 
+@pytest.mark.parametrize(
+    ("field_name", "application_version", "source_revision", "message"),
+    [
+        ("application_version", "   ", SOURCE_REVISION, "Application version must not be blank"),
+        ("source_revision", APPLICATION_VERSION, "   ", "Source revision must not be blank"),
+    ],
+)
+def test_runtime_lineage_must_not_be_blank_for_new_runs(
+    field_name: str,
+    application_version: str,
+    source_revision: str,
+    message: str,
+) -> None:
+    del field_name
+
+    with pytest.raises(
+        InvalidAnalysisRunError,
+        match=message,
+    ):
+        AnalysisRun.queue(
+            workspace_id=uuid4(),
+            project_id=uuid4(),
+            dataset_id=uuid4(),
+            dataset_checksum_sha256=DATASET_CHECKSUM_SHA256,
+            dataset_byte_size=DATASET_BYTE_SIZE,
+            semantic_mapping_id=uuid4(),
+            semantic_mapping_version=1,
+            created_by_user_id=uuid4(),
+            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            estimator_version="did-v1",
+            application_version=application_version,
+            source_revision=source_revision,
+            random_seed=1_729,
+            configuration_json=CONFIGURATION_JSON,
+            created_at=CREATED_AT,
+        )
+
+
 def test_creation_timestamp_must_be_timezone_aware() -> None:
     with pytest.raises(
         InvalidAnalysisRunError,
@@ -229,6 +274,17 @@ def test_starts_queued_analysis_run_immutably() -> None:
 
     assert queued.status is AnalysisRunStatus.QUEUED
     assert queued.started_at is None
+
+
+def test_lifecycle_transitions_preserve_runtime_lineage() -> None:
+    queued = queue_run()
+
+    running = queued.start(started_at=STARTED_AT)
+    succeeded = running.mark_succeeded(completed_at=COMPLETED_AT)
+
+    for run in (queued, running, succeeded):
+        assert run.application_version == APPLICATION_VERSION
+        assert run.source_revision == SOURCE_REVISION
 
 
 def test_start_cannot_precede_creation() -> None:

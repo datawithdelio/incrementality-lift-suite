@@ -37,6 +37,9 @@ from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 CREATED_AT = datetime(
     2026,
     7,
@@ -120,6 +123,8 @@ def build_run(
         }
         """,
         created_at=CREATED_AT,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     )
 
 
@@ -453,6 +458,54 @@ async def test_queue_request_rejects_extra_fields() -> None:
                 },
                 "unexpected": True,
             },
+        )
+
+    assert response.status_code == 422
+    assert queue_service.commands == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("application_version", "client-controlled-version"),
+        ("source_revision", "f" * 40),
+    ],
+)
+async def test_queue_request_rejects_client_supplied_runtime_lineage(
+    field_name: str,
+    field_value: str,
+) -> None:
+    workspace_id = uuid4()
+    project_id = uuid4()
+    user_id = uuid4()
+    run = build_run(
+        workspace_id=workspace_id,
+        project_id=project_id,
+        user_id=user_id,
+    )
+    queue_service = FakeQueueAnalysisRun(result=run)
+    application = build_application(
+        user_id=user_id,
+        queue_service=queue_service,
+        get_service=FakeGetAnalysisRun(result=run),
+    )
+    payload = {
+        "dataset_id": str(run.dataset_id),
+        "semantic_mapping_version": 3,
+        "estimator_type": "difference_in_differences",
+        "estimator_version": "did-v1",
+        "configuration": {"alpha": 0.05},
+        field_name: field_value,
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/projects/{project_id}/analysis-runs",
+            json=payload,
         )
 
     assert response.status_code == 422

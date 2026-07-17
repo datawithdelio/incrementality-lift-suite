@@ -36,6 +36,9 @@ from incrementality_api.domain.datasets.semantic_mapping import (
     DatasetSemanticMapping,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 CREATED_AT = datetime(
     2026,
     7,
@@ -359,6 +362,8 @@ async def test_queues_analysis_run_atomically() -> None:
     result = await QueueAnalysisRun(
         unit_of_work=unit_of_work,
         clock=FixedClock(),
+        application_version="0.1.0",
+        source_revision="a" * 40,
     ).execute(
         build_command(
             workspace_id=workspace_id,
@@ -381,6 +386,8 @@ async def test_queues_analysis_run_atomically() -> None:
 
     assert result.estimator_type is (AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES)
     assert result.estimator_version == "did-v1"
+    assert result.application_version == "0.1.0"
+    assert result.source_revision == "a" * 40
     assert result.random_seed == 1_729
 
     assert result.configuration_json == ('{"alpha":0.05,"include_unit_fixed_effects":true}')
@@ -441,6 +448,8 @@ async def test_queue_rejects_unavailable_dataset() -> None:
         await QueueAnalysisRun(
             unit_of_work=unit_of_work,
             clock=FixedClock(),
+            application_version=APPLICATION_VERSION,
+            source_revision=SOURCE_REVISION,
         ).execute(
             build_command(
                 workspace_id=workspace_id,
@@ -486,6 +495,8 @@ async def test_queue_requires_ready_dataset() -> None:
         await QueueAnalysisRun(
             unit_of_work=unit_of_work,
             clock=FixedClock(),
+            application_version=APPLICATION_VERSION,
+            source_revision=SOURCE_REVISION,
         ).execute(
             build_command(
                 workspace_id=workspace_id,
@@ -525,6 +536,8 @@ async def test_queue_requires_requested_mapping_version() -> None:
         await QueueAnalysisRun(
             unit_of_work=unit_of_work,
             clock=FixedClock(),
+            application_version=APPLICATION_VERSION,
+            source_revision=SOURCE_REVISION,
         ).execute(
             build_command(
                 workspace_id=workspace_id,
@@ -578,6 +591,8 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
         random_seed=1_729,
         configuration_json='{"alpha":0.05}',
         created_at=RUN_CREATED_AT,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     )
 
     unit_of_work = FakeAnalysisRunUnitOfWork(

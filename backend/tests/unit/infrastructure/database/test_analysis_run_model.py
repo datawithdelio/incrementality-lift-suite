@@ -51,6 +51,8 @@ def test_analysis_run_table_and_columns() -> None:
         "created_by_user_id",
         "estimator_type",
         "estimator_version",
+        "application_version",
+        "source_revision",
         "random_seed",
         "input_fingerprint_sha256",
         "configuration_json",
@@ -116,6 +118,20 @@ def test_analysis_run_table_and_columns() -> None:
     )
     assert table.c.estimator_version.type.length == 255
     assert not table.c.estimator_version.nullable
+
+    assert isinstance(
+        table.c.application_version.type,
+        String,
+    )
+    assert table.c.application_version.type.length == 255
+    assert table.c.application_version.nullable
+
+    assert isinstance(
+        table.c.source_revision.type,
+        String,
+    )
+    assert table.c.source_revision.type.length == 255
+    assert table.c.source_revision.nullable
 
     assert isinstance(
         table.c.random_seed.type,
@@ -185,6 +201,8 @@ def test_analysis_run_has_named_integrity_constraints() -> None:
             "ck_analysis_runs_input_fingerprint_sha256_format",
             "ck_analysis_runs_estimator_type",
             "ck_analysis_runs_estimator_version_not_blank",
+            "ck_analysis_runs_application_version_not_blank",
+            "ck_analysis_runs_source_revision_not_blank",
             "ck_analysis_runs_configuration_not_blank",
             "ck_analysis_runs_configuration_object",
             "ck_analysis_runs_status",

@@ -3,10 +3,15 @@ name: incrementality-lift-suite
 x-backend-build: &backend-build
   context: ./backend
   dockerfile: Dockerfile
+  args:
+    APP_VERSION: ${APP_VERSION:?APP_VERSION must be set}
+    SOURCE_REVISION: ${SOURCE_REVISION:?SOURCE_REVISION must be set}
 
 x-backend-environment: &backend-environment
   APP_ENVIRONMENT: development
   APP_DEBUG: "false"
+  APP_VERSION: ${APP_VERSION:?APP_VERSION must be set}
+  SOURCE_REVISION: ${SOURCE_REVISION:?SOURCE_REVISION must be set}
 
   DATABASE_URL: postgresql+asyncpg://incrementality:incrementality@postgres:5432/incrementality
 

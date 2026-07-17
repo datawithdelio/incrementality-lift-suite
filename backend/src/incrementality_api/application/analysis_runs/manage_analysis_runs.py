@@ -48,10 +48,14 @@ class QueueAnalysisRun:
         *,
         unit_of_work: AnalysisRunUnitOfWork,
         clock: AnalysisRunClock,
+        application_version: str,
+        source_revision: str,
         quality_gate: "AnalysisQualityGate | None" = None,
     ) -> None:
         self._unit_of_work = unit_of_work
         self._clock = clock
+        self._application_version = application_version
+        self._source_revision = source_revision
         self._quality_gate = quality_gate
 
     async def execute(
@@ -105,6 +109,8 @@ class QueueAnalysisRun:
                 created_by_user_id=(command.created_by_user_id),
                 estimator_type=command.estimator_type,
                 estimator_version=(command.estimator_version),
+                application_version=self._application_version,
+                source_revision=self._source_revision,
                 random_seed=command.random_seed,
                 configuration_json=(command.configuration_json),
                 created_at=queued_at,

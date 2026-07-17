@@ -31,6 +31,9 @@ from incrementality_api.domain.analysis_runs.status import (
     AnalysisRunStatus,
 )
 
+APPLICATION_VERSION = "0.1.0"
+SOURCE_REVISION = "a" * 40
+
 CREATED_AT = datetime(2026, 7, 18, 10, 0, tzinfo=UTC)
 AVAILABLE_AT = CREATED_AT + timedelta(minutes=1)
 STARTED_AT = CREATED_AT + timedelta(minutes=2)
@@ -77,6 +80,8 @@ def build_running_pair(
         random_seed=1_729,
         configuration_json='{"alpha":0.05}',
         created_at=CREATED_AT,
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
     ).start(started_at=STARTED_AT)
 
     job = AnalysisExecutionJob.enqueue(

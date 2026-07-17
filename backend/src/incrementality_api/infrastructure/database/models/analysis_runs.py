@@ -70,6 +70,14 @@ class AnalysisRunModel(
             name=("ck_analysis_runs_estimator_version_not_blank"),
         ),
         CheckConstraint(
+            ("application_version IS NULL OR btrim(application_version) <> ''"),
+            name=("ck_analysis_runs_application_version_not_blank"),
+        ),
+        CheckConstraint(
+            ("source_revision IS NULL OR btrim(source_revision) <> ''"),
+            name=("ck_analysis_runs_source_revision_not_blank"),
+        ),
+        CheckConstraint(
             "btrim(configuration_json) <> ''",
             name=("ck_analysis_runs_configuration_not_blank"),
         ),
@@ -272,6 +280,16 @@ class AnalysisRunModel(
     estimator_version: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
+    )
+
+    application_version: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    source_revision: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
 
     random_seed: Mapped[int | None] = mapped_column(
