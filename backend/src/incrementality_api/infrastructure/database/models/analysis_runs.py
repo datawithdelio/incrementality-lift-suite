@@ -78,6 +78,27 @@ class AnalysisRunModel(
             name=("ck_analysis_runs_source_revision_not_blank"),
         ),
         CheckConstraint(
+            (
+                "statistical_library_versions_json IS NULL "
+                "OR btrim(statistical_library_versions_json) <> ''"
+            ),
+            name=("ck_analysis_runs_statistical_library_versions_not_blank"),
+        ),
+        CheckConstraint(
+            (
+                "statistical_library_versions_json IS NULL "
+                "OR jsonb_typeof(statistical_library_versions_json::jsonb) = 'object'"
+            ),
+            name=("ck_analysis_runs_statistical_library_versions_object"),
+        ),
+        CheckConstraint(
+            (
+                "statistical_library_versions_json IS NULL "
+                "OR statistical_library_versions_json::jsonb <> '{}'::jsonb"
+            ),
+            name=("ck_analysis_runs_statistical_library_versions_not_empty"),
+        ),
+        CheckConstraint(
             "btrim(configuration_json) <> ''",
             name=("ck_analysis_runs_configuration_not_blank"),
         ),
@@ -289,6 +310,11 @@ class AnalysisRunModel(
 
     source_revision: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+    )
+
+    statistical_library_versions_json: Mapped[str | None] = mapped_column(
+        Text,
         nullable=True,
     )
 

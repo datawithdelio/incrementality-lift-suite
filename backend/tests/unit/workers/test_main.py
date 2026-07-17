@@ -19,6 +19,9 @@ from incrementality_api.infrastructure.estimation.geo_holdout import (
 from incrementality_api.infrastructure.estimation.marketing_mix_model import (
     BayesianMarketingMixEstimator,
 )
+from incrementality_api.infrastructure.estimation.runtime_versions import (
+    StatisticalRuntimeVersionProvider,
+)
 from incrementality_api.infrastructure.estimation.synthetic_control import (
     ScipySyntheticControlEstimator,
 )
@@ -162,6 +165,10 @@ def test_builds_complete_analysis_execution_worker(
     assert process_next._claim_next is not None
     assert process_next._input_loader is not None
     assert process_next._estimator_selector is not None
+    assert isinstance(
+        process_next._statistical_runtime_versions,
+        StatisticalRuntimeVersionProvider,
+    )
     assert set(process_next._input_loader._additional_builders) == {
         AnalysisEstimatorType.SYNTHETIC_CONTROL,
         AnalysisEstimatorType.GEO_HOLDOUT,

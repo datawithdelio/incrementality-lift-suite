@@ -34,6 +34,7 @@ def test_analysis_run_records_random_seed() -> None:
         ),
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
     )
 
     assert run.random_seed == 1_729

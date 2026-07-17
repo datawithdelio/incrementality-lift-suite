@@ -9,6 +9,9 @@ from incrementality_api.application.analysis_execution.estimation import (
     MarketingMixInput,
     PermanentEstimationError,
 )
+from incrementality_api.infrastructure.estimation.package_versions import (
+    installed_distribution_version,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,7 +175,7 @@ class PyMCMarketingMixModelRunner:
             min_effective_sample_size=float(np.min(ess)),
             divergences=divergences,
             library_name="pymc",
-            library_version=str(pm.__version__),
+            library_version=installed_distribution_version("pymc"),
         )
 
 
@@ -219,6 +222,8 @@ class MarketingMixDiagnosticPolicy:
 
 
 class BayesianMarketingMixEstimator:
+    statistical_packages = ("arviz", "numpy", "pymc", "pytensor")
+
     """Orchestrate custom MMM transformation and interpretation around PyMC."""
 
     def __init__(

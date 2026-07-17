@@ -1,4 +1,5 @@
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from hashlib import sha256
@@ -8,6 +9,9 @@ from uuid import UUID, uuid4
 from incrementality_api.domain.analysis_runs.errors import (
     InvalidAnalysisRunError,
     InvalidAnalysisRunTransitionError,
+)
+from incrementality_api.domain.analysis_runs.statistical_library_versions import (
+    StatisticalLibraryVersions,
 )
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
@@ -35,6 +39,7 @@ class AnalysisRun:
     estimator_version: str
     application_version: str | None
     source_revision: str | None
+    statistical_library_versions: StatisticalLibraryVersions | None
     random_seed: int | None
     input_fingerprint_sha256: str | None
     configuration_json: str
@@ -61,6 +66,7 @@ class AnalysisRun:
         estimator_version: str,
         application_version: str,
         source_revision: str,
+        statistical_library_versions: Mapping[str, str],
         random_seed: int,
         configuration_json: str,
         created_at: datetime,
@@ -82,6 +88,9 @@ class AnalysisRun:
             source_revision,
             field_name="Source revision",
         )
+        version_snapshot = StatisticalLibraryVersions.from_mapping(
+            statistical_library_versions
+        )
         canonical_configuration = cls._canonicalize_configuration(configuration_json)
 
         input_fingerprint_sha256 = cls._build_input_fingerprint_sha256(
@@ -93,6 +102,7 @@ class AnalysisRun:
             estimator_version=normalized_estimator_version,
             application_version=normalized_application_version,
             source_revision=normalized_source_revision,
+            statistical_library_versions=version_snapshot,
             random_seed=random_seed,
             configuration_json=canonical_configuration,
         )
@@ -111,6 +121,7 @@ class AnalysisRun:
             estimator_version=(normalized_estimator_version),
             application_version=normalized_application_version,
             source_revision=normalized_source_revision,
+            statistical_library_versions=version_snapshot,
             random_seed=random_seed,
             input_fingerprint_sha256=input_fingerprint_sha256,
             configuration_json=(canonical_configuration),
@@ -277,6 +288,7 @@ class AnalysisRun:
         estimator_version: str,
         application_version: str,
         source_revision: str,
+        statistical_library_versions: StatisticalLibraryVersions,
         random_seed: int,
         configuration_json: str,
     ) -> str:
@@ -289,6 +301,7 @@ class AnalysisRun:
                 "estimator_version": estimator_version,
                 "application_version": application_version,
                 "source_revision": source_revision,
+                "statistical_library_versions": statistical_library_versions.as_dict(),
                 "random_seed": random_seed,
                 "semantic_mapping_id": str(semantic_mapping_id),
                 "semantic_mapping_version": semantic_mapping_version,

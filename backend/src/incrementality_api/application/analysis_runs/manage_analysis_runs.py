@@ -19,6 +19,9 @@ from incrementality_api.domain.analysis_runs.entities import (
 from incrementality_api.domain.analysis_runs.execution_jobs import (
     AnalysisExecutionJob,
 )
+from incrementality_api.domain.analysis_runs.statistical_library_versions import (
+    StatisticalLibraryVersions,
+)
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
@@ -40,6 +43,13 @@ class QueueAnalysisRunCommand:
     configuration_json: str
 
 
+class StatisticalRuntimeVersions(Protocol):
+    def for_estimator(
+        self,
+        estimator_type: AnalysisEstimatorType,
+    ) -> StatisticalLibraryVersions: ...
+
+
 class QueueAnalysisRun:
     """Validate dependencies and atomically queue an analysis."""
 
@@ -50,12 +60,14 @@ class QueueAnalysisRun:
         clock: AnalysisRunClock,
         application_version: str,
         source_revision: str,
+        statistical_runtime_versions: StatisticalRuntimeVersions,
         quality_gate: "AnalysisQualityGate | None" = None,
     ) -> None:
         self._unit_of_work = unit_of_work
         self._clock = clock
         self._application_version = application_version
         self._source_revision = source_revision
+        self._statistical_runtime_versions = statistical_runtime_versions
         self._quality_gate = quality_gate
 
     async def execute(
@@ -97,6 +109,11 @@ class QueueAnalysisRun:
                 )
 
             queued_at = self._clock.now()
+            statistical_library_versions = (
+                self._statistical_runtime_versions.for_estimator(
+                    command.estimator_type
+                )
+            )
 
             run = AnalysisRun.queue(
                 workspace_id=command.workspace_id,
@@ -111,6 +128,9 @@ class QueueAnalysisRun:
                 estimator_version=(command.estimator_version),
                 application_version=self._application_version,
                 source_revision=self._source_revision,
+                statistical_library_versions=(
+                    statistical_library_versions.as_dict()
+                ),
                 random_seed=command.random_seed,
                 configuration_json=(command.configuration_json),
                 created_at=queued_at,

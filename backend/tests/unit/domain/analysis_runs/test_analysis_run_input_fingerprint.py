@@ -1,4 +1,5 @@
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -33,6 +34,7 @@ def queue_run(
     estimator_version: str = "did-v1",
     application_version: str = "0.1.0",
     source_revision: str = "a" * 40,
+    statistical_library_versions: Mapping[str, str] | None = None,
     random_seed: int = 1_729,
 ) -> AnalysisRun:
     return AnalysisRun.queue(
@@ -48,6 +50,13 @@ def queue_run(
         estimator_version=estimator_version,
         application_version=application_version,
         source_revision=source_revision,
+        statistical_library_versions=(
+            statistical_library_versions
+            or {
+                "numpy": "2.3.1",
+                "statsmodels": "0.14.5",
+            }
+        ),
         random_seed=random_seed,
         configuration_json=configuration_json,
         created_at=created_at,
@@ -130,6 +139,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         estimator_version="did-v1",
         application_version="0.1.0",
         source_revision="a" * 40,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
         random_seed=1_729,
         configuration_json=('{"alpha":0.05,"include_unit_fixed_effects":true}'),
         created_at=datetime(
@@ -155,6 +165,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         estimator_version="did-v1",
         application_version="0.2.0",
         source_revision="a" * 40,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
         random_seed=1_729,
         configuration_json=('{"alpha":0.05,"include_unit_fixed_effects":true}'),
         created_at=datetime(
@@ -180,6 +191,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         estimator_version="did-v1",
         application_version="0.1.0",
         source_revision="b" * 40,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
         random_seed=1_729,
         configuration_json=('{"alpha":0.05,"include_unit_fixed_effects":true}'),
         created_at=datetime(
@@ -197,3 +209,33 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
 
     assert changed_application.input_fingerprint_sha256 != baseline.input_fingerprint_sha256
     assert changed_source.input_fingerprint_sha256 != baseline.input_fingerprint_sha256
+
+
+def test_statistical_library_mapping_order_does_not_change_fingerprint() -> None:
+    first = queue_run(
+        statistical_library_versions={
+            "statsmodels": "0.14.5",
+            "numpy": "2.3.1",
+        }
+    )
+    second = queue_run(
+        statistical_library_versions={
+            "numpy": "2.3.1",
+            "statsmodels": "0.14.5",
+        }
+    )
+
+    assert first.statistical_library_versions == second.statistical_library_versions
+    assert first.input_fingerprint_sha256 == second.input_fingerprint_sha256
+
+
+def test_changing_statistical_library_version_changes_fingerprint() -> None:
+    baseline = queue_run()
+    changed = queue_run(
+        statistical_library_versions={
+            "numpy": "2.4.0",
+            "statsmodels": "0.14.5",
+        }
+    )
+
+    assert changed.input_fingerprint_sha256 != baseline.input_fingerprint_sha256

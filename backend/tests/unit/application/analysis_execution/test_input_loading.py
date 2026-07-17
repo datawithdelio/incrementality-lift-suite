@@ -60,6 +60,10 @@ def build_metadata(
         created_at=NOW,
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_library_versions={
+            "numpy": "2.3.1",
+            "statsmodels": "0.14.5",
+        },
     ).start(started_at=NOW)
     job = AnalysisExecutionJob.enqueue(
         workspace_id=workspace_id,
@@ -168,6 +172,7 @@ async def test_loads_tenant_scoped_csv_and_constructs_did_input() -> None:
 
     assert loaded.estimator_type is AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
     assert loaded.random_seed == 1_729
+    assert loaded.statistical_library_versions == metadata.run.statistical_library_versions
     assert storage.keys == [metadata.dataset.storage_key]
     assert isinstance(loaded.payload, DifferenceInDifferencesInput)
     assert [

@@ -83,6 +83,9 @@ from incrementality_api.infrastructure.database.unit_of_work.projects import (
 from incrementality_api.infrastructure.database.unit_of_work.tenancy import (
     SqlAlchemyTenancyUnitOfWork,
 )
+from incrementality_api.infrastructure.estimation.runtime_versions import (
+    StatisticalRuntimeVersionProvider,
+)
 from incrementality_api.infrastructure.security.passwords import (
     Argon2PasswordHasher,
 )
@@ -361,6 +364,7 @@ async def test_complete_authenticated_analysis_run_api_lifecycle(
             clock=FixedClock(),
             application_version=APPLICATION_VERSION,
             source_revision=SOURCE_REVISION,
+            statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
         )
 
     def override_get_analysis_run() -> GetAnalysisRun:

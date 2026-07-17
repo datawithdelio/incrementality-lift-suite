@@ -15,6 +15,9 @@ from incrementality_api.infrastructure.database.session import (
 from incrementality_api.infrastructure.database.unit_of_work.analysis_runs import (
     SqlAlchemyAnalysisRunUnitOfWork,
 )
+from incrementality_api.infrastructure.estimation.runtime_versions import (
+    StatisticalRuntimeVersionProvider,
+)
 
 
 class SystemAnalysisRunClock:
@@ -37,6 +40,7 @@ def get_queue_analysis_run_service() -> QueueAnalysisRun:
         clock=SystemAnalysisRunClock(),
         application_version=settings.app_version,
         source_revision=settings.source_revision,
+        statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
         quality_gate=SqlAlchemyAnalysisQualityGate(sessions),
     )
 

@@ -11,6 +11,9 @@ from incrementality_api.application.analysis_runs.errors import (
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
+from incrementality_api.domain.analysis_runs.statistical_library_versions import (
+    StatisticalLibraryVersions,
+)
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
     AnalysisRunStatus,
@@ -39,6 +42,11 @@ def to_analysis_run_model(
         estimator_version=run.estimator_version,
         application_version=run.application_version,
         source_revision=run.source_revision,
+        statistical_library_versions_json=(
+            run.statistical_library_versions.canonical_json
+            if run.statistical_library_versions is not None
+            else None
+        ),
         random_seed=run.random_seed,
         input_fingerprint_sha256=run.input_fingerprint_sha256,
         configuration_json=run.configuration_json,
@@ -71,6 +79,13 @@ def to_analysis_run(
         estimator_version=model.estimator_version,
         application_version=model.application_version,
         source_revision=model.source_revision,
+        statistical_library_versions=(
+            StatisticalLibraryVersions.from_json(
+                model.statistical_library_versions_json
+            )
+            if model.statistical_library_versions_json is not None
+            else None
+        ),
         random_seed=model.random_seed,
         input_fingerprint_sha256=model.input_fingerprint_sha256,
         configuration_json=model.configuration_json,

@@ -11,6 +11,10 @@ from incrementality_api.application.analysis_execution.estimation import (
     RetryableEstimationError,
 )
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
+from incrementality_api.domain.analysis_runs.statistical_library_versions import (
+    StatisticalLibraryVersions,
+)
+from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +27,13 @@ class ClaimNextExecution(Protocol):
 class AnalysisInputLoader(Protocol):
     async def load(self, job: AnalysisExecutionJob) -> AnalysisEstimatorInput:
         """Load and construct estimator-ready analysis input."""
+
+
+class StatisticalRuntimeVersions(Protocol):
+    def for_estimator(
+        self,
+        estimator_type: AnalysisEstimatorType,
+    ) -> StatisticalLibraryVersions: ...
 
 
 class PersistExecutionSuccess(Protocol):
@@ -51,6 +62,7 @@ class RunNextAnalysisExecutionJob:
         claim_next: ClaimNextExecution,
         input_loader: AnalysisInputLoader,
         estimator_selector: AnalysisEstimatorSelector,
+        statistical_runtime_versions: StatisticalRuntimeVersions,
         persist_success: PersistExecutionSuccess,
         record_retryable_failure: RecordRetryableExecutionFailure,
         mark_failed: MarkExecutionFailed,
@@ -58,6 +70,7 @@ class RunNextAnalysisExecutionJob:
         self._claim_next = claim_next
         self._input_loader = input_loader
         self._estimator_selector = estimator_selector
+        self._statistical_runtime_versions = statistical_runtime_versions
         self._persist_success = persist_success
         self._record_retryable_failure = record_retryable_failure
         self._mark_failed = mark_failed
@@ -75,6 +88,18 @@ class RunNextAnalysisExecutionJob:
 
         try:
             estimator_input = await self._input_loader.load(job)
+            queued_versions = estimator_input.statistical_library_versions
+            if queued_versions is None:
+                raise PermanentEstimationError(
+                    "Queued statistical-library version snapshot is unavailable."
+                )
+            worker_versions = self._statistical_runtime_versions.for_estimator(
+                estimator_input.estimator_type
+            )
+            if worker_versions != queued_versions:
+                raise PermanentEstimationError(
+                    "Worker statistical-library versions do not match the queued snapshot."
+                )
             estimator = self._estimator_selector.select(estimator_input.estimator_type)
             result = await asyncio.to_thread(
                 estimator.estimate,

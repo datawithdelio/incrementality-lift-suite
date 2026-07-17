@@ -53,6 +53,7 @@ def test_analysis_run_table_and_columns() -> None:
         "estimator_version",
         "application_version",
         "source_revision",
+        "statistical_library_versions_json",
         "random_seed",
         "input_fingerprint_sha256",
         "configuration_json",
@@ -134,6 +135,12 @@ def test_analysis_run_table_and_columns() -> None:
     assert table.c.source_revision.nullable
 
     assert isinstance(
+        table.c.statistical_library_versions_json.type,
+        Text,
+    )
+    assert table.c.statistical_library_versions_json.nullable
+
+    assert isinstance(
         table.c.random_seed.type,
         BigInteger,
     )
@@ -203,6 +210,9 @@ def test_analysis_run_has_named_integrity_constraints() -> None:
             "ck_analysis_runs_estimator_version_not_blank",
             "ck_analysis_runs_application_version_not_blank",
             "ck_analysis_runs_source_revision_not_blank",
+            "ck_analysis_runs_statistical_library_versions_not_blank",
+            "ck_analysis_runs_statistical_library_versions_object",
+            "ck_analysis_runs_statistical_library_versions_not_empty",
             "ck_analysis_runs_configuration_not_blank",
             "ck_analysis_runs_configuration_object",
             "ck_analysis_runs_status",

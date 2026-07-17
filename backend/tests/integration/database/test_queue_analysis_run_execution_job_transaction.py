@@ -44,6 +44,9 @@ from incrementality_api.infrastructure.database.models.tenancy import (
 from incrementality_api.infrastructure.database.unit_of_work.analysis_runs import (
     SqlAlchemyAnalysisRunUnitOfWork,
 )
+from incrementality_api.infrastructure.estimation.runtime_versions import (
+    StatisticalRuntimeVersionProvider,
+)
 
 APPLICATION_VERSION = "0.1.0"
 SOURCE_REVISION = "a" * 40
@@ -290,6 +293,7 @@ async def test_queue_analysis_run_persists_execution_job_in_same_transaction(
         clock=FixedClock(),
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
     ).execute(
         build_command(
             workspace_id=workspace_id,
@@ -368,6 +372,7 @@ async def test_execution_job_failure_rolls_back_analysis_run_insert(
             clock=FixedClock(),
             application_version=APPLICATION_VERSION,
             source_revision=SOURCE_REVISION,
+            statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
         ).execute(
             build_command(
                 workspace_id=workspace_id,

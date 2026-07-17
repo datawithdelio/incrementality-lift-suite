@@ -292,6 +292,60 @@ async def test_persists_valid_queued_analysis_run(
     assert persisted.status == "queued"
     assert persisted.application_version is None
     assert persisted.source_revision is None
+    assert persisted.statistical_library_versions_json is None
+
+
+@pytest.mark.asyncio
+async def test_persists_statistical_library_version_snapshot(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    scope = await seed_analysis_scope(tenancy_session_factory)
+    run = build_queued_run(scope)
+    run.statistical_library_versions_json = (
+        '{"numpy":"2.3.1","statsmodels":"0.14.5"}'
+    )
+
+    async with (
+        tenancy_session_factory() as session,
+        session.begin(),
+    ):
+        session.add(run)
+
+    async with tenancy_session_factory() as session:
+        persisted = await session.scalar(
+            select(AnalysisRunModel).where(AnalysisRunModel.id == run.id)
+        )
+
+    assert persisted is not None
+    assert persisted.statistical_library_versions_json == (
+        '{"numpy":"2.3.1","statsmodels":"0.14.5"}'
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_snapshot",
+    [
+        "   ",
+        "[]",
+        "{}",
+    ],
+)
+async def test_rejects_invalid_statistical_library_version_snapshot(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+    invalid_snapshot: str,
+) -> None:
+    scope = await seed_analysis_scope(tenancy_session_factory)
+    run = build_queued_run(scope)
+    run.statistical_library_versions_json = invalid_snapshot
+
+    async with tenancy_session_factory() as session:
+        session.add(run)
+
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+        await session.rollback()
 
 
 @pytest.mark.asyncio

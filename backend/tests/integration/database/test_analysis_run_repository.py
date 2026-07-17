@@ -48,6 +48,9 @@ from incrementality_api.infrastructure.database.models.tenancy import (
 from incrementality_api.infrastructure.database.unit_of_work.analysis_runs import (
     SqlAlchemyAnalysisRunUnitOfWork,
 )
+from incrementality_api.infrastructure.estimation.runtime_versions import (
+    StatisticalRuntimeVersionProvider,
+)
 
 APPLICATION_VERSION = "0.1.0"
 SOURCE_REVISION = "a" * 40
@@ -305,6 +308,7 @@ async def test_queues_and_reads_analysis_run_in_tenant_scope(
         clock=FixedClock(),
         application_version="0.1.0",
         source_revision="a" * 40,
+        statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
     ).execute(build_queue_command(scope))
 
     persisted = await GetAnalysisRun(
@@ -325,6 +329,11 @@ async def test_queues_and_reads_analysis_run_in_tenant_scope(
     assert persisted.semantic_mapping_version == 1
     assert persisted.application_version == "0.1.0"
     assert persisted.source_revision == "a" * 40
+    assert persisted.statistical_library_versions is not None
+    assert set(persisted.statistical_library_versions.as_dict()) == {
+        "numpy",
+        "statsmodels",
+    }
     assert persisted.random_seed == 1_729
     assert persisted.input_fingerprint_sha256 == queued.input_fingerprint_sha256
     assert persisted.configuration_json == ('{"alpha":0.05,"cluster_by":"unit"}')
@@ -350,6 +359,7 @@ async def test_persists_analysis_run_lifecycle_update(
         clock=FixedClock(),
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
     ).execute(build_queue_command(scope))
 
     unit_of_work = SqlAlchemyAnalysisRunUnitOfWork(
@@ -388,6 +398,7 @@ async def test_persists_analysis_run_lifecycle_update(
     assert persisted.status is AnalysisRunStatus.RUNNING
     assert persisted.started_at == RUN_STARTED_AT
     assert persisted.completed_at is None
+    assert persisted.statistical_library_versions == queued.statistical_library_versions
 
 
 @pytest.mark.asyncio
@@ -405,6 +416,7 @@ async def test_analysis_run_read_is_rejected_outside_workspace_scope(
         clock=FixedClock(),
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
     ).execute(build_queue_command(scope))
 
     with pytest.raises(

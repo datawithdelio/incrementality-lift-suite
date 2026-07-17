@@ -58,6 +58,8 @@ class GeoHoldoutDiagnosticPolicy:
 class StatsmodelsGeoHoldoutEstimator:
     """Estimate geo lift with clustered DiD while keeping geo policy custom."""
 
+    statistical_packages = ("numpy", "statsmodels")
+
     def __init__(self, policy: GeoHoldoutDiagnosticPolicy | None = None) -> None:
         self._policy = policy or GeoHoldoutDiagnosticPolicy()
         self._estimator = StatsmodelsDifferenceInDifferencesEstimator()

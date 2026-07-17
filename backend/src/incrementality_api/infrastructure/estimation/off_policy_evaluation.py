@@ -1,7 +1,5 @@
 """Off-policy evaluation with custom reliability policy and trusted numeric routines."""
 
-from importlib.metadata import version
-
 import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
@@ -9,6 +7,9 @@ from incrementality_api.application.analysis_execution.estimation import (
     AnalysisEstimationResult,
     OffPolicyEvaluationInput,
     PermanentEstimationError,
+)
+from incrementality_api.infrastructure.estimation.package_versions import (
+    installed_distribution_version,
 )
 
 _METHODS = {
@@ -20,6 +21,8 @@ _METHODS = {
 
 class StatsmodelsOffPolicyEstimator:
     """Estimate logged-policy value while keeping reliability rules explicit."""
+
+    statistical_packages = ("numpy", "scipy")
 
     def estimate(
         self,
@@ -87,7 +90,10 @@ class StatsmodelsOffPolicyEstimator:
             confidence_interval_high=high,
             observation_count=int(rewards.size),
             library_name="numpy-scipy",
-            library_version=f"numpy {version('numpy')}; scipy {version('scipy')}",
+            library_version=(
+                f"numpy {installed_distribution_version('numpy')}; "
+                f"scipy {installed_distribution_version('scipy')}"
+            ),
             diagnostics={
                 "policy_name": estimator_input.policy_name,
                 "primary_method": estimator_input.primary_method,

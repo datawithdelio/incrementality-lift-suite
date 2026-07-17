@@ -68,6 +68,7 @@ def build_run() -> AnalysisRun:
         created_at=NOW,
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
     )
 
 

@@ -25,6 +25,9 @@ from incrementality_api.domain.analysis_runs.execution_job_status import (
 from incrementality_api.domain.analysis_runs.execution_jobs import (
     AnalysisExecutionJob,
 )
+from incrementality_api.domain.analysis_runs.statistical_library_versions import (
+    StatisticalLibraryVersions,
+)
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
     AnalysisRunStatus,
@@ -156,6 +159,23 @@ def build_mapping(
 class FixedClock:
     def now(self) -> datetime:
         return RUN_CREATED_AT
+
+
+class FakeStatisticalRuntimeVersions:
+    def __init__(self) -> None:
+        self.received: list[AnalysisEstimatorType] = []
+
+    def for_estimator(
+        self,
+        estimator_type: AnalysisEstimatorType,
+    ) -> StatisticalLibraryVersions:
+        self.received.append(estimator_type)
+        return StatisticalLibraryVersions.from_mapping(
+            {
+                "numpy": "2.3.1",
+                "statsmodels": "0.14.5",
+            }
+        )
 
 
 class FakeDatasetRepository:
@@ -359,11 +379,13 @@ async def test_queues_analysis_run_atomically() -> None:
         mapping=mapping,
     )
 
+    runtime_versions = FakeStatisticalRuntimeVersions()
     result = await QueueAnalysisRun(
         unit_of_work=unit_of_work,
         clock=FixedClock(),
         application_version="0.1.0",
         source_revision="a" * 40,
+        statistical_runtime_versions=runtime_versions,
     ).execute(
         build_command(
             workspace_id=workspace_id,
@@ -388,6 +410,17 @@ async def test_queues_analysis_run_atomically() -> None:
     assert result.estimator_version == "did-v1"
     assert result.application_version == "0.1.0"
     assert result.source_revision == "a" * 40
+    assert result.statistical_library_versions == (
+        StatisticalLibraryVersions.from_mapping(
+            {
+                "numpy": "2.3.1",
+                "statsmodels": "0.14.5",
+            }
+        )
+    )
+    assert runtime_versions.received == [
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
+    ]
     assert result.random_seed == 1_729
 
     assert result.configuration_json == ('{"alpha":0.05,"include_unit_fixed_effects":true}')
@@ -450,6 +483,7 @@ async def test_queue_rejects_unavailable_dataset() -> None:
             clock=FixedClock(),
             application_version=APPLICATION_VERSION,
             source_revision=SOURCE_REVISION,
+            statistical_runtime_versions=FakeStatisticalRuntimeVersions(),
         ).execute(
             build_command(
                 workspace_id=workspace_id,
@@ -497,6 +531,7 @@ async def test_queue_requires_ready_dataset() -> None:
             clock=FixedClock(),
             application_version=APPLICATION_VERSION,
             source_revision=SOURCE_REVISION,
+            statistical_runtime_versions=FakeStatisticalRuntimeVersions(),
         ).execute(
             build_command(
                 workspace_id=workspace_id,
@@ -538,6 +573,7 @@ async def test_queue_requires_requested_mapping_version() -> None:
             clock=FixedClock(),
             application_version=APPLICATION_VERSION,
             source_revision=SOURCE_REVISION,
+            statistical_runtime_versions=FakeStatisticalRuntimeVersions(),
         ).execute(
             build_command(
                 workspace_id=workspace_id,
@@ -593,6 +629,7 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
         created_at=RUN_CREATED_AT,
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
     )
 
     unit_of_work = FakeAnalysisRunUnitOfWork(

@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import numpy as np
-import scipy  # type: ignore[import-untyped]
 from scipy.optimize import minimize  # type: ignore[import-untyped]
 
 from incrementality_api.application.analysis_execution.estimation import (
@@ -11,6 +10,9 @@ from incrementality_api.application.analysis_execution.estimation import (
     PanelObservation,
     PermanentEstimationError,
     SyntheticControlInput,
+)
+from incrementality_api.infrastructure.estimation.package_versions import (
+    installed_distribution_version,
 )
 
 
@@ -60,6 +62,8 @@ class SyntheticControlDiagnosticPolicy:
 
 class ScipySyntheticControlEstimator:
     """Thin constrained-weight adapter backed by SciPy SLSQP."""
+
+    statistical_packages = ("numpy", "scipy")
 
     def __init__(self, policy: SyntheticControlDiagnosticPolicy | None = None) -> None:
         self._policy = policy or SyntheticControlDiagnosticPolicy()
@@ -169,7 +173,7 @@ class ScipySyntheticControlEstimator:
             confidence_interval_high=average_effect + 1.96 * standard_error,
             observation_count=len(estimator_input.observations),
             library_name="scipy",
-            library_version=scipy.__version__,
+            library_version=installed_distribution_version("scipy"),
             diagnostics=diagnostics,
             incremental_outcome=float(np.sum(effects[first_post:])),
             relative_lift=(

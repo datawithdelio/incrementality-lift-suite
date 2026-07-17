@@ -81,6 +81,7 @@ def queue_run(
         created_at=created_at,
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
     )
 
 
@@ -113,6 +114,7 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
         created_at=CREATED_AT,
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
     )
 
     assert run.workspace_id == workspace_id
@@ -237,6 +239,7 @@ def test_runtime_lineage_must_not_be_blank_for_new_runs(
             estimator_version="did-v1",
             application_version=application_version,
             source_revision=source_revision,
+            statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
             random_seed=1_729,
             configuration_json=CONFIGURATION_JSON,
             created_at=CREATED_AT,
@@ -285,6 +288,7 @@ def test_lifecycle_transitions_preserve_runtime_lineage() -> None:
     for run in (queued, running, succeeded):
         assert run.application_version == APPLICATION_VERSION
         assert run.source_revision == SOURCE_REVISION
+        assert run.statistical_library_versions == queued.statistical_library_versions
 
 
 def test_start_cannot_precede_creation() -> None:

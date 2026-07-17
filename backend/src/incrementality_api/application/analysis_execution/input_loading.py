@@ -567,6 +567,9 @@ class ProductionAnalysisInputLoader:
             return AnalysisEstimatorInput(
                 estimator_type=metadata.run.estimator_type,
                 random_seed=random_seed,
+                statistical_library_versions=(
+                    metadata.run.statistical_library_versions
+                ),
                 payload=builder.build(
                     rows=rows,
                     mapping=metadata.mapping,
@@ -577,6 +580,9 @@ class ProductionAnalysisInputLoader:
         return AnalysisEstimatorInput(
             estimator_type=metadata.run.estimator_type,
             random_seed=random_seed,
+            statistical_library_versions=(
+                metadata.run.statistical_library_versions
+            ),
             payload=self._input_builder.build(
                 rows=rows,
                 mapping=metadata.mapping,

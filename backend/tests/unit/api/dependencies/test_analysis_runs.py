@@ -1,6 +1,9 @@
 from types import SimpleNamespace
 
 from incrementality_api.api.dependencies import analysis_runs
+from incrementality_api.infrastructure.estimation.runtime_versions import (
+    StatisticalRuntimeVersionProvider,
+)
 
 
 def test_queue_service_injects_runtime_versions(
@@ -38,3 +41,7 @@ def test_queue_service_injects_runtime_versions(
 
     assert service._application_version == "0.1.0"
     assert service._source_revision == "a" * 40
+    assert isinstance(
+        service._statistical_runtime_versions,
+        StatisticalRuntimeVersionProvider,
+    )

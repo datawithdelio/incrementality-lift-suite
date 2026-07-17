@@ -125,6 +125,7 @@ def build_run(
         created_at=CREATED_AT,
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
     )
 
 
@@ -470,11 +471,12 @@ async def test_queue_request_rejects_extra_fields() -> None:
     [
         ("application_version", "client-controlled-version"),
         ("source_revision", "f" * 40),
+        ("statistical_library_versions", {"numpy": "client-controlled-version"}),
     ],
 )
 async def test_queue_request_rejects_client_supplied_runtime_lineage(
     field_name: str,
-    field_value: str,
+    field_value: object,
 ) -> None:
     workspace_id = uuid4()
     project_id = uuid4()

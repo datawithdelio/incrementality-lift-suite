@@ -16,6 +16,9 @@ from incrementality_api.domain.analysis_runs.execution_job_status import (
     AnalysisExecutionJobStatus,
 )
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
+from incrementality_api.domain.analysis_runs.statistical_library_versions import (
+    StatisticalLibraryVersions,
+)
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 from incrementality_api.workers.handlers.analysis_execution import (
     RunNextAnalysisExecutionJob,
@@ -122,6 +125,19 @@ class FakeSelector:
         return self._estimator
 
 
+class FakeStatisticalRuntimeVersions:
+    def __init__(self, versions: dict[str, str]) -> None:
+        self._snapshot = StatisticalLibraryVersions.from_mapping(versions)
+        self.received: list[AnalysisEstimatorType] = []
+
+    def for_estimator(
+        self,
+        estimator_type: AnalysisEstimatorType,
+    ) -> StatisticalLibraryVersions:
+        self.received.append(estimator_type)
+        return self._snapshot
+
+
 @dataclass
 class FakePersistSuccess:
     result: AnalysisExecutionJob
@@ -165,6 +181,12 @@ def build_input() -> AnalysisEstimatorInput:
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         random_seed=1_729,
         payload=object(),
+        statistical_library_versions=StatisticalLibraryVersions.from_mapping(
+            {
+                "numpy": "2.3.1",
+                "statsmodels": "0.14.5",
+            }
+        ),
     )
 
 
@@ -184,6 +206,7 @@ def build_processor(
     job: AnalysisExecutionJob,
     loader: FakeInputLoader,
     selector: FakeSelector,
+    runtime_versions: FakeStatisticalRuntimeVersions | None = None,
 ) -> tuple[
     RunNextAnalysisExecutionJob,
     FakePersistSuccess,
@@ -197,11 +220,49 @@ def build_processor(
         claim_next=FakeClaimNext(job),
         input_loader=loader,
         estimator_selector=selector,
+        statistical_runtime_versions=(
+            runtime_versions
+            or FakeStatisticalRuntimeVersions(
+                {
+                    "numpy": "2.3.1",
+                    "statsmodels": "0.14.5",
+                }
+            )
+        ),
         persist_success=persist_success,
         record_retryable_failure=record_retry,
         mark_failed=mark_failed,
     )
     return processor, persist_success, record_retry, mark_failed
+
+
+@pytest.mark.asyncio
+async def test_runtime_version_mismatch_dead_letters_before_estimation() -> None:
+    job = build_running_job()
+    estimator = FakeEstimator(build_result())
+    runtime_versions = FakeStatisticalRuntimeVersions(
+        {
+            "numpy": "2.4.0",
+            "statsmodels": "0.14.5",
+        }
+    )
+    processor, persist_success, record_retry, mark_failed = build_processor(
+        job=job,
+        loader=FakeInputLoader(build_input()),
+        selector=FakeSelector(estimator),
+        runtime_versions=runtime_versions,
+    )
+
+    settled = await processor.execute()
+
+    assert settled is not None
+    assert settled.status is AnalysisExecutionJobStatus.DEAD_LETTER
+    assert estimator.inputs == []
+    assert persist_success.calls == []
+    assert record_retry.calls == []
+    assert mark_failed.calls == [
+        (job.id, "Worker statistical-library versions do not match the queued snapshot.")
+    ]
 
 
 @pytest.mark.asyncio

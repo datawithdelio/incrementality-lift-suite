@@ -11,6 +11,9 @@ from incrementality_api.application.analysis_execution.estimation import (
     DifferenceInDifferencesObservation,
     PermanentEstimationError,
 )
+from incrementality_api.infrastructure.estimation.package_versions import (
+    installed_distribution_version,
+)
 
 
 class DifferenceInDifferencesDiagnosticPolicy:
@@ -64,6 +67,8 @@ class DifferenceInDifferencesDiagnosticPolicy:
 
 class StatsmodelsDifferenceInDifferencesEstimator:
     """Estimate clustered DiD statistics and persist structured diagnostics."""
+
+    statistical_packages = ("numpy", "statsmodels")
 
     def __init__(self, policy: DifferenceInDifferencesDiagnosticPolicy | None = None) -> None:
         self._policy = policy or DifferenceInDifferencesDiagnosticPolicy()
@@ -175,7 +180,7 @@ class StatsmodelsDifferenceInDifferencesEstimator:
             confidence_interval_high=confidence_high,
             observation_count=len(observations),
             library_name="statsmodels",
-            library_version=str(sm.__version__),
+            library_version=installed_distribution_version("statsmodels"),
             diagnostics=diagnostics,
             incremental_outcome=effect * treated_post_count,
             relative_lift=relative_lift,

@@ -18,6 +18,9 @@ from incrementality_api.domain.analysis_runs.execution_job_status import (
 from incrementality_api.domain.analysis_runs.execution_jobs import (
     AnalysisExecutionJob,
 )
+from incrementality_api.domain.analysis_runs.statistical_library_versions import (
+    StatisticalLibraryVersions,
+)
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
@@ -58,6 +61,17 @@ class FixedClock:
     def now(self) -> datetime:
         self.call_count += 1
         return NOW
+
+
+class StubStatisticalRuntimeVersions:
+    def for_estimator(
+        self,
+        estimator_type: AnalysisEstimatorType,
+    ) -> StatisticalLibraryVersions:
+        del estimator_type
+        return StatisticalLibraryVersions.from_mapping(
+            {"numpy": "2.3.1", "statsmodels": "0.14.5"}
+        )
 
 
 class StubDatasetRepository:
@@ -209,6 +223,7 @@ async def test_queues_run_and_execution_job_atomically() -> None:
         clock=clock,
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_runtime_versions=StubStatisticalRuntimeVersions(),
     ).execute(command)
 
     assert unit_of_work.analysis_runs.added == [run]
@@ -248,6 +263,7 @@ async def test_execution_job_failure_prevents_commit() -> None:
             clock=FixedClock(),
             application_version=APPLICATION_VERSION,
             source_revision=SOURCE_REVISION,
+            statistical_runtime_versions=StubStatisticalRuntimeVersions(),
         ).execute(build_command())
 
     assert len(unit_of_work.analysis_runs.added) == 1

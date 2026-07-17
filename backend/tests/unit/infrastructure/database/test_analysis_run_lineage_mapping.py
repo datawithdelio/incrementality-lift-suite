@@ -23,6 +23,10 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
         estimator_version="did-v1",
         application_version="0.1.0",
         source_revision="a" * 40,
+        statistical_library_versions={
+            "numpy": "2.3.1",
+            "statsmodels": "0.14.5",
+        },
         random_seed=1_729,
         configuration_json='{"alpha":0.05}',
         created_at=datetime(2026, 7, 16, 18, 30, tzinfo=UTC),
@@ -34,6 +38,9 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
     assert model.dataset_byte_size == run.dataset_byte_size
     assert model.application_version == run.application_version
     assert model.source_revision == run.source_revision
+    assert model.statistical_library_versions_json == (
+        '{"numpy":"2.3.1","statsmodels":"0.14.5"}'
+    )
     assert model.random_seed == run.random_seed
     assert model.input_fingerprint_sha256 == run.input_fingerprint_sha256
 
@@ -56,6 +63,10 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
         estimator_version="did-v1",
         application_version="0.1.0",
         source_revision="a" * 40,
+        statistical_library_versions={
+            "numpy": "2.3.1",
+            "statsmodels": "0.14.5",
+        },
         random_seed=1_729,
         configuration_json='{"alpha":0.05}',
         created_at=datetime(2026, 7, 16, 18, 30, tzinfo=UTC),
@@ -63,8 +74,10 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
     historical_model = to_analysis_run_model(run)
     historical_model.application_version = None
     historical_model.source_revision = None
+    historical_model.statistical_library_versions_json = None
 
     restored = to_analysis_run(historical_model)
 
     assert restored.application_version is None
     assert restored.source_revision is None
+    assert restored.statistical_library_versions is None

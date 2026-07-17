@@ -94,6 +94,9 @@ from incrementality_api.infrastructure.estimation.marketing_mix_model import (
 from incrementality_api.infrastructure.estimation.off_policy_evaluation import (
     StatsmodelsOffPolicyEstimator,
 )
+from incrementality_api.infrastructure.estimation.runtime_versions import (
+    StatisticalRuntimeVersionProvider,
+)
 from incrementality_api.infrastructure.estimation.synthetic_control import (
     ScipySyntheticControlEstimator,
 )
@@ -288,6 +291,7 @@ def build_analysis_execution_worker() -> AnalysisExecutionWorker:
         ),
         input_loader=input_loader,
         estimator_selector=estimator_selector,
+        statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
         persist_success=PersistAnalysisExecutionSuccess(
             unit_of_work=SqlAlchemyAnalysisExecutionJobUnitOfWork(session_factory),
             clock=clock,

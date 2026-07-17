@@ -85,6 +85,7 @@ def build_queued_run(
         created_at=CREATED_AT,
         application_version=APPLICATION_VERSION,
         source_revision=SOURCE_REVISION,
+        statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
     )
 
 

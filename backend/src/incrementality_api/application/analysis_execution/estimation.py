@@ -3,6 +3,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
+from incrementality_api.domain.analysis_runs.statistical_library_versions import (
+    StatisticalLibraryVersions,
+)
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 
 
@@ -100,6 +103,7 @@ class AnalysisEstimatorInput:
     estimator_type: AnalysisEstimatorType
     random_seed: int
     payload: object
+    statistical_library_versions: StatisticalLibraryVersions | None = None
 
 
 @dataclass(frozen=True, slots=True)
