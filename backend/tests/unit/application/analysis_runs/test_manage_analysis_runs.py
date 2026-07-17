@@ -25,6 +25,9 @@ from incrementality_api.domain.analysis_runs.execution_job_status import (
 from incrementality_api.domain.analysis_runs.execution_jobs import (
     AnalysisExecutionJob,
 )
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.statistical_library_versions import (
     StatisticalLibraryVersions,
 )
@@ -404,6 +407,16 @@ async def test_queues_analysis_run_atomically() -> None:
 
     assert result.semantic_mapping_id == (mapping.id)
     assert result.semantic_mapping_version == 3
+    assert result.semantic_mapping_snapshot == SemanticMappingSnapshot.create(
+        time_column=mapping.time_column,
+        unit_column=mapping.unit_column,
+        treatment_column=mapping.treatment_column,
+        outcome_column=mapping.outcome_column,
+        spend_column=mapping.spend_column,
+        covariate_columns=mapping.covariate_columns,
+        treatment_value=mapping.treatment_value,
+        control_value=mapping.control_value,
+    )
     assert result.created_by_user_id == user_id
 
     assert result.estimator_type is (AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES)
@@ -621,6 +634,16 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
         dataset_byte_size=dataset.byte_size,
         semantic_mapping_id=mapping.id,
         semantic_mapping_version=(mapping.version),
+        semantic_mapping_snapshot=SemanticMappingSnapshot.create(
+            time_column=mapping.time_column,
+            unit_column=mapping.unit_column,
+            treatment_column=mapping.treatment_column,
+            outcome_column=mapping.outcome_column,
+            spend_column=mapping.spend_column,
+            covariate_columns=mapping.covariate_columns,
+            treatment_value=mapping.treatment_value,
+            control_value=mapping.control_value,
+        ),
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",

@@ -26,6 +26,9 @@ from incrementality_api.application.analysis_execution.estimation import (
 )
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
     AnalysisRunStatus,
@@ -36,7 +39,6 @@ from incrementality_api.domain.datasets.columns import (
     normalize_dataset_column_names,
 )
 from incrementality_api.domain.datasets.entities import Dataset
-from incrementality_api.domain.datasets.semantic_mapping import DatasetSemanticMapping
 from incrementality_api.domain.datasets.status import DatasetStatus
 
 _NUMERIC_TYPES = {DatasetColumnType.INTEGER, DatasetColumnType.FLOAT}
@@ -53,7 +55,7 @@ _TREATMENT_TYPES = {
 class AnalysisInputMetadata:
     run: AnalysisRun
     dataset: Dataset
-    mapping: DatasetSemanticMapping
+    mapping: SemanticMappingSnapshot
     columns: tuple[DatasetColumnProfile, ...]
 
 
@@ -77,7 +79,7 @@ class AdditionalEstimatorInputBuilder(Protocol):
         self,
         *,
         rows: tuple[Mapping[str, str], ...],
-        mapping: DatasetSemanticMapping,
+        mapping: SemanticMappingSnapshot,
         run: AnalysisRun,
     ) -> object: ...
 
@@ -104,11 +106,7 @@ class AnalysisInputMetadataValidator:
             raise PermanentEstimationError("Analysis run is not the claimed running job.")
         if dataset.id != run.dataset_id or dataset.status is not DatasetStatus.READY:
             raise PermanentEstimationError("Analysis dataset is unavailable or not ready.")
-        if (
-            mapping.id != run.semantic_mapping_id
-            or mapping.dataset_id != dataset.id
-            or mapping.version != run.semantic_mapping_version
-        ):
+        if run.semantic_mapping_snapshot is None or mapping != run.semantic_mapping_snapshot:
             raise PermanentEstimationError("Semantic mapping snapshot does not match the run.")
 
         columns = {column.normalized_name: column for column in metadata.columns}
@@ -192,7 +190,7 @@ class DifferenceInDifferencesInputBuilder:
         self,
         *,
         rows: tuple[Mapping[str, str], ...],
-        mapping: DatasetSemanticMapping,
+        mapping: SemanticMappingSnapshot,
         configuration: DifferenceInDifferencesConfiguration,
     ) -> DifferenceInDifferencesInput:
         observations: list[DifferenceInDifferencesObservation] = []
@@ -292,7 +290,7 @@ class PanelObservationBuilder:
         self,
         *,
         rows: tuple[Mapping[str, str], ...],
-        mapping: DatasetSemanticMapping,
+        mapping: SemanticMappingSnapshot,
         intervention_time: datetime,
     ) -> tuple[PanelObservation, ...]:
         observations: list[PanelObservation] = []
@@ -350,7 +348,7 @@ class SyntheticControlInputBuilder:
         self,
         *,
         rows: tuple[Mapping[str, str], ...],
-        mapping: DatasetSemanticMapping,
+        mapping: SemanticMappingSnapshot,
         run: AnalysisRun,
     ) -> SyntheticControlInput:
         return SyntheticControlInput(
@@ -370,7 +368,7 @@ class GeoHoldoutInputBuilder:
         self,
         *,
         rows: tuple[Mapping[str, str], ...],
-        mapping: DatasetSemanticMapping,
+        mapping: SemanticMappingSnapshot,
         run: AnalysisRun,
     ) -> GeoHoldoutInput:
         configuration = _configuration(run)
@@ -422,7 +420,7 @@ class MarketingMixInputBuilder:
         self,
         *,
         rows: tuple[Mapping[str, str], ...],
-        mapping: DatasetSemanticMapping,
+        mapping: SemanticMappingSnapshot,
         run: AnalysisRun,
     ) -> MarketingMixInput:
         if mapping.spend_column is None:
@@ -474,7 +472,7 @@ class OffPolicyEvaluationInputBuilder:
         self,
         *,
         rows: tuple[Mapping[str, str], ...],
-        mapping: DatasetSemanticMapping,
+        mapping: SemanticMappingSnapshot,
         run: AnalysisRun,
     ) -> OffPolicyEvaluationInput:
         del mapping

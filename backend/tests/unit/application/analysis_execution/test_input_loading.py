@@ -19,13 +19,15 @@ from incrementality_api.application.analysis_execution.input_loading import (
 )
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 from incrementality_api.domain.datasets.columns import (
     DatasetColumnProfile,
     DatasetColumnType,
 )
 from incrementality_api.domain.datasets.entities import Dataset
-from incrementality_api.domain.datasets.semantic_mapping import DatasetSemanticMapping
 from incrementality_api.domain.datasets.status import DatasetStatus
 
 APPLICATION_VERSION = "0.1.0"
@@ -44,6 +46,16 @@ def build_metadata(
     dataset_id = uuid4()
     mapping_id = uuid4()
     user_id = uuid4()
+    mapping_snapshot = SemanticMappingSnapshot.create(
+        time_column="date",
+        unit_column="market",
+        treatment_column="treated",
+        outcome_column="revenue",
+        spend_column=None,
+        covariate_columns=(),
+        treatment_value="yes",
+        control_value="no",
+    )
     run = AnalysisRun.queue(
         workspace_id=workspace_id,
         project_id=project_id,
@@ -52,6 +64,7 @@ def build_metadata(
         dataset_byte_size=4_096,
         semantic_mapping_id=mapping_id,
         semantic_mapping_version=2,
+        semantic_mapping_snapshot=mapping_snapshot,
         created_by_user_id=user_id,
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v1",
@@ -91,22 +104,6 @@ def build_metadata(
         column_count=4,
         failure_reason=None,
     )
-    mapping = DatasetSemanticMapping(
-        id=mapping_id,
-        dataset_id=dataset_id,
-        created_by_user_id=user_id,
-        version=2,
-        time_column="date",
-        unit_column="market",
-        treatment_column="treated",
-        outcome_column="revenue",
-        spend_column=None,
-        covariate_columns=(),
-        treatment_value="yes",
-        control_value="no",
-        created_at=NOW,
-        updated_at=NOW,
-    )
     columns = (
         DatasetColumnProfile(1, "Date", "date", DatasetColumnType.DATE, False, 0),
         DatasetColumnProfile(2, "Market", "market", DatasetColumnType.STRING, False, 0),
@@ -123,7 +120,7 @@ def build_metadata(
     return job, AnalysisInputMetadata(
         run=run,
         dataset=dataset,
-        mapping=mapping,
+        mapping=mapping_snapshot,
         columns=columns,
     )
 
@@ -202,6 +199,28 @@ def test_rejects_dataset_outside_job_tenant_scope() -> None:
     )
 
     with pytest.raises(PermanentEstimationError, match="tenant scope"):
+        AnalysisInputMetadataValidator().validate(job=job, metadata=mismatched)
+
+
+def test_rejects_mapping_that_differs_from_persisted_run_snapshot() -> None:
+    job, metadata = build_metadata()
+    mismatched = AnalysisInputMetadata(
+        run=metadata.run,
+        dataset=metadata.dataset,
+        mapping=SemanticMappingSnapshot.create(
+            time_column="week",
+            unit_column="market",
+            treatment_column="treated",
+            outcome_column="revenue",
+            spend_column=None,
+            covariate_columns=(),
+            treatment_value="yes",
+            control_value="no",
+        ),
+        columns=metadata.columns,
+    )
+
+    with pytest.raises(PermanentEstimationError, match="snapshot does not match"):
         AnalysisInputMetadataValidator().validate(job=job, metadata=mismatched)
 
 

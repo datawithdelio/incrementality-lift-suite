@@ -19,6 +19,9 @@ from incrementality_api.domain.analysis_runs.entities import (
 from incrementality_api.domain.analysis_runs.execution_jobs import (
     AnalysisExecutionJob,
 )
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.statistical_library_versions import (
     StatisticalLibraryVersions,
 )
@@ -123,6 +126,16 @@ class QueueAnalysisRun:
                 dataset_byte_size=dataset.byte_size,
                 semantic_mapping_id=mapping.id,
                 semantic_mapping_version=mapping.version,
+                semantic_mapping_snapshot=SemanticMappingSnapshot.create(
+                    time_column=mapping.time_column,
+                    unit_column=mapping.unit_column,
+                    treatment_column=mapping.treatment_column,
+                    outcome_column=mapping.outcome_column,
+                    spend_column=mapping.spend_column,
+                    covariate_columns=mapping.covariate_columns,
+                    treatment_value=mapping.treatment_value,
+                    control_value=mapping.control_value,
+                ),
                 created_by_user_id=(command.created_by_user_id),
                 estimator_type=command.estimator_type,
                 estimator_version=(command.estimator_version),

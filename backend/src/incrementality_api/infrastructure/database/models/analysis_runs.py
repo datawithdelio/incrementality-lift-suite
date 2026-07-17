@@ -99,6 +99,20 @@ class AnalysisRunModel(
             name=("ck_analysis_runs_statistical_library_versions_not_empty"),
         ),
         CheckConstraint(
+            (
+                "semantic_mapping_snapshot_json IS NULL "
+                "OR btrim(semantic_mapping_snapshot_json) <> ''"
+            ),
+            name="ck_analysis_runs_mapping_snapshot_not_blank",
+        ),
+        CheckConstraint(
+            (
+                "semantic_mapping_snapshot_json IS NULL "
+                "OR jsonb_typeof(semantic_mapping_snapshot_json::jsonb) = 'object'"
+            ),
+            name="ck_analysis_runs_mapping_snapshot_object",
+        ),
+        CheckConstraint(
             "btrim(configuration_json) <> ''",
             name=("ck_analysis_runs_configuration_not_blank"),
         ),
@@ -314,6 +328,11 @@ class AnalysisRunModel(
     )
 
     statistical_library_versions_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    semantic_mapping_snapshot_json: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

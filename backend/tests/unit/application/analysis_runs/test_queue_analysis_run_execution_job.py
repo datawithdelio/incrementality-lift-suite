@@ -52,6 +52,14 @@ class StubDataset:
 class StubSemanticMapping:
     id: UUID
     version: int
+    time_column: str = "date"
+    unit_column: str = "market"
+    treatment_column: str = "treated"
+    outcome_column: str = "revenue"
+    spend_column: str | None = None
+    covariate_columns: tuple[str, ...] = ()
+    treatment_value: str = "true"
+    control_value: str = "false"
 
 
 class FixedClock:

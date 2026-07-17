@@ -10,6 +10,9 @@ from incrementality_api.domain.analysis_runs.errors import (
     InvalidAnalysisRunError,
     InvalidAnalysisRunTransitionError,
 )
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
     AnalysisRunStatus,
@@ -17,6 +20,16 @@ from incrementality_api.domain.analysis_runs.status import (
 
 APPLICATION_VERSION = "0.1.0"
 SOURCE_REVISION = "a" * 40
+MAPPING_SNAPSHOT = SemanticMappingSnapshot.create(
+    time_column="date",
+    unit_column="market",
+    treatment_column="treated",
+    outcome_column="revenue",
+    spend_column=None,
+    covariate_columns=(),
+    treatment_value="true",
+    control_value="false",
+)
 
 CREATED_AT = datetime(
     2026,
@@ -73,6 +86,7 @@ def queue_run(
         dataset_byte_size=DATASET_BYTE_SIZE,
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=(semantic_mapping_version),
+        semantic_mapping_snapshot=MAPPING_SNAPSHOT,
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version=estimator_version,
@@ -106,6 +120,7 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
         dataset_byte_size=DATASET_BYTE_SIZE,
         semantic_mapping_id=mapping_id,
         semantic_mapping_version=3,
+        semantic_mapping_snapshot=MAPPING_SNAPSHOT,
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -234,6 +249,7 @@ def test_runtime_lineage_must_not_be_blank_for_new_runs(
             dataset_byte_size=DATASET_BYTE_SIZE,
             semantic_mapping_id=uuid4(),
             semantic_mapping_version=1,
+            semantic_mapping_snapshot=MAPPING_SNAPSHOT,
             created_by_user_id=uuid4(),
             estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             estimator_version="did-v1",
@@ -289,6 +305,7 @@ def test_lifecycle_transitions_preserve_runtime_lineage() -> None:
         assert run.application_version == APPLICATION_VERSION
         assert run.source_revision == SOURCE_REVISION
         assert run.statistical_library_versions == queued.statistical_library_versions
+        assert run.semantic_mapping_snapshot == queued.semantic_mapping_snapshot
 
 
 def test_start_cannot_precede_creation() -> None:

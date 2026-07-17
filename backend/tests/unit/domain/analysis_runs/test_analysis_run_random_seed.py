@@ -2,6 +2,9 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
@@ -19,6 +22,16 @@ def test_analysis_run_records_random_seed() -> None:
         dataset_byte_size=4_096,
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=1,
+        semantic_mapping_snapshot=SemanticMappingSnapshot.create(
+            time_column="date",
+            unit_column="market",
+            treatment_column="treated",
+            outcome_column="revenue",
+            spend_column=None,
+            covariate_columns=(),
+            treatment_value="true",
+            control_value="false",
+        ),
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",

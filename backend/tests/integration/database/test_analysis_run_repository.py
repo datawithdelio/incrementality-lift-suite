@@ -327,6 +327,17 @@ async def test_queues_and_reads_analysis_run_in_tenant_scope(
     assert persisted.status is AnalysisRunStatus.QUEUED
     assert persisted.semantic_mapping_id == (scope.mapping_id)
     assert persisted.semantic_mapping_version == 1
+    assert persisted.semantic_mapping_snapshot is not None
+    assert persisted.semantic_mapping_snapshot.as_dict() == {
+        "time_column": "date",
+        "unit_column": "market",
+        "treatment_column": "treated",
+        "outcome_column": "revenue",
+        "spend_column": None,
+        "covariate_columns": [],
+        "treatment_value": "true",
+        "control_value": "false",
+    }
     assert persisted.application_version == "0.1.0"
     assert persisted.source_revision == "a" * 40
     assert persisted.statistical_library_versions is not None
@@ -399,6 +410,7 @@ async def test_persists_analysis_run_lifecycle_update(
     assert persisted.started_at == RUN_STARTED_AT
     assert persisted.completed_at is None
     assert persisted.statistical_library_versions == queued.statistical_library_versions
+    assert persisted.semantic_mapping_snapshot == queued.semantic_mapping_snapshot
 
 
 @pytest.mark.asyncio

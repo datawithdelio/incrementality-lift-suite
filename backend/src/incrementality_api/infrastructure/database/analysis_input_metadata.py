@@ -13,9 +13,6 @@ from incrementality_api.infrastructure.database.repositories.analysis_runs impor
 from incrementality_api.infrastructure.database.repositories.dataset_columns import (
     SqlAlchemyDatasetColumnRepository,
 )
-from incrementality_api.infrastructure.database.repositories.dataset_semantic_mappings import (
-    SqlAlchemyDatasetSemanticMappingRepository,
-)
 from incrementality_api.infrastructure.database.repositories.datasets import (
     SqlAlchemyDatasetRepository,
 )
@@ -31,7 +28,6 @@ class SqlAlchemyAnalysisInputMetadataReader:
         async with self._session_factory() as session:
             runs = SqlAlchemyAnalysisRunRepository(session=session)
             datasets = SqlAlchemyDatasetRepository(session=session)
-            mappings = SqlAlchemyDatasetSemanticMappingRepository(session=session)
             columns = SqlAlchemyDatasetColumnRepository(session=session)
 
             run = await runs.get_by_scope(
@@ -48,13 +44,7 @@ class SqlAlchemyAnalysisInputMetadataReader:
             )
             if dataset is None:
                 raise PermanentEstimationError("Analysis dataset metadata is unavailable.")
-            mapping = await mappings.get_by_id_scope_and_version(
-                workspace_id=job.workspace_id,
-                project_id=job.project_id,
-                dataset_id=run.dataset_id,
-                mapping_id=run.semantic_mapping_id,
-                version=run.semantic_mapping_version,
-            )
+            mapping = run.semantic_mapping_snapshot
             if mapping is None:
                 raise PermanentEstimationError("Semantic mapping snapshot is unavailable.")
             column_profiles = await columns.list_by_scope(

@@ -6,6 +6,9 @@ from uuid import UUID
 import pytest
 
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 
 WORKSPACE_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -13,6 +16,16 @@ PROJECT_ID = UUID("22222222-2222-2222-2222-222222222222")
 DATASET_ID = UUID("33333333-3333-3333-3333-333333333333")
 SEMANTIC_MAPPING_ID = UUID("44444444-4444-4444-4444-444444444444")
 USER_ID = UUID("55555555-5555-5555-5555-555555555555")
+MAPPING_SNAPSHOT: dict[str, object] = {
+    "time_column": "date",
+    "unit_column": "market",
+    "treatment_column": "treated",
+    "outcome_column": "revenue",
+    "spend_column": "spend",
+    "covariate_columns": ["promotion", "temperature"],
+    "treatment_value": "yes",
+    "control_value": "no",
+}
 
 
 def queue_run(
@@ -35,6 +48,7 @@ def queue_run(
     application_version: str = "0.1.0",
     source_revision: str = "a" * 40,
     statistical_library_versions: Mapping[str, str] | None = None,
+    semantic_mapping_snapshot: Mapping[str, object] | None = None,
     random_seed: int = 1_729,
 ) -> AnalysisRun:
     return AnalysisRun.queue(
@@ -56,6 +70,9 @@ def queue_run(
                 "numpy": "2.3.1",
                 "statsmodels": "0.14.5",
             }
+        ),
+        semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(
+            semantic_mapping_snapshot or MAPPING_SNAPSHOT
         ),
         random_seed=random_seed,
         configuration_json=configuration_json,
@@ -134,6 +151,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         dataset_byte_size=4_096,
         semantic_mapping_id=SEMANTIC_MAPPING_ID,
         semantic_mapping_version=3,
+        semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -160,6 +178,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         dataset_byte_size=4_096,
         semantic_mapping_id=SEMANTIC_MAPPING_ID,
         semantic_mapping_version=3,
+        semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -186,6 +205,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         dataset_byte_size=4_096,
         semantic_mapping_id=SEMANTIC_MAPPING_ID,
         semantic_mapping_version=3,
+        semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -239,3 +259,56 @@ def test_changing_statistical_library_version_changes_fingerprint() -> None:
     )
 
     assert changed.input_fingerprint_sha256 != baseline.input_fingerprint_sha256
+
+
+def test_equivalent_semantic_mapping_snapshots_produce_same_fingerprint() -> None:
+    first = queue_run(
+        semantic_mapping_snapshot={
+            "time_column": "date",
+            "unit_column": "market",
+            "treatment_column": "treated",
+            "outcome_column": "revenue",
+            "spend_column": "spend",
+            "covariate_columns": [" Promotion ", "TEMPERATURE"],
+            "treatment_value": "yes",
+            "control_value": "no",
+        }
+    )
+    second = queue_run()
+
+    assert first.semantic_mapping_snapshot == second.semantic_mapping_snapshot
+    assert first.input_fingerprint_sha256 == second.input_fingerprint_sha256
+
+
+@pytest.mark.parametrize(
+    ("changed_field", "changed_value"),
+    [
+        ("time_column", "week"),
+        ("unit_column", "region"),
+        ("treatment_column", "exposed"),
+        ("outcome_column", "conversions"),
+        ("spend_column", None),
+        ("covariate_columns", ["holiday"]),
+        ("treatment_value", "1"),
+        ("control_value", "0"),
+    ],
+)
+def test_changing_each_semantic_mapping_value_changes_fingerprint(
+    changed_field: str,
+    changed_value: object,
+) -> None:
+    baseline_values: dict[str, object] = {
+        "time_column": "date",
+        "unit_column": "market",
+        "treatment_column": "treated",
+        "outcome_column": "revenue",
+        "spend_column": "spend",
+        "covariate_columns": ["promotion", "temperature"],
+        "treatment_value": "yes",
+        "control_value": "no",
+    }
+    changed_values = {**baseline_values, changed_field: changed_value}
+
+    assert queue_run(
+        semantic_mapping_snapshot=changed_values
+    ).input_fingerprint_sha256 != queue_run().input_fingerprint_sha256

@@ -10,6 +10,9 @@ from incrementality_api.domain.analysis_runs.errors import (
     InvalidAnalysisRunError,
     InvalidAnalysisRunTransitionError,
 )
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.statistical_library_versions import (
     StatisticalLibraryVersions,
 )
@@ -34,6 +37,7 @@ class AnalysisRun:
     dataset_byte_size: int
     semantic_mapping_id: UUID
     semantic_mapping_version: int
+    semantic_mapping_snapshot: SemanticMappingSnapshot | None
     created_by_user_id: UUID
     estimator_type: AnalysisEstimatorType
     estimator_version: str
@@ -61,6 +65,7 @@ class AnalysisRun:
         dataset_byte_size: int,
         semantic_mapping_id: UUID,
         semantic_mapping_version: int,
+        semantic_mapping_snapshot: SemanticMappingSnapshot,
         created_by_user_id: UUID,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
@@ -98,6 +103,7 @@ class AnalysisRun:
             dataset_byte_size=dataset_byte_size,
             semantic_mapping_id=semantic_mapping_id,
             semantic_mapping_version=semantic_mapping_version,
+            semantic_mapping_snapshot=semantic_mapping_snapshot,
             estimator_type=estimator_type,
             estimator_version=normalized_estimator_version,
             application_version=normalized_application_version,
@@ -116,6 +122,7 @@ class AnalysisRun:
             dataset_byte_size=dataset_byte_size,
             semantic_mapping_id=semantic_mapping_id,
             semantic_mapping_version=(semantic_mapping_version),
+            semantic_mapping_snapshot=semantic_mapping_snapshot,
             created_by_user_id=created_by_user_id,
             estimator_type=estimator_type,
             estimator_version=(normalized_estimator_version),
@@ -284,6 +291,7 @@ class AnalysisRun:
         dataset_byte_size: int,
         semantic_mapping_id: UUID,
         semantic_mapping_version: int,
+        semantic_mapping_snapshot: SemanticMappingSnapshot,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
         application_version: str,
@@ -305,6 +313,7 @@ class AnalysisRun:
                 "random_seed": random_seed,
                 "semantic_mapping_id": str(semantic_mapping_id),
                 "semantic_mapping_version": semantic_mapping_version,
+                "semantic_mapping_snapshot": semantic_mapping_snapshot.as_dict(),
             },
             sort_keys=True,
             separators=(",", ":"),

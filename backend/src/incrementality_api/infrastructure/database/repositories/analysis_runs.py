@@ -11,6 +11,9 @@ from incrementality_api.application.analysis_runs.errors import (
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.statistical_library_versions import (
     StatisticalLibraryVersions,
 )
@@ -47,6 +50,11 @@ def to_analysis_run_model(
             if run.statistical_library_versions is not None
             else None
         ),
+        semantic_mapping_snapshot_json=(
+            run.semantic_mapping_snapshot.canonical_json
+            if run.semantic_mapping_snapshot is not None
+            else None
+        ),
         random_seed=run.random_seed,
         input_fingerprint_sha256=run.input_fingerprint_sha256,
         configuration_json=run.configuration_json,
@@ -74,6 +82,11 @@ def to_analysis_run(
         dataset_byte_size=model.dataset_byte_size,
         semantic_mapping_id=model.semantic_mapping_id,
         semantic_mapping_version=(model.semantic_mapping_version),
+        semantic_mapping_snapshot=(
+            SemanticMappingSnapshot.from_json(model.semantic_mapping_snapshot_json)
+            if model.semantic_mapping_snapshot_json is not None
+            else None
+        ),
         created_by_user_id=model.created_by_user_id,
         estimator_type=AnalysisEstimatorType(model.estimator_type),
         estimator_version=model.estimator_version,
