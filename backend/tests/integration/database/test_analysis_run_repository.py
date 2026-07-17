@@ -319,6 +319,7 @@ async def test_queues_and_reads_analysis_run_in_tenant_scope(
     assert persisted.semantic_mapping_id == (scope.mapping_id)
     assert persisted.semantic_mapping_version == 1
     assert persisted.random_seed == 1_729
+    assert persisted.input_fingerprint_sha256 == queued.input_fingerprint_sha256
     assert persisted.configuration_json == ('{"alpha":0.05,"cluster_by":"unit"}')
 
     async with tenancy_session_factory() as session:

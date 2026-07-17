@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass, replace
 from datetime import datetime
+from hashlib import sha256
 from typing import Any, Self
 from uuid import UUID, uuid4
 
@@ -33,6 +34,7 @@ class AnalysisRun:
     estimator_type: AnalysisEstimatorType
     estimator_version: str
     random_seed: int | None
+    input_fingerprint_sha256: str | None
     configuration_json: str
     status: AnalysisRunStatus
     created_at: datetime
@@ -70,6 +72,17 @@ class AnalysisRun:
 
         canonical_configuration = cls._canonicalize_configuration(configuration_json)
 
+        input_fingerprint_sha256 = cls._build_input_fingerprint_sha256(
+            dataset_checksum_sha256=dataset_checksum_sha256,
+            dataset_byte_size=dataset_byte_size,
+            semantic_mapping_id=semantic_mapping_id,
+            semantic_mapping_version=semantic_mapping_version,
+            estimator_type=estimator_type,
+            estimator_version=normalized_estimator_version,
+            random_seed=random_seed,
+            configuration_json=canonical_configuration,
+        )
+
         return cls(
             id=uuid4(),
             workspace_id=workspace_id,
@@ -83,6 +96,7 @@ class AnalysisRun:
             estimator_type=estimator_type,
             estimator_version=(normalized_estimator_version),
             random_seed=random_seed,
+            input_fingerprint_sha256=input_fingerprint_sha256,
             configuration_json=(canonical_configuration),
             status=AnalysisRunStatus.QUEUED,
             created_at=created_at,
@@ -219,6 +233,39 @@ class AnalysisRun:
             raise InvalidAnalysisRunTransitionError(
                 "Analysis completion timestamp cannot precede its start timestamp."
             )
+
+    @staticmethod
+    def _build_input_fingerprint_sha256(
+        *,
+        dataset_checksum_sha256: str,
+        dataset_byte_size: int,
+        semantic_mapping_id: UUID,
+        semantic_mapping_version: int,
+        estimator_type: AnalysisEstimatorType,
+        estimator_version: str,
+        random_seed: int,
+        configuration_json: str,
+    ) -> str:
+        canonical_input = json.dumps(
+            {
+                "configuration_json": configuration_json,
+                "dataset_byte_size": dataset_byte_size,
+                "dataset_checksum_sha256": dataset_checksum_sha256,
+                "estimator_type": estimator_type.value,
+                "estimator_version": estimator_version,
+                "random_seed": random_seed,
+                "semantic_mapping_id": str(semantic_mapping_id),
+                "semantic_mapping_version": semantic_mapping_version,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+
+        return sha256(
+            canonical_input.encode("utf-8"),
+        ).hexdigest()
 
     @staticmethod
     def _normalize_estimator_version(

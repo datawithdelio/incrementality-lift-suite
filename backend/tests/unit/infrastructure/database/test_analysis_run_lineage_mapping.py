@@ -31,6 +31,7 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
     assert model.dataset_checksum_sha256 == run.dataset_checksum_sha256
     assert model.dataset_byte_size == run.dataset_byte_size
     assert model.random_seed == run.random_seed
+    assert model.input_fingerprint_sha256 == run.input_fingerprint_sha256
 
     reconstructed = to_analysis_run(model)
 

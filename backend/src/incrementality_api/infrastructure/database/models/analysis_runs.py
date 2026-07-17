@@ -46,6 +46,10 @@ class AnalysisRunModel(
             name="ck_analysis_runs_dataset_checksum_sha256_format",
         ),
         CheckConstraint(
+            ("input_fingerprint_sha256 IS NULL OR input_fingerprint_sha256 ~ '^[0-9a-f]{64}$'"),
+            name=("ck_analysis_runs_input_fingerprint_sha256_format"),
+        ),
+        CheckConstraint(
             "dataset_byte_size > 0",
             name="ck_analysis_runs_dataset_byte_size_positive",
         ),
@@ -272,6 +276,11 @@ class AnalysisRunModel(
 
     random_seed: Mapped[int | None] = mapped_column(
         BigInteger,
+        nullable=True,
+    )
+
+    input_fingerprint_sha256: Mapped[str | None] = mapped_column(
+        String(64),
         nullable=True,
     )
 
