@@ -5,7 +5,7 @@ import math
 from collections import defaultdict
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, time
 from typing import Protocol
 
 from incrementality_api.application.analysis_execution.estimation import (
@@ -24,7 +24,11 @@ from incrementality_api.application.analysis_execution.estimation import (
     RetryableEstimationError,
     SyntheticControlInput,
 )
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
+from incrementality_api.domain.analysis_runs.errors import InvalidAnalysisRunError
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
 from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
@@ -108,6 +112,17 @@ class AnalysisInputMetadataValidator:
             raise PermanentEstimationError("Analysis dataset is unavailable or not ready.")
         if run.semantic_mapping_snapshot is None or mapping != run.semantic_mapping_snapshot:
             raise PermanentEstimationError("Semantic mapping snapshot does not match the run.")
+        period = run.analysis_period_snapshot
+        if period is None or period.estimator_type is not run.estimator_type:
+            raise PermanentEstimationError("Analysis-period snapshot does not match the run.")
+        try:
+            configured_period = AnalysisPeriodSnapshot.from_configuration_json(
+                run.estimator_type, run.configuration_json
+            )
+        except InvalidAnalysisRunError as error:
+            raise PermanentEstimationError("Analysis-period configuration is invalid.") from error
+        if configured_period != period:
+            raise PermanentEstimationError("Analysis-period snapshot does not match configuration.")
 
         columns = {column.normalized_name: column for column in metadata.columns}
         required = {
@@ -134,22 +149,41 @@ class DifferenceInDifferencesConfigurationParser:
     def parse(self, run: AnalysisRun) -> DifferenceInDifferencesConfiguration:
         if run.estimator_type is not AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES:
             raise PermanentEstimationError("Analysis run is not a DiD estimator run.")
-        try:
-            configuration = json.loads(run.configuration_json)
-        except json.JSONDecodeError as error:
-            raise PermanentEstimationError("Analysis configuration is invalid JSON.") from error
-        intervention_value = configuration.get("intervention_time")
-        if not isinstance(intervention_value, str) or not intervention_value.strip():
-            raise PermanentEstimationError(
-                "DiD configuration requires a timezone-aware intervention_time."
-            )
-        try:
-            intervention_time = datetime.fromisoformat(intervention_value.strip())
-        except ValueError as error:
-            raise PermanentEstimationError("intervention_time must be ISO-8601.") from error
-        if intervention_time.tzinfo is None or intervention_time.utcoffset() is None:
-            raise PermanentEstimationError("intervention_time must be timezone-aware.")
-        return DifferenceInDifferencesConfiguration(intervention_time=intervention_time)
+        return DifferenceInDifferencesConfiguration(intervention_time=_intervention_time(run))
+
+
+class AnalysisPeriodRowFilter:
+    """Restrict estimator rows to the immutable calendar window."""
+
+    def filter(
+        self,
+        *,
+        rows: tuple[dict[str, str], ...],
+        time_column: str,
+        snapshot: AnalysisPeriodSnapshot | None,
+    ) -> tuple[dict[str, str], ...]:
+        if snapshot is None:
+            raise PermanentEstimationError("Analysis-period snapshot is unavailable.")
+        selected: list[dict[str, str]] = []
+        for row_number, row in enumerate(rows, start=2):
+            raw_value = row.get(time_column)
+            if raw_value is None or not raw_value.strip():
+                raise PermanentEstimationError(
+                    f"CSV row {row_number} has a missing value for '{time_column}'."
+                )
+            try:
+                observed_date = datetime.fromisoformat(
+                    raw_value.strip().replace("Z", "+00:00")
+                ).date()
+            except ValueError as error:
+                raise PermanentEstimationError(
+                    f"CSV row {row_number} has an invalid analysis date."
+                ) from error
+            if snapshot.contains(observed_date):
+                selected.append(row)
+        if not selected:
+            raise PermanentEstimationError("No dataset rows fall inside the analysis period.")
+        return tuple(selected)
 
 
 class CsvAnalysisRowLoader:
@@ -271,16 +305,10 @@ def _configuration(run: AnalysisRun) -> dict[str, object]:
 
 
 def _intervention_time(run: AnalysisRun) -> datetime:
-    value = _configuration(run).get("intervention_time")
-    if not isinstance(value, str):
-        raise PermanentEstimationError("Analysis requires intervention_time.")
-    try:
-        timestamp = datetime.fromisoformat(value)
-    except ValueError as error:
-        raise PermanentEstimationError("intervention_time must be ISO-8601.") from error
-    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
-        raise PermanentEstimationError("intervention_time must be timezone-aware.")
-    return timestamp
+    snapshot = run.analysis_period_snapshot
+    if snapshot is None or snapshot.intervention_date is None:
+        raise PermanentEstimationError("Analysis requires a persisted intervention date.")
+    return datetime.combine(snapshot.intervention_date, time.min, tzinfo=UTC)
 
 
 class PanelObservationBuilder:
@@ -530,6 +558,7 @@ class ProductionAnalysisInputLoader:
         row_loader: CsvAnalysisRowLoader,
         configuration_parser: DifferenceInDifferencesConfigurationParser,
         input_builder: DifferenceInDifferencesInputBuilder,
+        period_filter: AnalysisPeriodRowFilter,
         additional_builders: Mapping[AnalysisEstimatorType, AdditionalEstimatorInputBuilder]
         | None = None,
     ) -> None:
@@ -539,6 +568,7 @@ class ProductionAnalysisInputLoader:
         self._row_loader = row_loader
         self._configuration_parser = configuration_parser
         self._input_builder = input_builder
+        self._period_filter = period_filter
         self._additional_builders = dict(additional_builders or {})
 
     async def load(self, job: AnalysisExecutionJob) -> AnalysisEstimatorInput:
@@ -555,6 +585,11 @@ class ProductionAnalysisInputLoader:
         random_seed = metadata.run.random_seed
         if random_seed is None:
             raise PermanentEstimationError("Analysis run random seed is unavailable.")
+        rows = self._period_filter.filter(
+            rows=rows,
+            time_column=metadata.mapping.time_column,
+            snapshot=metadata.run.analysis_period_snapshot,
+        )
 
         if metadata.run.estimator_type is not AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES:
             builder = self._additional_builders.get(metadata.run.estimator_type)

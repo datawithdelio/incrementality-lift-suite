@@ -287,7 +287,10 @@ def build_queue_command(
         configuration_json="""
         {
           "cluster_by": "unit",
-          "alpha": 0.05
+          "alpha": 0.05,
+          "analysis_start_date": "2026-01-01",
+          "analysis_end_date": "2026-01-31",
+          "intervention_date": "2026-01-15"
         }
         """,
     )
@@ -347,7 +350,7 @@ async def test_queues_and_reads_analysis_run_in_tenant_scope(
     }
     assert persisted.random_seed == 1_729
     assert persisted.input_fingerprint_sha256 == queued.input_fingerprint_sha256
-    assert persisted.configuration_json == ('{"alpha":0.05,"cluster_by":"unit"}')
+    assert persisted.analysis_period_snapshot == queued.analysis_period_snapshot
 
     async with tenancy_session_factory() as session:
         count = await session.scalar(select(func.count()).select_from(AnalysisRunModel))

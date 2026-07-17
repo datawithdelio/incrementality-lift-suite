@@ -27,6 +27,9 @@ from incrementality_api.application.analysis_runs.manage_analysis_runs import (
     GetAnalysisRunQuery,
     QueueAnalysisRunCommand,
 )
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -124,6 +127,14 @@ def build_run(
             covariate_columns=(),
             treatment_value="true",
             control_value="false",
+        ),
+        analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
+            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            {
+                "analysis_start_date": "2026-01-01",
+                "analysis_end_date": "2026-01-31",
+                "intervention_date": "2026-01-15",
+            },
         ),
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
@@ -230,7 +241,14 @@ async def test_queues_analysis_run() -> None:
     assert payload["estimator_version"] == "did-v1"
     assert payload["configuration"] == {
         "alpha": 0.05,
+        "analysis_start_date": "2026-01-01",
+        "analysis_end_date": "2026-01-31",
         "cluster_by": "unit",
+        "intervention_date": "2026-01-15",
+        "pre_period_start_date": "2026-01-01",
+        "pre_period_end_date": "2026-01-14",
+        "post_period_start_date": "2026-01-15",
+        "post_period_end_date": "2026-01-31",
     }
     assert payload["status"] == "queued"
     assert payload["started_at"] is None
@@ -297,7 +315,14 @@ async def test_reads_analysis_run() -> None:
     assert response.json()["status"] == "queued"
     assert response.json()["configuration"] == {
         "alpha": 0.05,
+        "analysis_start_date": "2026-01-01",
+        "analysis_end_date": "2026-01-31",
         "cluster_by": "unit",
+        "intervention_date": "2026-01-15",
+        "pre_period_start_date": "2026-01-01",
+        "pre_period_end_date": "2026-01-14",
+        "post_period_start_date": "2026-01-15",
+        "post_period_end_date": "2026-01-31",
     }
 
     assert get_service.queries == [
@@ -488,6 +513,10 @@ async def test_queue_request_rejects_extra_fields() -> None:
         (
             "semantic_mapping_snapshot",
             {"time_column": "client-controlled-column"},
+        ),
+        (
+            "analysis_period_snapshot",
+            {"analysis_start_date": "client-controlled-date"},
         ),
     ],
 )

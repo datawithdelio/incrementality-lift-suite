@@ -55,6 +55,7 @@ def test_analysis_run_table_and_columns() -> None:
         "source_revision",
         "statistical_library_versions_json",
         "semantic_mapping_snapshot_json",
+        "analysis_period_snapshot_json",
         "random_seed",
         "input_fingerprint_sha256",
         "configuration_json",
@@ -147,6 +148,9 @@ def test_analysis_run_table_and_columns() -> None:
     )
     assert table.c.semantic_mapping_snapshot_json.nullable
 
+    assert isinstance(table.c.analysis_period_snapshot_json.type, Text)
+    assert table.c.analysis_period_snapshot_json.nullable
+
     assert isinstance(
         table.c.random_seed.type,
         BigInteger,
@@ -222,6 +226,9 @@ def test_analysis_run_has_named_integrity_constraints() -> None:
             "ck_analysis_runs_statistical_library_versions_not_empty",
             "ck_analysis_runs_mapping_snapshot_not_blank",
             "ck_analysis_runs_mapping_snapshot_object",
+            "ck_analysis_runs_period_snapshot_not_blank",
+            "ck_analysis_runs_period_snapshot_object",
+            "ck_analysis_runs_period_snapshot_not_empty",
             "ck_analysis_runs_configuration_not_blank",
             "ck_analysis_runs_configuration_object",
             "ck_analysis_runs_status",

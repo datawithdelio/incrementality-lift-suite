@@ -8,6 +8,9 @@ from incrementality_api.application.analysis_runs.errors import (
     AnalysisRunPersistenceConflictError,
     AnalysisRunUnavailableError,
 )
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -55,6 +58,11 @@ def to_analysis_run_model(
             if run.semantic_mapping_snapshot is not None
             else None
         ),
+        analysis_period_snapshot_json=(
+            run.analysis_period_snapshot.canonical_json
+            if run.analysis_period_snapshot is not None
+            else None
+        ),
         random_seed=run.random_seed,
         input_fingerprint_sha256=run.input_fingerprint_sha256,
         configuration_json=run.configuration_json,
@@ -85,6 +93,11 @@ def to_analysis_run(
         semantic_mapping_snapshot=(
             SemanticMappingSnapshot.from_json(model.semantic_mapping_snapshot_json)
             if model.semantic_mapping_snapshot_json is not None
+            else None
+        ),
+        analysis_period_snapshot=(
+            AnalysisPeriodSnapshot.from_json(model.analysis_period_snapshot_json)
+            if model.analysis_period_snapshot_json is not None
             else None
         ),
         created_by_user_id=model.created_by_user_id,

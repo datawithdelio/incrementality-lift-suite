@@ -10,6 +10,9 @@ from incrementality_api.application.analysis_execution.claim_next_execution_job 
 from incrementality_api.application.analysis_execution.errors import (
     AnalysisExecutionRunUnavailableError,
 )
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -89,6 +92,14 @@ def build_queued_run(
             covariate_columns=(),
             treatment_value="true",
             control_value="false",
+        ),
+        analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
+            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            {
+                "analysis_start_date": "2026-01-01",
+                "analysis_end_date": "2026-01-31",
+                "intervention_date": "2026-01-15",
+            },
         ),
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),

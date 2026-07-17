@@ -458,6 +458,9 @@ async def test_complete_authenticated_analysis_run_api_lifecycle(
             "configuration": {
                 "cluster_by": "unit",
                 "alpha": 0.05,
+                "analysis_start_date": "2026-01-01",
+                "analysis_end_date": "2026-01-31",
+                "intervention_date": "2026-01-15",
             },
         }
 
@@ -502,7 +505,14 @@ async def test_complete_authenticated_analysis_run_api_lifecycle(
 
         assert queued_payload["configuration"] == {
             "alpha": 0.05,
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
             "cluster_by": "unit",
+            "intervention_date": "2026-01-15",
+            "pre_period_start_date": "2026-01-01",
+            "pre_period_end_date": "2026-01-14",
+            "post_period_start_date": "2026-01-15",
+            "post_period_end_date": "2026-01-31",
         }
 
         assert queued_payload["status"] == ("queued")
@@ -591,4 +601,4 @@ async def test_complete_authenticated_analysis_run_api_lifecycle(
     assert persisted_run.created_by_user_id == (primary_owner_id)
     assert persisted_run.status == "queued"
     assert persisted_run.estimator_type == ("difference_in_differences")
-    assert persisted_run.configuration_json == ('{"alpha":0.05,"cluster_by":"unit"}')
+    assert persisted_run.analysis_period_snapshot_json is not None

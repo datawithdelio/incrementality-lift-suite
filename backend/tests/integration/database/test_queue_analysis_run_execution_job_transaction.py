@@ -268,7 +268,10 @@ def build_command(
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
         random_seed=1_729,
-        configuration_json='{"alpha":0.05}',
+        configuration_json=(
+            '{"alpha":0.05,"analysis_start_date":"2026-01-01",'
+            '"analysis_end_date":"2026-01-31","intervention_date":"2026-01-15"}'
+        ),
     )
 
 

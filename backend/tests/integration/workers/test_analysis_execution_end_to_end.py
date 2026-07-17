@@ -17,6 +17,7 @@ from incrementality_api.application.analysis_execution.claim_next_execution_job 
 from incrementality_api.application.analysis_execution.estimation import AnalysisEstimatorRegistry
 from incrementality_api.application.analysis_execution.input_loading import (
     AnalysisInputMetadataValidator,
+    AnalysisPeriodRowFilter,
     CsvAnalysisRowLoader,
     DifferenceInDifferencesConfigurationParser,
     DifferenceInDifferencesInputBuilder,
@@ -243,7 +244,22 @@ async def seed_did_execution(
                 created_by_user_id=user_id,
                 estimator_type="difference_in_differences",
                 estimator_version="did-v1",
-                configuration_json=('{"intervention_time":"2026-01-03T00:00:00+00:00"}'),
+                analysis_period_snapshot_json=(
+                    '{"analysis_end_date":"2026-01-04",'
+                    '"analysis_start_date":"2026-01-01",'
+                    '"estimator_type":"difference_in_differences",'
+                    '"intervention_date":"2026-01-03",'
+                    '"post_period_end_date":"2026-01-04",'
+                    '"post_period_start_date":"2026-01-03",'
+                    '"pre_period_end_date":"2026-01-02",'
+                    '"pre_period_start_date":"2026-01-01",'
+                    '"validation_end_date":null,"validation_start_date":null}'
+                ),
+                configuration_json=(
+                    '{"analysis_start_date":"2026-01-01",'
+                    '"analysis_end_date":"2026-01-04",'
+                    '"intervention_date":"2026-01-03"}'
+                ),
                 status="queued",
                 started_at=None,
                 completed_at=None,
@@ -317,6 +333,7 @@ async def test_real_postgresql_s3_did_execution_workflow(
                 row_loader=CsvAnalysisRowLoader(),
                 configuration_parser=DifferenceInDifferencesConfigurationParser(),
                 input_builder=DifferenceInDifferencesInputBuilder(),
+                period_filter=AnalysisPeriodRowFilter(),
             ),
             estimator_selector=AnalysisEstimatorRegistry(
                 {

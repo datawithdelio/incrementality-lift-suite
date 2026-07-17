@@ -16,6 +16,9 @@ from incrementality_api.application.analysis_runs.manage_analysis_runs import (
     QueueAnalysisRun,
     QueueAnalysisRunCommand,
 )
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -354,7 +357,10 @@ def build_command(
         configuration_json="""
         {
           "include_unit_fixed_effects": true,
-          "alpha": 0.05
+          "alpha": 0.05,
+          "analysis_start_date": "2026-01-01",
+          "analysis_end_date": "2026-01-31",
+          "intervention_date": "2026-01-15"
         }
         """,
     )
@@ -417,6 +423,14 @@ async def test_queues_analysis_run_atomically() -> None:
         treatment_value=mapping.treatment_value,
         control_value=mapping.control_value,
     )
+    assert result.analysis_period_snapshot == AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-15",
+        },
+    )
     assert result.created_by_user_id == user_id
 
     assert result.estimator_type is (AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES)
@@ -436,7 +450,13 @@ async def test_queues_analysis_run_atomically() -> None:
     ]
     assert result.random_seed == 1_729
 
-    assert result.configuration_json == ('{"alpha":0.05,"include_unit_fixed_effects":true}')
+    assert result.configuration_json == (
+        '{"alpha":0.05,"analysis_end_date":"2026-01-31",'
+        '"analysis_start_date":"2026-01-01","include_unit_fixed_effects":true,'
+        '"intervention_date":"2026-01-15","post_period_end_date":"2026-01-31",'
+        '"post_period_start_date":"2026-01-15","pre_period_end_date":"2026-01-14",'
+        '"pre_period_start_date":"2026-01-01"}'
+    )
 
     assert result.created_at == RUN_CREATED_AT
 
@@ -643,6 +663,14 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
             covariate_columns=mapping.covariate_columns,
             treatment_value=mapping.treatment_value,
             control_value=mapping.control_value,
+        ),
+        analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
+            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            {
+                "analysis_start_date": "2026-01-01",
+                "analysis_end_date": "2026-01-31",
+                "intervention_date": "2026-01-15",
+            },
         ),
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),

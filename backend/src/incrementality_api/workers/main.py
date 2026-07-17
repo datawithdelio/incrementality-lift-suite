@@ -9,6 +9,7 @@ from incrementality_api.application.analysis_execution.estimation import (
 )
 from incrementality_api.application.analysis_execution.input_loading import (
     AnalysisInputMetadataValidator,
+    AnalysisPeriodRowFilter,
     CsvAnalysisRowLoader,
     DifferenceInDifferencesConfigurationParser,
     DifferenceInDifferencesInputBuilder,
@@ -263,6 +264,7 @@ def build_analysis_execution_worker() -> AnalysisExecutionWorker:
         row_loader=CsvAnalysisRowLoader(),
         configuration_parser=DifferenceInDifferencesConfigurationParser(),
         input_builder=DifferenceInDifferencesInputBuilder(),
+        period_filter=AnalysisPeriodRowFilter(),
         additional_builders={
             AnalysisEstimatorType.SYNTHETIC_CONTROL: SyntheticControlInputBuilder(),
             AnalysisEstimatorType.GEO_HOLDOUT: GeoHoldoutInputBuilder(),

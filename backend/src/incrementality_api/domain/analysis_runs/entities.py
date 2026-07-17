@@ -6,6 +6,9 @@ from hashlib import sha256
 from typing import Any, Self
 from uuid import UUID, uuid4
 
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
 from incrementality_api.domain.analysis_runs.errors import (
     InvalidAnalysisRunError,
     InvalidAnalysisRunTransitionError,
@@ -38,6 +41,7 @@ class AnalysisRun:
     semantic_mapping_id: UUID
     semantic_mapping_version: int
     semantic_mapping_snapshot: SemanticMappingSnapshot | None
+    analysis_period_snapshot: AnalysisPeriodSnapshot | None
     created_by_user_id: UUID
     estimator_type: AnalysisEstimatorType
     estimator_version: str
@@ -66,6 +70,7 @@ class AnalysisRun:
         semantic_mapping_id: UUID,
         semantic_mapping_version: int,
         semantic_mapping_snapshot: SemanticMappingSnapshot,
+        analysis_period_snapshot: AnalysisPeriodSnapshot,
         created_by_user_id: UUID,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
@@ -96,7 +101,13 @@ class AnalysisRun:
         version_snapshot = StatisticalLibraryVersions.from_mapping(
             statistical_library_versions
         )
-        canonical_configuration = cls._canonicalize_configuration(configuration_json)
+        if analysis_period_snapshot.estimator_type is not estimator_type:
+            raise InvalidAnalysisRunError(
+                "Analysis-period snapshot estimator must match the analysis estimator."
+            )
+        canonical_configuration = cls._canonicalize_configuration(
+            configuration_json, analysis_period_snapshot
+        )
 
         input_fingerprint_sha256 = cls._build_input_fingerprint_sha256(
             dataset_checksum_sha256=dataset_checksum_sha256,
@@ -104,6 +115,7 @@ class AnalysisRun:
             semantic_mapping_id=semantic_mapping_id,
             semantic_mapping_version=semantic_mapping_version,
             semantic_mapping_snapshot=semantic_mapping_snapshot,
+            analysis_period_snapshot=analysis_period_snapshot,
             estimator_type=estimator_type,
             estimator_version=normalized_estimator_version,
             application_version=normalized_application_version,
@@ -123,6 +135,7 @@ class AnalysisRun:
             semantic_mapping_id=semantic_mapping_id,
             semantic_mapping_version=(semantic_mapping_version),
             semantic_mapping_snapshot=semantic_mapping_snapshot,
+            analysis_period_snapshot=analysis_period_snapshot,
             created_by_user_id=created_by_user_id,
             estimator_type=estimator_type,
             estimator_version=(normalized_estimator_version),
@@ -292,6 +305,7 @@ class AnalysisRun:
         semantic_mapping_id: UUID,
         semantic_mapping_version: int,
         semantic_mapping_snapshot: SemanticMappingSnapshot,
+        analysis_period_snapshot: AnalysisPeriodSnapshot,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
         application_version: str,
@@ -314,6 +328,7 @@ class AnalysisRun:
                 "semantic_mapping_id": str(semantic_mapping_id),
                 "semantic_mapping_version": semantic_mapping_version,
                 "semantic_mapping_snapshot": semantic_mapping_snapshot.as_dict(),
+                "analysis_period_snapshot": analysis_period_snapshot.as_dict(),
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -344,6 +359,7 @@ class AnalysisRun:
     @staticmethod
     def _canonicalize_configuration(
         configuration_json: str,
+        analysis_period_snapshot: AnalysisPeriodSnapshot,
     ) -> str:
         if not configuration_json.strip():
             raise InvalidAnalysisRunError("Analysis configuration must not be blank.")
@@ -366,7 +382,7 @@ class AnalysisRun:
             raise InvalidAnalysisRunError("Analysis configuration must be a JSON object.")
 
         return json.dumps(
-            configuration,
+            analysis_period_snapshot.canonicalize_configuration(configuration),
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,

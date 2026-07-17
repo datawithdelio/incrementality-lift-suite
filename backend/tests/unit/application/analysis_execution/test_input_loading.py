@@ -12,10 +12,14 @@ from incrementality_api.application.analysis_execution.estimation import (
 from incrementality_api.application.analysis_execution.input_loading import (
     AnalysisInputMetadata,
     AnalysisInputMetadataValidator,
+    AnalysisPeriodRowFilter,
     CsvAnalysisRowLoader,
     DifferenceInDifferencesConfigurationParser,
     DifferenceInDifferencesInputBuilder,
     ProductionAnalysisInputLoader,
+)
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
 )
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
@@ -56,6 +60,14 @@ def build_metadata(
         treatment_value="yes",
         control_value="no",
     )
+    period_snapshot = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-02",
+        },
+    )
     run = AnalysisRun.queue(
         workspace_id=workspace_id,
         project_id=project_id,
@@ -65,6 +77,7 @@ def build_metadata(
         semantic_mapping_id=mapping_id,
         semantic_mapping_version=2,
         semantic_mapping_snapshot=mapping_snapshot,
+        analysis_period_snapshot=period_snapshot,
         created_by_user_id=user_id,
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v1",
@@ -165,6 +178,7 @@ async def test_loads_tenant_scoped_csv_and_constructs_did_input() -> None:
         row_loader=CsvAnalysisRowLoader(),
         configuration_parser=DifferenceInDifferencesConfigurationParser(),
         input_builder=DifferenceInDifferencesInputBuilder(),
+        period_filter=AnalysisPeriodRowFilter(),
     ).load(job)
 
     assert loaded.estimator_type is AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
@@ -227,8 +241,25 @@ def test_rejects_mapping_that_differs_from_persisted_run_snapshot() -> None:
 def test_rejects_configuration_without_intervention_time() -> None:
     _job, metadata = build_metadata(configuration_json="{}")
 
-    with pytest.raises(PermanentEstimationError, match="intervention_time"):
-        DifferenceInDifferencesConfigurationParser().parse(metadata.run)
+    parsed = DifferenceInDifferencesConfigurationParser().parse(metadata.run)
+
+    assert parsed.intervention_time.isoformat() == "2026-01-02T00:00:00+00:00"
+
+
+def test_period_filter_excludes_rows_outside_persisted_analysis_range() -> None:
+    _job, metadata = build_metadata()
+    rows = (
+        {"date": "2025-12-31", "market": "north"},
+        {"date": "2026-01-01", "market": "north"},
+        {"date": "2026-01-31T23:00:00+00:00", "market": "south"},
+        {"date": "2026-02-01", "market": "south"},
+    )
+
+    assert AnalysisPeriodRowFilter().filter(
+        rows=rows,
+        time_column=metadata.mapping.time_column,
+        snapshot=metadata.run.analysis_period_snapshot,
+    ) == rows[1:3]
 
 
 def test_rejects_missing_required_csv_value() -> None:

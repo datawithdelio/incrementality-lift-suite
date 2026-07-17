@@ -13,6 +13,9 @@ from incrementality_api.application.analysis_runs.ports import (
     AnalysisRunClock,
     AnalysisRunUnitOfWork,
 )
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -135,6 +138,9 @@ class QueueAnalysisRun:
                     covariate_columns=mapping.covariate_columns,
                     treatment_value=mapping.treatment_value,
                     control_value=mapping.control_value,
+                ),
+                analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration_json(
+                    command.estimator_type, command.configuration_json
                 ),
                 created_by_user_id=(command.created_by_user_id),
                 estimator_type=command.estimator_type,

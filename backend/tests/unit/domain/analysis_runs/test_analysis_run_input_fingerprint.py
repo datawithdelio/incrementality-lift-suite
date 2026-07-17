@@ -5,6 +5,9 @@ from uuid import UUID
 
 import pytest
 
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
@@ -26,6 +29,14 @@ MAPPING_SNAPSHOT: dict[str, object] = {
     "treatment_value": "yes",
     "control_value": "no",
 }
+PERIOD_SNAPSHOT = AnalysisPeriodSnapshot.from_configuration(
+    AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+    {
+        "analysis_start_date": "2026-01-01",
+        "analysis_end_date": "2026-01-31",
+        "intervention_date": "2026-01-15",
+    },
+)
 
 
 def queue_run(
@@ -50,6 +61,7 @@ def queue_run(
     statistical_library_versions: Mapping[str, str] | None = None,
     semantic_mapping_snapshot: Mapping[str, object] | None = None,
     random_seed: int = 1_729,
+    analysis_period_snapshot: AnalysisPeriodSnapshot | None = None,
 ) -> AnalysisRun:
     return AnalysisRun.queue(
         workspace_id=WORKSPACE_ID,
@@ -73,6 +85,26 @@ def queue_run(
         ),
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(
             semantic_mapping_snapshot or MAPPING_SNAPSHOT
+        ),
+        analysis_period_snapshot=(
+            analysis_period_snapshot
+            or AnalysisPeriodSnapshot.from_configuration(
+                estimator_type,
+                {
+                    "analysis_start_date": "2026-01-01",
+                    "analysis_end_date": "2026-01-31",
+                    **(
+                        {"intervention_date": "2026-01-15"}
+                        if estimator_type
+                        in {
+                            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+                            AnalysisEstimatorType.SYNTHETIC_CONTROL,
+                            AnalysisEstimatorType.GEO_HOLDOUT,
+                        }
+                        else {}
+                    ),
+                },
+            )
         ),
         random_seed=random_seed,
         configuration_json=configuration_json,
@@ -152,6 +184,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_id=SEMANTIC_MAPPING_ID,
         semantic_mapping_version=3,
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
+        analysis_period_snapshot=PERIOD_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -179,6 +212,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_id=SEMANTIC_MAPPING_ID,
         semantic_mapping_version=3,
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
+        analysis_period_snapshot=PERIOD_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -206,6 +240,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_id=SEMANTIC_MAPPING_ID,
         semantic_mapping_version=3,
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
+        analysis_period_snapshot=PERIOD_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -311,4 +346,66 @@ def test_changing_each_semantic_mapping_value_changes_fingerprint(
 
     assert queue_run(
         semantic_mapping_snapshot=changed_values
+    ).input_fingerprint_sha256 != queue_run().input_fingerprint_sha256
+
+
+def test_equivalent_analysis_period_representations_produce_same_fingerprint() -> None:
+    date_snapshot = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-15",
+        },
+    )
+    datetime_snapshot = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {
+            "analysis_start_date": "2026-01-01T00:00:00Z",
+            "analysis_end_date": "2026-01-31T23:59:59+00:00",
+            "intervention_date": "2026-01-15T12:00:00+00:00",
+        },
+    )
+
+    assert queue_run(
+        analysis_period_snapshot=date_snapshot
+    ).input_fingerprint_sha256 == queue_run(
+        analysis_period_snapshot=datetime_snapshot
+    ).input_fingerprint_sha256
+
+
+@pytest.mark.parametrize(
+    ("field_name", "changed_value"),
+    [
+        ("analysis_start_date", "2025-12-31"),
+        ("analysis_end_date", "2026-02-01"),
+        ("intervention_date", "2026-01-16"),
+        ("pre_period_start_date", "2026-01-02"),
+        ("pre_period_end_date", "2026-01-13"),
+        ("post_period_start_date", "2026-01-16"),
+        ("post_period_end_date", "2026-01-30"),
+    ],
+)
+def test_changing_each_relevant_analysis_date_changes_fingerprint(
+    field_name: str, changed_value: str
+) -> None:
+    values: dict[str, object] = {
+        "analysis_start_date": "2026-01-01",
+        "analysis_end_date": "2026-01-31",
+        "intervention_date": "2026-01-15",
+        "pre_period_start_date": "2026-01-01",
+        "pre_period_end_date": "2026-01-14",
+        "post_period_start_date": "2026-01-15",
+        "post_period_end_date": "2026-01-31",
+    }
+    if field_name == "intervention_date":
+        values["pre_period_end_date"] = "2026-01-15"
+        values["post_period_start_date"] = "2026-01-16"
+    changed = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {**values, field_name: changed_value},
+    )
+
+    assert queue_run(
+        analysis_period_snapshot=changed
     ).input_fingerprint_sha256 != queue_run().input_fingerprint_sha256
