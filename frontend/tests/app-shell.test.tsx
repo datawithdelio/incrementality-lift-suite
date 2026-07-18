@@ -47,4 +47,18 @@ describe("AppShell", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Search workspace" })).not.toBeInTheDocument();
   });
+
+  it("supports fast keyboard navigation without requiring a pointer", async () => {
+    render(<AppShell workspaceId="workspace-1"><p>Dashboard content</p></AppShell>);
+
+    fireEvent.click(screen.getByRole("button", { name: /search workspace/i }));
+    const search = screen.getByRole("combobox", { name: "Search workspace" });
+    await waitFor(() => expect(search).toHaveFocus());
+
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    expect(screen.getByRole("option", { name: /channel performance/i })).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(search, { key: "Enter" });
+
+    expect(push).toHaveBeenCalledWith("/workspaces/workspace-1/channel-performance");
+  });
 });

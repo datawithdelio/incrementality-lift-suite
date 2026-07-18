@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { logout, SESSION_TOKEN_KEY } from "../../lib/auth/api";
+import { BrandMark } from "../brand/brand-mark";
 
 type Destination = {
   label: string;
@@ -82,6 +83,7 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeResult, setActiveResult] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const destinations = useMemo(
     () => workspaceDestinations(workspaceId, pathname),
@@ -118,6 +120,22 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
     router.push(href);
   }
 
+  function handleSearchKeys(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (results.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveResult((current) => Math.min(current + 1, results.length - 1));
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveResult((current) => Math.max(current - 1, 0));
+    }
+    if (event.key === "Enter" && results[activeResult]) {
+      event.preventDefault();
+      navigate(results[activeResult].href);
+    }
+  }
+
   async function signOut() {
     const token = localStorage.getItem(SESSION_TOKEN_KEY);
     try {
@@ -136,7 +154,7 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
     <div className="app-frame">
       {mobileOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
       <aside className={`app-sidebar ${mobileOpen ? "is-open" : ""}`}>
-        <div className="sidebar-brand"><span className="product-mark" aria-hidden="true"><i /><i /><i /></span><strong>Incrementality</strong></div>
+        <div className="sidebar-brand"><BrandMark inverted /></div>
 
         <div className="workspace-switcher">
           <span>Workspace</span>
@@ -193,11 +211,11 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
       {searchOpen && (
         <div className="command-backdrop" role="presentation" onMouseDown={() => { setSearchOpen(false); setQuery(""); }}>
           <section className="command-palette" role="dialog" aria-modal="true" aria-label="Search workspace" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="command-input"><span aria-hidden="true">⌕</span><input ref={searchRef} role="combobox" aria-label="Search workspace" aria-controls="workspace-search-results" aria-expanded="true" placeholder="Search pages, reports, and datasets…" value={query} onChange={(event) => setQuery(event.target.value)} /><kbd>ESC</kbd></div>
+            <div className="command-input"><span aria-hidden="true">⌕</span><input ref={searchRef} role="combobox" aria-label="Search workspace" aria-controls="workspace-search-results" aria-activedescendant={results[activeResult] ? `workspace-result-${activeResult}` : undefined} aria-expanded="true" placeholder="Search pages, reports, and datasets…" value={query} onChange={(event) => { setQuery(event.target.value); setActiveResult(0); }} onKeyDown={handleSearchKeys} /><kbd>ESC</kbd></div>
             <div className="command-results" id="workspace-search-results" role="listbox">
               <p>{query ? "Matching destinations" : "Quick navigation"}</p>
-              {results.map((destination) => (
-                <button key={`${destination.label}-${destination.href}`} type="button" role="option" aria-selected="false" aria-label={`${destination.label}. ${destination.description}`} onClick={() => navigate(destination.href)}>
+              {results.map((destination, index) => (
+                <button id={`workspace-result-${index}`} key={`${destination.label}-${destination.href}`} type="button" role="option" aria-selected={index === activeResult} aria-label={`${destination.label}. ${destination.description}`} onMouseMove={() => setActiveResult(index)} onClick={() => navigate(destination.href)}>
                   <span className="command-symbol" aria-hidden="true">{destination.icon}</span>
                   <span><strong>{destination.label}</strong><small>{destination.description}</small></span>
                   <i aria-hidden="true">↵</i>
