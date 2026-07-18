@@ -13,3 +13,11 @@ export function datasetQualityPath(
 ): string {
   return `/workspaces/${workspaceId}/projects/${projectId}/datasets/${datasetId}/quality`;
 }
+
+export function datasetMappingPath(
+  workspaceId: string,
+  projectId: string,
+  datasetId: string,
+): string {
+  return `/workspaces/${workspaceId}/projects/${projectId}/datasets/${datasetId}/mapping`;
+}

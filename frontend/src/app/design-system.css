@@ -569,3 +569,386 @@ button:disabled {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* Semantic Mapping Wizard */
+.semantic-mapping-shell {
+  width: min(1040px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 42px 0 80px;
+}
+
+.semantic-mapping-surface {
+  display: grid;
+  gap: 24px;
+}
+
+.semantic-mapping-header {
+  padding: 10px 0 4px;
+}
+
+.semantic-mapping-header h1 {
+  margin: 0 0 10px;
+  font-size: clamp(36px, 5vw, 52px);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.semantic-mapping-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.semantic-mapping-header p + p {
+  margin-top: 7px;
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.semantic-mapping-dataset-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.semantic-mapping-dataset-nav a {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--ink-subtle);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.semantic-mapping-dataset-nav a:hover {
+  border-color: var(--accent-muted);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Step progress */
+.semantic-mapping-steps {
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.semantic-mapping-steps ol {
+  display: grid;
+  min-width: 780px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+  list-style: none;
+}
+
+.semantic-mapping-steps li {
+  position: relative;
+  display: grid;
+  min-height: 78px;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 9px;
+  padding: 14px;
+  border-right: 1px solid var(--line-soft);
+  color: var(--muted);
+}
+
+.semantic-mapping-steps li:last-child {
+  border-right: 0;
+}
+
+.semantic-mapping-steps li > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.semantic-mapping-steps li strong {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.semantic-mapping-steps li.is-complete {
+  color: var(--ink-subtle);
+}
+
+.semantic-mapping-steps li.is-complete > span {
+  border-color: #c9e4d6;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.semantic-mapping-steps li.is-current {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.semantic-mapping-steps li.is-current > span {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* Wizard step card */
+.semantic-mapping-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 13px;
+  padding: clamp(24px, 4vw, 38px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+
+.semantic-mapping-card h2 {
+  margin: 0;
+  font-size: clamp(25px, 3vw, 32px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.semantic-mapping-card > p:not([role]) {
+  max-width: 650px;
+  margin: -3px 0 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.semantic-mapping-card label {
+  margin-top: 4px;
+  color: var(--ink-subtle);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.semantic-mapping-card select,
+.semantic-mapping-card input {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  transition:
+    border-color 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+
+.semantic-mapping-card select:hover,
+.semantic-mapping-card input:hover {
+  border-color: var(--line-strong);
+}
+
+.semantic-mapping-card select:focus,
+.semantic-mapping-card input:focus {
+  border-color: var(--accent);
+  outline: 0;
+  box-shadow: 0 0 0 4px rgb(91 63 209 / 0.11);
+}
+
+.semantic-mapping-card select[multiple] {
+  min-height: 190px;
+  padding: 8px;
+}
+
+.semantic-mapping-card select[multiple] option {
+  padding: 9px 10px;
+  border-radius: 7px;
+}
+
+.semantic-mapping-card select[multiple] option:checked {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.semantic-mapping-card option:disabled {
+  color: #aaa7b2;
+}
+
+.semantic-mapping-card > [role="alert"] {
+  margin: 4px 0;
+  padding: 11px 13px;
+  border: 1px solid #e5b8bd;
+  border-radius: var(--radius-control);
+  background: var(--danger-soft);
+  color: #84313b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.semantic-mapping-card > [role="status"] {
+  margin: 4px 0;
+  padding: 11px 13px;
+  border: 1px solid #c9e4d6;
+  border-radius: var(--radius-control);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.semantic-mapping-card > button {
+  min-height: 44px;
+  justify-self: start;
+  padding: 0 17px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: 700 13px inherit;
+  cursor: pointer;
+}
+
+.semantic-mapping-card > button:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+}
+
+.semantic-mapping-card > button:last-of-type {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.semantic-mapping-card > button:last-of-type:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+/* Keep Back + Next together without changing markup. */
+.semantic-mapping-card > button + button {
+  margin-top: -57px;
+  margin-left: 82px;
+}
+
+/* Review */
+.semantic-mapping-review pre {
+  max-width: 100%;
+  margin: 4px 0 8px;
+  padding: 20px;
+  overflow: auto;
+  border: 1px solid #332e40;
+  border-radius: var(--radius-control);
+  background: #211e29;
+  color: #efedf6;
+  font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre;
+}
+
+/* Loading / blocked / failure states reuse the same shell. */
+.semantic-mapping-surface:not(:has(.semantic-mapping-header)) {
+  width: min(660px, 100%);
+  justify-self: center;
+  padding: 42px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+  text-align: center;
+}
+
+.semantic-mapping-surface:not(:has(.semantic-mapping-header)) h1 {
+  margin: 0 0 12px;
+  font-size: clamp(29px, 4vw, 40px);
+  letter-spacing: -0.04em;
+}
+
+.semantic-mapping-surface:not(:has(.semantic-mapping-header)) p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.semantic-mapping-surface:not(:has(.semantic-mapping-header)) [role="alert"] {
+  color: var(--danger);
+}
+
+@media (max-width: 800px) {
+  .semantic-mapping-shell {
+    width: min(100% - 32px, 1040px);
+    padding-top: 28px;
+  }
+
+  .semantic-mapping-header h1 {
+    font-size: 36px;
+  }
+
+  .semantic-mapping-card {
+    padding: 26px;
+  }
+}
+
+@media (max-width: 520px) {
+  .semantic-mapping-shell {
+    width: min(100% - 24px, 1040px);
+    padding: 22px 0 56px;
+  }
+
+  .semantic-mapping-surface {
+    gap: 18px;
+  }
+
+  .semantic-mapping-header h1 {
+    font-size: 32px;
+  }
+
+  .semantic-mapping-dataset-nav {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .semantic-mapping-dataset-nav a {
+    justify-content: center;
+  }
+
+  .semantic-mapping-card {
+    padding: 22px 18px;
+  }
+
+  .semantic-mapping-card > button {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .semantic-mapping-card > button + button {
+    margin-top: 0;
+    margin-left: 0;
+  }
+
+  .semantic-mapping-card select[multiple] {
+    min-height: 160px;
+  }
+
+  .semantic-mapping-review pre {
+    padding: 15px;
+    font-size: 11px;
+  }
+
+  .semantic-mapping-surface:not(:has(.semantic-mapping-header)) {
+    padding: 30px 20px;
+  }
+}

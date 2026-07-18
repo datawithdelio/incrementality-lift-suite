@@ -1,5 +1,8 @@
 "use client";
-import { datasetQualityPath } from "../../lib/datasets/routes";
+import {
+  datasetMappingPath,
+  datasetQualityPath,
+} from "../../lib/datasets/routes";
 import { useMemo, useState } from "react";
 import { ExplorerOptions, queueReport } from "@/lib/data-products/api";
 import { useDatasetExplorer, useReports } from "@/lib/data-products/use-data-products";
@@ -14,7 +17,26 @@ export function ExplorerClient({ workspaceId, projectId, datasetId }: { workspac
   const currentPage = state.kind === "ready" ? state.data.page : page;
   const totalPages = state.kind === "ready" ? state.data.total_pages : 1;
   const changeVersion = (id: string) => { if (id !== datasetId) window.location.assign(`/workspaces/${workspaceId}/projects/${projectId}/datasets/${id}/explore`); };
-  return <main className="results-shell"><Header title="Data Explorer" subtitle="Inspect structure, distributions, and method readiness before analysis."/><nav aria-label="Dataset navigation"><a href={datasetQualityPath(workspaceId, projectId, datasetId)}>View Data Quality</a></nav><div className="filters"><select aria-label="Dataset version" value={datasetId} onChange={(event) => changeVersion(event.target.value)}>{versions.map((version) => <option key={version.id} value={version.id}>{version.source_filename} · {new Date(version.created_at).toLocaleDateString()}</option>)}</select><input aria-label="Search columns" placeholder="Search columns" value={search} onChange={(event) => setSearch(event.target.value)}/><input aria-label="Filter column" placeholder="Filter column" value={filterColumn} onChange={(event) => setFilterColumn(event.target.value)}/><input aria-label="Filter value" placeholder="Contains value" value={filterValue} onChange={(event) => setFilterValue(event.target.value)}/><input aria-label="Sort column" placeholder="Sort column" value={sortColumn} onChange={(event) => setSortColumn(event.target.value)}/><label><input type="checkbox" checked={descending} onChange={(event) => setDescending(event.target.checked)}/> Descending</label><select aria-label="Causal method" value={estimator} onChange={(event) => setEstimator(event.target.value)}><option value="difference_in_differences">Difference in Differences</option><option value="synthetic_control">Synthetic Control</option><option value="geo_holdout">Geo Holdout</option><option value="marketing_mix_model">Marketing Mix Modeling</option><option value="off_policy_evaluation">Off-Policy Evaluation</option></select><a className="button secondary" href={`${base}/preview.csv?sort_column=${encodeURIComponent(sortColumn)}&descending=${descending}&filter_column=${encodeURIComponent(filterColumn)}&filter_operator=contains&filter_value=${encodeURIComponent(filterValue)}&column_search=${encodeURIComponent(search)}`}>Export filtered view</a></div><DataExplorer state={state} quality={quality} dataset={dataset}/><div className="pager"><button disabled={currentPage <= 1} onClick={() => setPage(Math.max(1, currentPage - 1))}>Previous</button><button disabled={currentPage >= totalPages} onClick={() => setPage(Math.min(totalPages, currentPage + 1))}>Next</button></div></main>;
+  return <main className="results-shell"><Header title="Data Explorer" subtitle="Inspect structure, distributions, and method readiness before analysis."/><nav aria-label="Dataset navigation">
+    <a
+      href={datasetQualityPath(
+        workspaceId,
+        projectId,
+        datasetId,
+      )}
+    >
+      View Data Quality
+    </a>
+    <a
+      href={datasetMappingPath(
+        workspaceId,
+        projectId,
+        datasetId,
+      )}
+    >
+      Semantic Mapping
+    </a>
+  </nav><div className="filters"><select aria-label="Dataset version" value={datasetId} onChange={(event) => changeVersion(event.target.value)}>{versions.map((version) => <option key={version.id} value={version.id}>{version.source_filename} · {new Date(version.created_at).toLocaleDateString()}</option>)}</select><input aria-label="Search columns" placeholder="Search columns" value={search} onChange={(event) => setSearch(event.target.value)}/><input aria-label="Filter column" placeholder="Filter column" value={filterColumn} onChange={(event) => setFilterColumn(event.target.value)}/><input aria-label="Filter value" placeholder="Contains value" value={filterValue} onChange={(event) => setFilterValue(event.target.value)}/><input aria-label="Sort column" placeholder="Sort column" value={sortColumn} onChange={(event) => setSortColumn(event.target.value)}/><label><input type="checkbox" checked={descending} onChange={(event) => setDescending(event.target.checked)}/> Descending</label><select aria-label="Causal method" value={estimator} onChange={(event) => setEstimator(event.target.value)}><option value="difference_in_differences">Difference in Differences</option><option value="synthetic_control">Synthetic Control</option><option value="geo_holdout">Geo Holdout</option><option value="marketing_mix_model">Marketing Mix Modeling</option><option value="off_policy_evaluation">Off-Policy Evaluation</option></select><a className="button secondary" href={`${base}/preview.csv?sort_column=${encodeURIComponent(sortColumn)}&descending=${descending}&filter_column=${encodeURIComponent(filterColumn)}&filter_operator=contains&filter_value=${encodeURIComponent(filterValue)}&column_search=${encodeURIComponent(search)}`}>Export filtered view</a></div><DataExplorer state={state} quality={quality} dataset={dataset}/><div className="pager"><button disabled={currentPage <= 1} onClick={() => setPage(Math.max(1, currentPage - 1))}>Previous</button><button disabled={currentPage >= totalPages} onClick={() => setPage(Math.min(totalPages, currentPage + 1))}>Next</button></div></main>;
 }
 export function ReportsClient({ workspaceId, projectId, runId }: { workspaceId: string; projectId: string; runId: string }) { const reports = useReports(workspaceId, projectId, runId); const generate = async (format: string) => { const token = localStorage.getItem("incrementality_session_token"); if (token) await queueReport(workspaceId, projectId, runId, format, token); }; const base = `/api/v1/workspaces/${workspaceId}/projects/${projectId}`; return <main className="results-shell"><Header title="Reports" subtitle="Versioned analysis records with diagnostics, quality, limitations, and business impact."/><div className="filters"><button className="button secondary" onClick={() => void generate("pdf")}>Generate PDF</button><button className="button secondary" onClick={() => void generate("csv")}>Generate CSV</button></div><ReportHistory reports={reports} downloadBase={base}/></main>; }
 function Header({ title, subtitle }: { title: string; subtitle: string }) { return <header className="measurement-hero"><p className="eyebrow">Measurement evidence</p><h1>{title}</h1><p>{subtitle}</p></header>; }

@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { useDataQuality } from "../../lib/data-products/use-data-products";
-import { datasetExplorePath } from "../../lib/datasets/routes";
+import {
+  datasetExplorePath,
+  datasetMappingPath,
+} from "../../lib/datasets/routes";
 import { DataQualityView } from "./data-quality-view";
 
 type DataQualityClientProps = {
@@ -40,6 +43,16 @@ export function DataQualityClient({
           )}
         >
           Explore Dataset
+        </Link>
+
+        <Link
+          href={datasetMappingPath(
+            workspaceId,
+            projectId,
+            datasetId,
+          )}
+        >
+          Semantic Mapping
         </Link>
       </nav>
 

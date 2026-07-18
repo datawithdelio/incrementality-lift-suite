@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { SESSION_TOKEN_KEY } from "@/lib/auth/api";
 import {
   datasetExplorePath,
+  datasetMappingPath,
   datasetQualityPath,
 } from "@/lib/datasets/routes";
 import {
@@ -130,11 +131,29 @@ export function ProjectOverview({
 
   const { project, projects } = state;
   const nextAction = projectNextAction(project);
-  const actionHref = nextAction.destination === "dataset" && project.latest_dataset_id
-    ? `/workspaces/${workspaceId}/projects/${projectId}/datasets/${project.latest_dataset_id}/explore`
-    : nextAction.destination === "analysis" && project.latest_analysis_run_id
-      ? `/workspaces/${workspaceId}/projects/${projectId}/analysis-runs/${project.latest_analysis_run_id}`
-      : null;
+
+  const datasetActionHref = project.latest_dataset_id
+    ? project.latest_dataset_status === "ready"
+      && !project.semantic_mapping_configured
+      ? datasetMappingPath(
+          workspaceId,
+          projectId,
+          project.latest_dataset_id,
+        )
+      : datasetExplorePath(
+          workspaceId,
+          projectId,
+          project.latest_dataset_id,
+        )
+    : null;
+
+  const actionHref =
+    nextAction.destination === "dataset"
+      ? datasetActionHref
+      : nextAction.destination === "analysis"
+        && project.latest_analysis_run_id
+        ? `/workspaces/${workspaceId}/projects/${projectId}/analysis-runs/${project.latest_analysis_run_id}`
+        : null;
   return (
     <main className="project-shell project-overview">
       <nav className="project-breadcrumb" aria-label="Breadcrumb"><Link href={workspacePath(workspaceId)}>Projects</Link><span aria-hidden="true">/</span><span>{project.name}</span></nav>
@@ -278,6 +297,19 @@ export function ProjectOverview({
               Explore Dataset
               <ArrowRightIcon size={16} aria-hidden="true" />
             </Link>
+              {project.semantic_mapping_configured && (
+                <Link
+                  className="project-next-link"
+                  href={datasetMappingPath(
+                    workspaceId,
+                    projectId,
+                    project.latest_dataset_id,
+                  )}
+                >
+                  View/Edit Mapping
+                  <ArrowRightIcon size={16} aria-hidden="true" />
+                </Link>
+              )}
               <Link
                 className="project-next-link"
                 href={datasetQualityPath(

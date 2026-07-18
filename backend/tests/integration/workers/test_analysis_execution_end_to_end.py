@@ -31,7 +31,20 @@ from incrementality_api.application.analysis_execution.settle_execution import (
     PersistAnalysisExecutionSuccess,
     RecordAnalysisExecutionFailure,
 )
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
+from incrementality_api.domain.analysis_runs.estimand_snapshot import EstimandSnapshot
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 from incrementality_api.infrastructure.analysis_execution.selection import (
     AnalysisSelectionRowExecutor,
 )
@@ -62,6 +75,9 @@ from incrementality_api.infrastructure.database.unit_of_work.analysis_execution_
 )
 from incrementality_api.infrastructure.estimation.difference_in_differences import (
     StatsmodelsDifferenceInDifferencesEstimator,
+)
+from incrementality_api.infrastructure.estimation.runtime_versions import (
+    StatisticalRuntimeVersionProvider,
 )
 from incrementality_api.infrastructure.storage.s3_clients import create_s3_compatible_client
 from incrementality_api.infrastructure.storage.s3_dataset_objects import S3DatasetObjectStorage
@@ -109,6 +125,63 @@ async def seed_did_execution(
     mapping_id = uuid4()
     run_id = uuid4()
     job_id = uuid4()
+
+    estimator_type = AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
+    configuration_json = (
+        '{"analysis_start_date":"2026-01-01",'
+        '"analysis_end_date":"2026-01-04",'
+        '"intervention_date":"2026-01-03"}'
+    )
+
+    semantic_mapping_snapshot = SemanticMappingSnapshot.create(
+        time_column="date",
+        unit_column="market",
+        treatment_column="treated",
+        outcome_column="revenue",
+        spend_column=None,
+        covariate_columns=(),
+        treatment_value="yes",
+        control_value="no",
+    )
+
+    analysis_period_snapshot = AnalysisPeriodSnapshot.from_configuration_json(
+        estimator_type,
+        configuration_json,
+    )
+
+    analysis_selection_snapshot = (
+        AnalysisSelectionSnapshot.from_configuration_json(
+            estimator_type=estimator_type,
+            serialized=configuration_json,
+            semantic_mapping=semantic_mapping_snapshot,
+        )
+    )
+
+    treatment_control_snapshot = (
+        TreatmentControlSnapshot.from_configuration_json(
+            estimator_type=estimator_type,
+            serialized=configuration_json,
+            semantic_mapping=semantic_mapping_snapshot,
+            analysis_period=analysis_period_snapshot,
+            analysis_selection=analysis_selection_snapshot,
+        )
+    )
+
+    estimand_snapshot = EstimandSnapshot.from_validated_run_configuration(
+        estimator_type=estimator_type,
+        semantic_mapping=semantic_mapping_snapshot,
+        analysis_period=analysis_period_snapshot,
+        analysis_selection=analysis_selection_snapshot,
+        treatment_control=treatment_control_snapshot,
+        serialized=configuration_json,
+    )
+
+    statistical_library_versions = (
+        StatisticalRuntimeVersionProvider().for_estimator(
+            estimator_type,
+        )
+    )
+
     async with session_factory() as session, session.begin():
         session.add_all(
             [
@@ -243,36 +316,35 @@ async def seed_did_execution(
                 workspace_id=workspace_id,
                 project_id=project_id,
                 dataset_id=dataset_id,
-                dataset_checksum_sha256="c" * 64,
-                dataset_byte_size=4_096,
+                dataset_checksum_sha256=sha256(content).hexdigest(),
+                dataset_byte_size=len(content),
                 semantic_mapping_id=mapping_id,
                 semantic_mapping_version=1,
-                created_by_user_id=user_id,
-                estimator_type="difference_in_differences",
-                estimator_version="did-v1",
+                semantic_mapping_snapshot_json=(
+                    semantic_mapping_snapshot.canonical_json
+                ),
                 analysis_period_snapshot_json=(
-                    '{"analysis_end_date":"2026-01-04",'
-                    '"analysis_start_date":"2026-01-01",'
-                    '"estimator_type":"difference_in_differences",'
-                    '"intervention_date":"2026-01-03",'
-                    '"post_period_end_date":"2026-01-04",'
-                    '"post_period_start_date":"2026-01-03",'
-                    '"pre_period_end_date":"2026-01-02",'
-                    '"pre_period_start_date":"2026-01-01",'
-                    '"validation_end_date":null,"validation_start_date":null}'
+                    analysis_period_snapshot.canonical_json
                 ),
                 analysis_selection_snapshot_json=(
-                    '{"eligibility_filters":[],"excluded_geographies":[],'
-                    '"excluded_segments":[],"excluded_values":{},'
-                    '"geography_column":null,"included_values":{},"row_filters":[],'
-                    '"segment_column":null,"selected_geographies":[],'
-                    '"selected_segments":[]}'
+                    analysis_selection_snapshot.canonical_json
                 ),
-                configuration_json=(
-                    '{"analysis_start_date":"2026-01-01",'
-                    '"analysis_end_date":"2026-01-04",'
-                    '"intervention_date":"2026-01-03"}'
+                treatment_control_snapshot_json=(
+                    treatment_control_snapshot.canonical_json
                 ),
+                estimand_snapshot_json=(
+                    estimand_snapshot.canonical_json
+                ),
+                created_by_user_id=user_id,
+                estimator_type=estimator_type.value,
+                estimator_version="did-v1",
+                application_version="0.1.0",
+                source_revision="a" * 40,
+                statistical_library_versions_json=(
+                    statistical_library_versions.canonical_json
+                ),
+                random_seed=1_729,
+                configuration_json=configuration_json,
                 status="queued",
                 started_at=None,
                 completed_at=None,
@@ -357,6 +429,7 @@ async def test_real_postgresql_s3_did_execution_workflow(
                     )
                 }
             ),
+            statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
             persist_success=PersistAnalysisExecutionSuccess(
                 unit_of_work=SqlAlchemyAnalysisExecutionJobUnitOfWork(tenancy_session_factory),
                 clock=clock,

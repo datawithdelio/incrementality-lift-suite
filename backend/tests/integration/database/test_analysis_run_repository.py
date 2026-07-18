@@ -451,3 +451,103 @@ async def test_analysis_run_read_is_rejected_outside_workspace_scope(
                 analysis_run_id=queued.id,
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_historical_analysis_run_keeps_mapping_snapshot_after_new_mapping_version(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    scope = await seed_analysis_scope(
+        tenancy_session_factory,
+    )
+
+    queued = await QueueAnalysisRun(
+        unit_of_work=SqlAlchemyAnalysisRunUnitOfWork(
+            session_factory=tenancy_session_factory,
+        ),
+        clock=FixedClock(),
+        application_version=APPLICATION_VERSION,
+        source_revision=SOURCE_REVISION,
+        statistical_runtime_versions=StatisticalRuntimeVersionProvider(),
+    ).execute(build_queue_command(scope))
+
+    original_mapping_id = queued.semantic_mapping_id
+    original_mapping_version = queued.semantic_mapping_version
+    original_mapping_snapshot = queued.semantic_mapping_snapshot
+    original_fingerprint = queued.input_fingerprint_sha256
+
+    assert original_mapping_snapshot is not None
+    assert original_mapping_version == 1
+    assert original_mapping_snapshot.treatment_value == "true"
+    assert original_mapping_snapshot.control_value == "false"
+
+    newer_mapping_id = uuid4()
+
+    async with (
+        tenancy_session_factory() as session,
+        session.begin(),
+    ):
+        session.add(
+            DatasetSemanticMappingModel(
+                id=newer_mapping_id,
+                dataset_id=scope.dataset_id,
+                created_by_user_id=scope.user_id,
+                version=2,
+                time_column="date",
+                unit_column="market",
+                treatment_column="treated",
+                outcome_column="revenue",
+                spend_column=None,
+                treatment_value="variant",
+                control_value="baseline",
+                created_at=CREATED_AT,
+                updated_at=UPDATED_AT,
+            )
+        )
+
+    async with tenancy_session_factory() as session:
+        latest_mapping = await session.scalar(
+            select(DatasetSemanticMappingModel)
+            .where(
+                DatasetSemanticMappingModel.dataset_id
+                == scope.dataset_id,
+            )
+            .order_by(
+                DatasetSemanticMappingModel.version.desc(),
+            )
+        )
+
+    assert latest_mapping is not None
+    assert latest_mapping.id == newer_mapping_id
+    assert latest_mapping.version == 2
+    assert latest_mapping.treatment_value == "variant"
+    assert latest_mapping.control_value == "baseline"
+
+    persisted = await GetAnalysisRun(
+        unit_of_work=SqlAlchemyAnalysisRunUnitOfWork(
+            session_factory=tenancy_session_factory,
+        ),
+    ).execute(
+        GetAnalysisRunQuery(
+            workspace_id=scope.workspace_id,
+            project_id=scope.project_id,
+            analysis_run_id=queued.id,
+        )
+    )
+
+    assert persisted.semantic_mapping_id == original_mapping_id
+    assert persisted.semantic_mapping_version == original_mapping_version
+    assert persisted.semantic_mapping_snapshot == original_mapping_snapshot
+    assert persisted.input_fingerprint_sha256 == original_fingerprint
+
+    assert persisted.semantic_mapping_snapshot is not None
+    assert persisted.semantic_mapping_snapshot.as_dict() == {
+        "time_column": "date",
+        "unit_column": "market",
+        "treatment_column": "treated",
+        "outcome_column": "revenue",
+        "spend_column": None,
+        "covariate_columns": [],
+        "treatment_value": "true",
+        "control_value": "false",
+    }
