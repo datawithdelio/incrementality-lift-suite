@@ -1,5 +1,16 @@
+from collections.abc import AsyncIterator
+
+from incrementality_api.application.tenancy.create_workspace import (
+    CreateWorkspace,
+)
+from incrementality_api.application.tenancy.list_user_workspaces import (
+    ListUserWorkspaces,
+)
 from incrementality_api.application.tenancy.provision_tenant import (
     ProvisionTenant,
+)
+from incrementality_api.infrastructure.database.repositories.tenancy import (
+    SqlAlchemyWorkspaceAccessReader,
 )
 from incrementality_api.infrastructure.database.session import (
     get_session_factory,
@@ -12,6 +23,15 @@ from incrementality_api.infrastructure.security.passwords import (
 )
 
 
+def get_create_workspace_service() -> CreateWorkspace:
+    """Build the authenticated workspace-creation use case."""
+
+    return CreateWorkspace(
+        unit_of_work=SqlAlchemyTenancyUnitOfWork(
+            session_factory=get_session_factory(),
+        ),
+    )
+
 def get_provision_tenant() -> ProvisionTenant:
     """Build one tenant-provisioning use case per request."""
 
@@ -21,3 +41,17 @@ def get_provision_tenant() -> ProvisionTenant:
         ),
         password_hasher=Argon2PasswordHasher(),
     )
+
+
+
+async def get_list_user_workspaces_service() -> AsyncIterator[ListUserWorkspaces]:
+    """Build a workspace-listing service with a request-scoped session."""
+
+    session_factory = get_session_factory()
+
+    async with session_factory() as session:
+        yield ListUserWorkspaces(
+            reader=SqlAlchemyWorkspaceAccessReader(
+                session=session,
+            ),
+        )

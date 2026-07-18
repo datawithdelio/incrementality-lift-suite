@@ -6,6 +6,9 @@ from incrementality_api.application.authentication.login import (
 from incrementality_api.application.authentication.logout import (
     Logout,
 )
+from incrementality_api.application.authentication.register_user import (
+    RegisterUser,
+)
 from incrementality_api.application.authentication.validate_session import (
     ValidateSession,
 )
@@ -14,6 +17,9 @@ from incrementality_api.infrastructure.database.session import (
 )
 from incrementality_api.infrastructure.database.unit_of_work.authentication import (
     SqlAlchemyAuthenticationUnitOfWork,
+)
+from incrementality_api.infrastructure.database.unit_of_work.tenancy import (
+    SqlAlchemyTenancyUnitOfWork,
 )
 from incrementality_api.infrastructure.security.passwords import (
     Argon2PasswordHasher,
@@ -35,6 +41,17 @@ def _build_authentication_unit_of_work() -> SqlAlchemyAuthenticationUnitOfWork:
         session_factory=get_session_factory(),
     )
 
+
+
+def get_register_user_service() -> RegisterUser:
+    """Construct the standalone account-registration use case."""
+
+    return RegisterUser(
+        unit_of_work=SqlAlchemyTenancyUnitOfWork(
+            session_factory=get_session_factory(),
+        ),
+        password_hasher=Argon2PasswordHasher(),
+    )
 
 def get_login_service() -> Login:
     """Construct the production login use case."""

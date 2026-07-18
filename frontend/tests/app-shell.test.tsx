@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../src/components/navigation/app-shell";
 
 const push = vi.fn();
+const authSignOut = vi.fn();
 let pathname = "/workspaces/workspace-1/results-dashboard";
 
 vi.mock("next/navigation", () => ({
@@ -11,9 +12,18 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
+vi.mock("../src/components/auth/auth-provider", () => ({
+  useAuth: () => ({
+    status: "authenticated",
+    userId: "user-1",
+    signOut: authSignOut,
+  }),
+}));
+
 afterEach(() => {
   cleanup();
   push.mockReset();
+  authSignOut.mockReset();
   pathname = "/workspaces/workspace-1/results-dashboard";
 });
 
@@ -61,4 +71,24 @@ describe("AppShell", () => {
 
     expect(push).toHaveBeenCalledWith("/workspaces/workspace-1/channel-performance");
   });
+
+
+  it("delegates sign out to the centralized authentication boundary", async () => {
+    authSignOut.mockResolvedValueOnce(undefined);
+
+    render(
+      <AppShell workspaceId="workspace-1">
+        <p>Dashboard content</p>
+      </AppShell>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /sign out/i }),
+    );
+
+    await waitFor(() =>
+      expect(authSignOut).toHaveBeenCalledTimes(1),
+    );
+  });
+
 });

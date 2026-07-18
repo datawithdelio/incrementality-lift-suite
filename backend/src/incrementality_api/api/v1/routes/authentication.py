@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import (
     APIRouter,
     Depends,
-    Header,
     HTTPException,
     Response,
     status,
@@ -12,11 +11,17 @@ from fastapi import (
 from incrementality_api.api.dependencies.authentication import (
     get_login_service,
     get_logout_service,
-    get_validate_session_service,
+    get_register_user_service,
+)
+from incrementality_api.api.dependencies.session import (
+    get_bearer_token,
+    get_validated_session,
 )
 from incrementality_api.api.v1.schemas.authentication import (
     LoginRequest,
     LoginResponse,
+    RegisterUserRequest,
+    RegisterUserResponse,
     SessionResponse,
 )
 from incrementality_api.application.authentication.errors import (
@@ -30,16 +35,21 @@ from incrementality_api.application.authentication.login import (
 from incrementality_api.application.authentication.logout import (
     Logout,
 )
+from incrementality_api.application.authentication.register_user import (
+    RegisterUser,
+    RegisterUserCommand,
+)
 from incrementality_api.application.authentication.validate_session import (
-    ValidateSession,
+    ValidatedSession,
+)
+from incrementality_api.application.tenancy.errors import (
+    TenancyConflictError,
 )
 
 router = APIRouter(
     prefix="/auth",
     tags=["authentication"],
 )
-
-_INVALID_SESSION_MESSAGE = "Invalid or expired session."
 
 
 def _unauthorized(detail: str) -> HTTPException:
@@ -52,18 +62,38 @@ def _unauthorized(detail: str) -> HTTPException:
     )
 
 
-def _extract_bearer_token(
-    authorization: str | None,
-) -> str:
-    if authorization is None:
-        raise _unauthorized(_INVALID_SESSION_MESSAGE)
+@router.post(
+    "/register",
+    response_model=RegisterUserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def register_user(
+    request: RegisterUserRequest,
+    service: Annotated[
+        RegisterUser,
+        Depends(get_register_user_service),
+    ],
+) -> RegisterUserResponse:
+    try:
+        result = await service.execute(
+            RegisterUserCommand(
+                email=request.email,
+                display_name=request.display_name,
+                password=request.password,
+            )
+        )
+    except TenancyConflictError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "An account with this information "
+                "already exists."
+            ),
+        ) from error
 
-    parts = authorization.split()
-
-    if len(parts) != 2 or parts[0].casefold() != "bearer" or not parts[1]:
-        raise _unauthorized(_INVALID_SESSION_MESSAGE)
-
-    return parts[1]
+    return RegisterUserResponse(
+        user_id=result.user_id,
+    )
 
 
 @router.post(
@@ -86,7 +116,9 @@ async def login_user(
             )
         )
     except InvalidCredentialsError as error:
-        raise _unauthorized(str(error)) from error
+        raise _unauthorized(
+            str(error),
+        ) from error
 
     return LoginResponse(
         user_id=result.user_id,
@@ -101,26 +133,15 @@ async def login_user(
     status_code=status.HTTP_200_OK,
 )
 async def read_session(
-    service: Annotated[
-        ValidateSession,
-        Depends(get_validate_session_service),
+    session: Annotated[
+        ValidatedSession,
+        Depends(get_validated_session),
     ],
-    authorization: Annotated[
-        str | None,
-        Header(alias="Authorization"),
-    ] = None,
 ) -> SessionResponse:
-    raw_token = _extract_bearer_token(authorization)
-
-    try:
-        result = await service.execute(raw_token)
-    except InvalidSessionTokenError as error:
-        raise _unauthorized(str(error)) from error
-
     return SessionResponse(
-        session_id=result.session_id,
-        user_id=result.user_id,
-        expires_at=result.expires_at,
+        session_id=session.session_id,
+        user_id=session.user_id,
+        expires_at=session.expires_at,
     )
 
 
@@ -133,17 +154,17 @@ async def logout_user(
         Logout,
         Depends(get_logout_service),
     ],
-    authorization: Annotated[
-        str | None,
-        Header(alias="Authorization"),
-    ] = None,
+    raw_token: Annotated[
+        str,
+        Depends(get_bearer_token),
+    ],
 ) -> Response:
-    raw_token = _extract_bearer_token(authorization)
-
     try:
         await service.execute(raw_token)
     except InvalidSessionTokenError as error:
-        raise _unauthorized(str(error)) from error
+        raise _unauthorized(
+            str(error),
+        ) from error
 
     return Response(
         status_code=status.HTTP_204_NO_CONTENT,

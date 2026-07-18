@@ -55,3 +55,30 @@ class ProvisionTenantResponse(BaseModel):
     workspace_id: UUID
     owner_user_id: UUID
     owner_membership_id: UUID
+
+
+
+class AccessibleWorkspaceResponse(BaseModel):
+    workspace_id: UUID
+    organization_id: UUID
+    name: str
+    slug: str
+    role: str
+
+
+
+class CreateWorkspaceRequest(BaseModel):
+    organization_name: str = Field(
+        min_length=1,
+        max_length=200,
+    )
+    workspace_name: str = Field(
+        min_length=1,
+        max_length=200,
+    )
+
+
+class CreateWorkspaceResponse(BaseModel):
+    organization_id: UUID
+    workspace_id: UUID
+    membership_id: UUID

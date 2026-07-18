@@ -1,5 +1,11 @@
 from types import TracebackType
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+from uuid import UUID
+
+if TYPE_CHECKING:
+    from incrementality_api.application.tenancy.list_user_workspaces import (
+        AccessibleWorkspace,
+    )
 
 from incrementality_api.domain.authentication.entities import (
     PasswordCredential,
@@ -66,3 +72,13 @@ class TenancyUnitOfWork(Protocol):
 
     async def rollback(self) -> None:
         """Roll back the current transaction."""
+
+
+
+class WorkspaceAccessReader(Protocol):
+    async def list_for_user(
+        self,
+        *,
+        user_id: UUID,
+    ) -> list["AccessibleWorkspace"]:
+        """List workspaces accessible to one user."""

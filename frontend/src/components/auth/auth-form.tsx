@@ -8,14 +8,14 @@ import {
   AuthenticationError,
   login,
   register,
-  SESSION_TOKEN_KEY,
-  WORKSPACE_ID_KEY,
 } from "../../lib/auth/api";
+import { useAuth } from "./auth-provider";
 
 type AuthMode = "login" | "register";
 
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
+  const auth = useAuth();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -30,22 +30,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     const password = String(data.get("password") ?? "");
 
     try {
-      let destination = "/";
       if (mode === "register") {
-        const result = await register({
+        await register({
           displayName: String(data.get("displayName") ?? "").trim(),
-          organizationName: String(data.get("organizationName") ?? "").trim(),
           email,
           password,
         });
-        localStorage.setItem(WORKSPACE_ID_KEY, result.workspace_id);
-        destination = `/workspaces/${result.workspace_id}/results-dashboard`;
       }
 
       const session = await login(email, password);
-      localStorage.setItem(SESSION_TOKEN_KEY, session.session_token);
-      localStorage.setItem("incrementality_session_expires_at", session.expires_at);
-      router.push(destination);
+      auth.establishSession(session);
+      router.push("/");
     } catch (caught) {
       setError(caught instanceof AuthenticationError ? caught.message : "Something went wrong. Please try again.");
     } finally {
@@ -54,20 +49,16 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   }
 
   const isLogin = mode === "login";
+  const visibleError =
+    error ?? (isLogin ? auth.sessionNotice : null);
 
   return (
     <form className="auth-form" onSubmit={submit}>
       {!isLogin && (
-        <div className="auth-field-row">
-          <label className="auth-field">
-            <span>Your name</span>
-            <input name="displayName" autoComplete="name" placeholder="Avery Stone" required />
-          </label>
-          <label className="auth-field">
-            <span>Organization</span>
-            <input name="organizationName" autoComplete="organization" placeholder="Northstar Labs" required />
-          </label>
-        </div>
+        <label className="auth-field">
+          <span>Your name</span>
+          <input name="displayName" autoComplete="name" placeholder="Avery Stone" required />
+        </label>
       )}
 
       <label className="auth-field">
@@ -92,16 +83,23 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         </span>
       </label>
 
-      {error && <p className="auth-error" role="alert">{error}</p>}
+      {visibleError && (
+        <p
+          className="auth-error"
+          role="alert"
+        >
+          {visibleError}
+        </p>
+      )}
 
       <button className="auth-submit" type="submit" disabled={pending}>
-        <span>{pending ? (isLogin ? "Signing in…" : "Building workspace…") : (isLogin ? "Sign in" : "Create workspace")}</span>
+        <span>{pending ? (isLogin ? "Signing in…" : "Creating account…") : (isLogin ? "Sign in" : "Create account")}</span>
         {!pending && <span aria-hidden="true">→</span>}
       </button>
 
       <p className="auth-switch">
         {isLogin ? "New to Incrementality?" : "Already have an account?"}{" "}
-        <Link href={isLogin ? "/register" : "/login"}>{isLogin ? "Create your workspace" : "Sign in"}</Link>
+        <Link href={isLogin ? "/register" : "/login"}>{isLogin ? "Create an account" : "Sign in"}</Link>
       </p>
     </form>
   );

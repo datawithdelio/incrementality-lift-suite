@@ -5,8 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { logout, SESSION_TOKEN_KEY } from "../../lib/auth/api";
+import { useAuth } from "../auth/auth-provider";
 import { BrandMark } from "../brand/brand-mark";
+import { WorkspaceSwitcher } from "../workspaces/workspace-switcher";
 
 type Destination = {
   label: string;
@@ -88,6 +89,7 @@ function currentTitle(pathname: string): string {
 export function AppShell({ workspaceId, children }: { workspaceId: string; children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const auth = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -145,14 +147,8 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
   }
 
   async function signOut() {
-    const token = localStorage.getItem(SESSION_TOKEN_KEY);
-    try {
-      if (token) await logout(token);
-    } finally {
-      localStorage.removeItem(SESSION_TOKEN_KEY);
-      localStorage.removeItem("incrementality_session_expires_at");
-      router.push("/login");
-    }
+    await auth.signOut();
+    router.push("/login");
   }
 
   const primary = destinations.slice(0, 2);
@@ -164,10 +160,7 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
       <aside className={`app-sidebar ${mobileOpen ? "is-open" : ""}`}>
         <div className="sidebar-brand"><BrandMark inverted /></div>
 
-        <div className="workspace-switcher">
-          <span>Workspace</span>
-          <button type="button"><i>MW</i><span><strong>Measurement workspace</strong><small>Active workspace</small></span><b aria-hidden="true">⌄</b></button>
-        </div>
+        <WorkspaceSwitcher workspaceId={workspaceId} />
 
         <nav className="app-navigation" aria-label="Workspace navigation">
           <p>Measure</p>

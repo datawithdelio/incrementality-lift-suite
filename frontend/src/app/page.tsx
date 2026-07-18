@@ -1,10 +1,12 @@
 import Link from "next/link";
 
 import { BrandMark } from "@/components/brand/brand-mark";
+import { HomeGate } from "@/components/home/home-gate";
 
 export default function Home() {
   return (
-    <main className="landing-page">
+    <HomeGate>
+      <main className="landing-page">
       <nav className="landing-nav" aria-label="Primary navigation">
         <Link className="landing-brand" href="/" aria-label="Incrementality home">
           <BrandMark />
@@ -81,6 +83,7 @@ export default function Home() {
           </article>
         </div>
       </section>
-    </main>
+      </main>
+    </HomeGate>
   );
 }

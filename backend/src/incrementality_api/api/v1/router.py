@@ -21,10 +21,14 @@ from incrementality_api.api.v1.routes.projects import (
 from incrementality_api.api.v1.routes.tenancy import (
     router as tenancy_router,
 )
+from incrementality_api.api.v1.routes.workspaces import (
+    router as workspaces_router,
+)
 
 api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(tenancy_router)
+api_router.include_router(workspaces_router)
 api_router.include_router(authentication_router)
 api_router.include_router(projects_router)
 api_router.include_router(datasets_router)

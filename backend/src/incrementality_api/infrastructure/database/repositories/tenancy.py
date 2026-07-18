@@ -1,8 +1,14 @@
+from uuid import UUID
+
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from incrementality_api.application.tenancy.errors import (
     TenancyConflictError,
+)
+from incrementality_api.application.tenancy.list_user_workspaces import (
+    AccessibleWorkspace,
 )
 from incrementality_api.domain.authentication.entities import (
     PasswordCredential,
@@ -15,6 +21,10 @@ from incrementality_api.domain.tenancy.entities import (
 )
 from incrementality_api.infrastructure.database.models.authentication import (
     UserCredentialModel,
+)
+from incrementality_api.infrastructure.database.models.tenancy import (
+    WorkspaceMembershipModel,
+    WorkspaceModel,
 )
 from incrementality_api.infrastructure.database.repositories.tenancy_mappers import (
     to_membership_model,
@@ -109,3 +119,51 @@ class SqlAlchemyMembershipRepository:
             self._session,
             to_membership_model(membership),
         )
+
+
+
+class SqlAlchemyWorkspaceAccessReader:
+    """Read workspaces accessible to one user."""
+
+    def __init__(
+        self,
+        session: AsyncSession,
+    ) -> None:
+        self._session = session
+
+    async def list_for_user(
+        self,
+        *,
+        user_id: UUID,
+    ) -> list[AccessibleWorkspace]:
+        statement = (
+            select(
+                WorkspaceMembershipModel,
+                WorkspaceModel,
+            )
+            .join(
+                WorkspaceModel,
+                WorkspaceModel.id
+                == WorkspaceMembershipModel.workspace_id,
+            )
+            .where(
+                WorkspaceMembershipModel.user_id == user_id,
+            )
+            .order_by(
+                WorkspaceModel.name.asc(),
+                WorkspaceModel.id.asc(),
+            )
+        )
+
+        result = await self._session.execute(statement)
+
+        return [
+            AccessibleWorkspace(
+                workspace_id=workspace.id,
+                organization_id=workspace.organization_id,
+                name=workspace.name,
+                slug=workspace.slug,
+                role=membership.role,
+            )
+            for membership, workspace in result.all()
+        ]
