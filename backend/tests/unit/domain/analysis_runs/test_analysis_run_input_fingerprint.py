@@ -16,6 +16,9 @@ from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
 )
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 
 WORKSPACE_ID = UUID("11111111-1111-1111-1111-111111111111")
 PROJECT_ID = UUID("22222222-2222-2222-2222-222222222222")
@@ -45,6 +48,13 @@ SELECTION_SNAPSHOT = AnalysisSelectionSnapshot.from_configuration(
     configuration={},
     semantic_mapping=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
 )
+TREATMENT_CONTROL_SNAPSHOT = TreatmentControlSnapshot.from_configuration(
+    estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+    configuration={},
+    semantic_mapping=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
+    analysis_period=PERIOD_SNAPSHOT,
+    analysis_selection=SELECTION_SNAPSHOT,
+)
 
 
 def queue_run(
@@ -71,9 +81,59 @@ def queue_run(
     random_seed: int = 1_729,
     analysis_period_snapshot: AnalysisPeriodSnapshot | None = None,
     analysis_selection_snapshot: AnalysisSelectionSnapshot | None = None,
+    treatment_control_snapshot: TreatmentControlSnapshot | None = None,
 ) -> AnalysisRun:
     mapping_snapshot = SemanticMappingSnapshot.from_mapping(
         semantic_mapping_snapshot or MAPPING_SNAPSHOT
+    )
+    period_snapshot = analysis_period_snapshot or AnalysisPeriodSnapshot.from_configuration(
+        estimator_type,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            **(
+                {"intervention_date": "2026-01-15"}
+                if estimator_type
+                in {
+                    AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+                    AnalysisEstimatorType.SYNTHETIC_CONTROL,
+                    AnalysisEstimatorType.GEO_HOLDOUT,
+                }
+                else {}
+            ),
+        },
+    )
+    selection_snapshot = (
+        analysis_selection_snapshot
+        or AnalysisSelectionSnapshot.from_configuration(
+            estimator_type=estimator_type,
+            configuration={},
+            semantic_mapping=mapping_snapshot,
+        )
+    )
+    assignment_configuration: dict[str, object] = {}
+    if estimator_type is AnalysisEstimatorType.SYNTHETIC_CONTROL:
+        assignment_configuration = {
+            "treated_unit": "Boston",
+            "donor_pool": ["Austin", "Seattle"],
+        }
+    elif estimator_type is AnalysisEstimatorType.GEO_HOLDOUT:
+        assignment_configuration = {
+            "treated_geographies": ["Boston"],
+            "control_geographies": ["Austin"],
+        }
+    elif estimator_type is AnalysisEstimatorType.OFF_POLICY_EVALUATION:
+        assignment_configuration = {
+            "policy_name": "growth_policy",
+            "behavior_propensity_column": "behavior_probability",
+            "target_propensity_column": "target_probability",
+        }
+    assignment_snapshot = treatment_control_snapshot or TreatmentControlSnapshot.from_configuration(
+        estimator_type=estimator_type,
+        configuration=assignment_configuration,
+        semantic_mapping=mapping_snapshot,
+        analysis_period=period_snapshot,
+        analysis_selection=selection_snapshot,
     )
     return AnalysisRun.queue(
         workspace_id=WORKSPACE_ID,
@@ -96,34 +156,9 @@ def queue_run(
             }
         ),
         semantic_mapping_snapshot=mapping_snapshot,
-        analysis_period_snapshot=(
-            analysis_period_snapshot
-            or AnalysisPeriodSnapshot.from_configuration(
-                estimator_type,
-                {
-                    "analysis_start_date": "2026-01-01",
-                    "analysis_end_date": "2026-01-31",
-                    **(
-                        {"intervention_date": "2026-01-15"}
-                        if estimator_type
-                        in {
-                            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
-                            AnalysisEstimatorType.SYNTHETIC_CONTROL,
-                            AnalysisEstimatorType.GEO_HOLDOUT,
-                        }
-                        else {}
-                    ),
-                },
-            )
-        ),
-        analysis_selection_snapshot=(
-            analysis_selection_snapshot
-            or AnalysisSelectionSnapshot.from_configuration(
-                estimator_type=estimator_type,
-                configuration={},
-                semantic_mapping=mapping_snapshot,
-            )
-        ),
+        analysis_period_snapshot=period_snapshot,
+        analysis_selection_snapshot=selection_snapshot,
+        treatment_control_snapshot=assignment_snapshot,
         random_seed=random_seed,
         configuration_json=configuration_json,
         created_at=created_at,
@@ -204,6 +239,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         analysis_period_snapshot=PERIOD_SNAPSHOT,
         analysis_selection_snapshot=SELECTION_SNAPSHOT,
+        treatment_control_snapshot=TREATMENT_CONTROL_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -233,6 +269,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         analysis_period_snapshot=PERIOD_SNAPSHOT,
         analysis_selection_snapshot=SELECTION_SNAPSHOT,
+        treatment_control_snapshot=TREATMENT_CONTROL_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -262,6 +299,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         analysis_period_snapshot=PERIOD_SNAPSHOT,
         analysis_selection_snapshot=SELECTION_SNAPSHOT,
+        treatment_control_snapshot=TREATMENT_CONTROL_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -506,4 +544,115 @@ def test_changing_each_selection_criterion_changes_fingerprint(
     assert (
         queue_run(analysis_selection_snapshot=changed).input_fingerprint_sha256
         != queue_run().input_fingerprint_sha256
+    )
+
+
+def test_equivalent_treatment_control_ordering_produces_same_fingerprint() -> None:
+    mapping = SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT)
+    period = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.GEO_HOLDOUT,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-15",
+        },
+    )
+    selection = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.GEO_HOLDOUT,
+        configuration={},
+        semantic_mapping=mapping,
+    )
+    first = TreatmentControlSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.GEO_HOLDOUT,
+        configuration={
+            "treated_geographies": ["Boston", "Miami"],
+            "control_geographies": ["Seattle", "Austin"],
+        },
+        semantic_mapping=mapping,
+        analysis_period=period,
+        analysis_selection=selection,
+    )
+    second = TreatmentControlSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.GEO_HOLDOUT,
+        configuration={
+            "treated_geographies": ["Miami", "Boston"],
+            "control_geographies": ["Austin", "Seattle"],
+        },
+        semantic_mapping=mapping,
+        analysis_period=period,
+        analysis_selection=selection,
+    )
+
+    assert (
+        queue_run(
+            estimator_type=AnalysisEstimatorType.GEO_HOLDOUT,
+            analysis_period_snapshot=period,
+            analysis_selection_snapshot=selection,
+            treatment_control_snapshot=first,
+        ).input_fingerprint_sha256
+        == queue_run(
+            estimator_type=AnalysisEstimatorType.GEO_HOLDOUT,
+            analysis_period_snapshot=period,
+            analysis_selection_snapshot=selection,
+            treatment_control_snapshot=second,
+        ).input_fingerprint_sha256
+    )
+
+
+@pytest.mark.parametrize(
+    "configuration",
+    [
+        {
+            "treated_geographies": ["Boston", "Miami"],
+            "control_geographies": ["Austin"],
+        },
+        {
+            "treated_geographies": ["Boston"],
+            "control_geographies": ["Austin", "Seattle"],
+        },
+        {
+            "treated_geographies": ["Boston"],
+            "control_geographies": ["Austin"],
+            "excluded_treatment_units": ["Miami"],
+        },
+        {
+            "treated_geographies": ["Boston"],
+            "control_geographies": ["Austin"],
+            "excluded_control_units": ["Seattle"],
+        },
+    ],
+)
+def test_changing_assignment_units_changes_fingerprint(
+    configuration: dict[str, object],
+) -> None:
+    mapping = SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT)
+    period = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.GEO_HOLDOUT,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-15",
+        },
+    )
+    selection = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.GEO_HOLDOUT,
+        configuration={},
+        semantic_mapping=mapping,
+    )
+    changed = TreatmentControlSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.GEO_HOLDOUT,
+        configuration=configuration,
+        semantic_mapping=mapping,
+        analysis_period=period,
+        analysis_selection=selection,
+    )
+
+    assert (
+        queue_run(
+            estimator_type=AnalysisEstimatorType.GEO_HOLDOUT,
+            analysis_period_snapshot=period,
+            analysis_selection_snapshot=selection,
+            treatment_control_snapshot=changed,
+        ).input_fingerprint_sha256
+        != queue_run(estimator_type=AnalysisEstimatorType.GEO_HOLDOUT).input_fingerprint_sha256
     )

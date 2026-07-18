@@ -28,6 +28,19 @@ class AnalysisSelectionRowExecutor:
                 )
         return tuple(row for row in rows if self._matches(row, snapshot))
 
+    def matches_rules(
+        self,
+        *,
+        row: dict[str, str],
+        rules: tuple[SelectionRule, ...],
+    ) -> bool:
+        missing = sorted({rule.column for rule in rules} - set(row))
+        if missing:
+            raise PermanentEstimationError(
+                f"Analysis assignment targets unavailable column '{missing[0]}'."
+            )
+        return all(self._matches_rule(row, rule) for rule in rules)
+
     @staticmethod
     def _required_columns(snapshot: AnalysisSelectionSnapshot) -> set[str]:
         columns = {

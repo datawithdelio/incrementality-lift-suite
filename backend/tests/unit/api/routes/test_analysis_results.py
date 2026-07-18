@@ -24,6 +24,9 @@ from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
 )
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 
 APPLICATION_VERSION = "0.1.0"
 SOURCE_REVISION = "a" * 40
@@ -74,6 +77,24 @@ def build_view(*, succeeded: bool = False, failed: bool = False) -> AnalysisResu
             estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             configuration={},
             semantic_mapping=MAPPING_SNAPSHOT,
+        ),
+        treatment_control_snapshot=TreatmentControlSnapshot.from_configuration(
+            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            configuration={},
+            semantic_mapping=MAPPING_SNAPSHOT,
+            analysis_period=AnalysisPeriodSnapshot.from_configuration(
+                AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+                {
+                    "analysis_start_date": "2026-01-01",
+                    "analysis_end_date": "2026-01-31",
+                    "intervention_date": "2026-01-15",
+                },
+            ),
+            analysis_selection=AnalysisSelectionSnapshot.from_configuration(
+                estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+                configuration={},
+                semantic_mapping=MAPPING_SNAPSHOT,
+            ),
         ),
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,

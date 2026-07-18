@@ -352,6 +352,7 @@ async def test_queues_and_reads_analysis_run_in_tenant_scope(
     assert persisted.input_fingerprint_sha256 == queued.input_fingerprint_sha256
     assert persisted.analysis_period_snapshot == queued.analysis_period_snapshot
     assert persisted.analysis_selection_snapshot == queued.analysis_selection_snapshot
+    assert persisted.treatment_control_snapshot == queued.treatment_control_snapshot
 
     async with tenancy_session_factory() as session:
         count = await session.scalar(select(func.count()).select_from(AnalysisRunModel))

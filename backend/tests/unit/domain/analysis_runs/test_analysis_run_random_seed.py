@@ -14,6 +14,9 @@ from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 
 APPLICATION_VERSION = "0.1.0"
 SOURCE_REVISION = "a" * 40
@@ -30,6 +33,19 @@ def test_analysis_run_records_random_seed() -> None:
         treatment_value="true",
         control_value="false",
     )
+    period_snapshot = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-15",
+        },
+    )
+    selection_snapshot = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        configuration={},
+        semantic_mapping=mapping_snapshot,
+    )
     run = AnalysisRun.queue(
         workspace_id=uuid4(),
         project_id=uuid4(),
@@ -39,18 +55,14 @@ def test_analysis_run_records_random_seed() -> None:
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=1,
         semantic_mapping_snapshot=mapping_snapshot,
-        analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
-            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
-            {
-                "analysis_start_date": "2026-01-01",
-                "analysis_end_date": "2026-01-31",
-                "intervention_date": "2026-01-15",
-            },
-        ),
-        analysis_selection_snapshot=AnalysisSelectionSnapshot.from_configuration(
+        analysis_period_snapshot=period_snapshot,
+        analysis_selection_snapshot=selection_snapshot,
+        treatment_control_snapshot=TreatmentControlSnapshot.from_configuration(
             estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             configuration={},
             semantic_mapping=mapping_snapshot,
+            analysis_period=period_snapshot,
+            analysis_selection=selection_snapshot,
         ),
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),

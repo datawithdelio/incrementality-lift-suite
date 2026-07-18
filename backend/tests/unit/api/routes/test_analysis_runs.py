@@ -45,6 +45,9 @@ from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 
 APPLICATION_VERSION = "0.1.0"
 SOURCE_REVISION = "a" * 40
@@ -123,6 +126,19 @@ def build_run(
         treatment_value="true",
         control_value="false",
     )
+    period_snapshot = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-15",
+        },
+    )
+    selection_snapshot = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        configuration={},
+        semantic_mapping=mapping_snapshot,
+    )
     return AnalysisRun.queue(
         workspace_id=workspace_id,
         project_id=project_id,
@@ -132,18 +148,14 @@ def build_run(
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=3,
         semantic_mapping_snapshot=mapping_snapshot,
-        analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
-            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
-            {
-                "analysis_start_date": "2026-01-01",
-                "analysis_end_date": "2026-01-31",
-                "intervention_date": "2026-01-15",
-            },
-        ),
-        analysis_selection_snapshot=AnalysisSelectionSnapshot.from_configuration(
+        analysis_period_snapshot=period_snapshot,
+        analysis_selection_snapshot=selection_snapshot,
+        treatment_control_snapshot=TreatmentControlSnapshot.from_configuration(
             estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             configuration={},
             semantic_mapping=mapping_snapshot,
+            analysis_period=period_snapshot,
+            analysis_selection=selection_snapshot,
         ),
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
@@ -530,6 +542,10 @@ async def test_queue_request_rejects_extra_fields() -> None:
         (
             "analysis_selection_snapshot",
             {"selected_geographies": ["client-controlled-market"]},
+        ),
+        (
+            "treatment_control_snapshot",
+            {"treated_units": ["client-controlled-market"]},
         ),
     ],
 )

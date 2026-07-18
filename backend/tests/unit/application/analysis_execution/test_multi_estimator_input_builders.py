@@ -13,7 +13,16 @@ from incrementality_api.application.analysis_execution.input_loading import (
     OffPolicyEvaluationInputBuilder,
     SyntheticControlInputBuilder,
 )
+from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
+    AnalysisPeriodSnapshot,
+)
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 
 from .test_input_loading import build_metadata
 
@@ -102,15 +111,38 @@ def test_builds_off_policy_input_from_custom_policy_columns() -> None:
         {"reward": "4", "behavior": "0.5", "target": "0.75", "prediction": "3.5"},
         {"reward": "2", "behavior": "0.4", "target": "0.25", "prediction": "2.1"},
     )
+    period = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.OFF_POLICY_EVALUATION,
+        {"analysis_start_date": "2026-01-01", "analysis_end_date": "2026-01-31"},
+    )
+    selection = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.OFF_POLICY_EVALUATION,
+        configuration={},
+        semantic_mapping=metadata.mapping,
+    )
+    assignment = TreatmentControlSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.OFF_POLICY_EVALUATION,
+        configuration={
+            "policy_name": "growth_policy",
+            "behavior_propensity_column": "behavior",
+            "target_propensity_column": "target",
+        },
+        semantic_mapping=metadata.mapping,
+        analysis_period=period,
+        analysis_selection=selection,
+    )
     run = replace(
         metadata.run,
         estimator_type=AnalysisEstimatorType.OFF_POLICY_EVALUATION,
+        analysis_period_snapshot=period,
+        analysis_selection_snapshot=selection,
+        treatment_control_snapshot=assignment,
         configuration_json=json.dumps(
             {
-                "policy_name": "growth_policy",
+                "policy_name": "mutable_policy",
                 "reward_column": "reward",
-                "behavior_propensity_column": "behavior",
-                "target_propensity_column": "target",
+                "behavior_propensity_column": "wrong_behavior",
+                "target_propensity_column": "wrong_target",
                 "expected_reward_column": "prediction",
                 "primary_method": "doubly_robust",
             }

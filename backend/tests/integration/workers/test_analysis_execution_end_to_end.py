@@ -35,6 +35,9 @@ from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 from incrementality_api.infrastructure.analysis_execution.selection import (
     AnalysisSelectionRowExecutor,
 )
+from incrementality_api.infrastructure.analysis_execution.treatment_control import (
+    TreatmentControlRowExecutor,
+)
 from incrementality_api.infrastructure.database.analysis_input_metadata import (
     SqlAlchemyAnalysisInputMetadataReader,
 )
@@ -345,6 +348,7 @@ async def test_real_postgresql_s3_did_execution_workflow(
                 input_builder=DifferenceInDifferencesInputBuilder(),
                 period_filter=AnalysisPeriodRowFilter(),
                 selection_executor=AnalysisSelectionRowExecutor(),
+                treatment_control_executor=TreatmentControlRowExecutor(),
             ),
             estimator_selector=AnalysisEstimatorRegistry(
                 {

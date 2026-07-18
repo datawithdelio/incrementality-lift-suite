@@ -12,6 +12,9 @@ from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
 )
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 from incrementality_api.infrastructure.database.repositories.analysis_runs import (
     to_analysis_run,
     to_analysis_run_model,
@@ -29,6 +32,26 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
         treatment_value="yes",
         control_value="no",
     )
+    period_snapshot = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-15",
+        },
+    )
+    selection_snapshot = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        semantic_mapping=mapping_snapshot,
+        configuration={"selected_geographies": ["Boston", "New York"]},
+    )
+    treatment_control_snapshot = TreatmentControlSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        configuration={},
+        semantic_mapping=mapping_snapshot,
+        analysis_period=period_snapshot,
+        analysis_selection=selection_snapshot,
+    )
     run = AnalysisRun.queue(
         workspace_id=uuid4(),
         project_id=uuid4(),
@@ -38,19 +61,9 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=3,
         semantic_mapping_snapshot=mapping_snapshot,
-        analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
-            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
-            {
-                "analysis_start_date": "2026-01-01",
-                "analysis_end_date": "2026-01-31",
-                "intervention_date": "2026-01-15",
-            },
-        ),
-        analysis_selection_snapshot=AnalysisSelectionSnapshot.from_configuration(
-            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
-            semantic_mapping=mapping_snapshot,
-            configuration={"selected_geographies": ["Boston", "New York"]},
-        ),
+        analysis_period_snapshot=period_snapshot,
+        analysis_selection_snapshot=selection_snapshot,
+        treatment_control_snapshot=treatment_control_snapshot,
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v1",
@@ -92,6 +105,7 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
         '"included_values":{},"row_filters":[],"segment_column":null,'
         '"selected_geographies":["Boston","New York"],"selected_segments":[]}'
     )
+    assert model.treatment_control_snapshot_json == treatment_control_snapshot.canonical_json
     assert model.random_seed == run.random_seed
     assert model.input_fingerprint_sha256 == run.input_fingerprint_sha256
 
@@ -111,6 +125,26 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
         treatment_value="yes",
         control_value="no",
     )
+    period_snapshot = AnalysisPeriodSnapshot.from_configuration(
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+            "intervention_date": "2026-01-15",
+        },
+    )
+    selection_snapshot = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        configuration={},
+        semantic_mapping=mapping_snapshot,
+    )
+    treatment_control_snapshot = TreatmentControlSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        configuration={},
+        semantic_mapping=mapping_snapshot,
+        analysis_period=period_snapshot,
+        analysis_selection=selection_snapshot,
+    )
     run = AnalysisRun.queue(
         workspace_id=uuid4(),
         project_id=uuid4(),
@@ -120,19 +154,9 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=3,
         semantic_mapping_snapshot=mapping_snapshot,
-        analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
-            AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
-            {
-                "analysis_start_date": "2026-01-01",
-                "analysis_end_date": "2026-01-31",
-                "intervention_date": "2026-01-15",
-            },
-        ),
-        analysis_selection_snapshot=AnalysisSelectionSnapshot.from_configuration(
-            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
-            configuration={},
-            semantic_mapping=mapping_snapshot,
-        ),
+        analysis_period_snapshot=period_snapshot,
+        analysis_selection_snapshot=selection_snapshot,
+        treatment_control_snapshot=treatment_control_snapshot,
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v1",
@@ -153,6 +177,7 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
     historical_model.semantic_mapping_snapshot_json = None
     historical_model.analysis_period_snapshot_json = None
     historical_model.analysis_selection_snapshot_json = None
+    historical_model.treatment_control_snapshot_json = None
 
     restored = to_analysis_run(historical_model)
 
@@ -162,3 +187,4 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
     assert restored.semantic_mapping_snapshot is None
     assert restored.analysis_period_snapshot is None
     assert restored.analysis_selection_snapshot is None
+    assert restored.treatment_control_snapshot is None

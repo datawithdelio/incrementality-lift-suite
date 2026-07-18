@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -22,6 +23,9 @@ from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
     AnalysisRunStatus,
+)
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
 )
 
 APPLICATION_VERSION = "0.1.0"
@@ -48,6 +52,13 @@ SELECTION_SNAPSHOT = AnalysisSelectionSnapshot.from_configuration(
     estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
     configuration={},
     semantic_mapping=MAPPING_SNAPSHOT,
+)
+TREATMENT_CONTROL_SNAPSHOT = TreatmentControlSnapshot.from_configuration(
+    estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+    configuration={},
+    semantic_mapping=MAPPING_SNAPSHOT,
+    analysis_period=PERIOD_SNAPSHOT,
+    analysis_selection=SELECTION_SNAPSHOT,
 )
 
 CREATED_AT = datetime(
@@ -108,6 +119,7 @@ def queue_run(
         semantic_mapping_snapshot=MAPPING_SNAPSHOT,
         analysis_period_snapshot=PERIOD_SNAPSHOT,
         analysis_selection_snapshot=SELECTION_SNAPSHOT,
+        treatment_control_snapshot=TREATMENT_CONTROL_SNAPSHOT,
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version=estimator_version,
@@ -144,6 +156,7 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
         semantic_mapping_snapshot=MAPPING_SNAPSHOT,
         analysis_period_snapshot=PERIOD_SNAPSHOT,
         analysis_selection_snapshot=SELECTION_SNAPSHOT,
+        treatment_control_snapshot=TREATMENT_CONTROL_SNAPSHOT,
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -164,6 +177,7 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
 
     assert run.estimator_type is (AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES)
     assert run.estimator_version == "did-v1"
+    assert run.treatment_control_snapshot == TREATMENT_CONTROL_SNAPSHOT
 
     assert run.configuration_json == (
         '{"alpha":0.05,"analysis_end_date":"2026-01-31",'
@@ -179,6 +193,34 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
     assert run.completed_at is None
     assert run.failure_reason is None
     assert run.cancellation_reason is None
+
+
+def test_queue_rejects_treatment_control_snapshot_that_disagrees_with_mapping() -> None:
+    with pytest.raises(InvalidAnalysisRunError, match="semantic mapping"):
+        AnalysisRun.queue(
+            workspace_id=uuid4(),
+            project_id=uuid4(),
+            dataset_id=uuid4(),
+            dataset_checksum_sha256=DATASET_CHECKSUM_SHA256,
+            dataset_byte_size=DATASET_BYTE_SIZE,
+            semantic_mapping_id=uuid4(),
+            semantic_mapping_version=1,
+            semantic_mapping_snapshot=MAPPING_SNAPSHOT,
+            analysis_period_snapshot=PERIOD_SNAPSHOT,
+            analysis_selection_snapshot=SELECTION_SNAPSHOT,
+            treatment_control_snapshot=replace(
+                TREATMENT_CONTROL_SNAPSHOT, treatment_value="different"
+            ),
+            created_by_user_id=uuid4(),
+            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            estimator_version="did-v1",
+            application_version=APPLICATION_VERSION,
+            source_revision=SOURCE_REVISION,
+            statistical_library_versions={"numpy": "2.3.1", "statsmodels": "0.14.5"},
+            random_seed=1_729,
+            configuration_json=CONFIGURATION_JSON,
+            created_at=CREATED_AT,
+        )
 
 
 @pytest.mark.parametrize(
@@ -279,6 +321,7 @@ def test_runtime_lineage_must_not_be_blank_for_new_runs(
             semantic_mapping_snapshot=MAPPING_SNAPSHOT,
             analysis_period_snapshot=PERIOD_SNAPSHOT,
             analysis_selection_snapshot=SELECTION_SNAPSHOT,
+            treatment_control_snapshot=TREATMENT_CONTROL_SNAPSHOT,
             created_by_user_id=uuid4(),
             estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             estimator_version="did-v1",
@@ -337,6 +380,7 @@ def test_lifecycle_transitions_preserve_runtime_lineage() -> None:
         assert run.semantic_mapping_snapshot == queued.semantic_mapping_snapshot
         assert run.analysis_period_snapshot == queued.analysis_period_snapshot
         assert run.analysis_selection_snapshot == queued.analysis_selection_snapshot
+        assert run.treatment_control_snapshot == queued.treatment_control_snapshot
 
 
 def test_start_cannot_precede_creation() -> None:

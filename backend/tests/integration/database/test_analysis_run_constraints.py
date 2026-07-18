@@ -349,6 +349,25 @@ async def test_rejects_invalid_statistical_library_version_snapshot(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_snapshot", ["   ", "[]", "{}"])
+async def test_rejects_invalid_treatment_control_snapshot(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+    invalid_snapshot: str,
+) -> None:
+    scope = await seed_analysis_scope(tenancy_session_factory)
+    run = build_queued_run(scope)
+    run.treatment_control_snapshot_json = invalid_snapshot
+
+    async with tenancy_session_factory() as session:
+        session.add(run)
+
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+        await session.rollback()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "field_name",
     [

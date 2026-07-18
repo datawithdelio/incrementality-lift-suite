@@ -26,6 +26,9 @@ from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
     AnalysisRunStatus,
 )
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 
 _MAX_ESTIMATOR_VERSION_LENGTH = 255
 _MAX_REASON_LENGTH = 2_000
@@ -46,6 +49,7 @@ class AnalysisRun:
     semantic_mapping_snapshot: SemanticMappingSnapshot | None
     analysis_period_snapshot: AnalysisPeriodSnapshot | None
     analysis_selection_snapshot: AnalysisSelectionSnapshot | None
+    treatment_control_snapshot: TreatmentControlSnapshot | None
     created_by_user_id: UUID
     estimator_type: AnalysisEstimatorType
     estimator_version: str
@@ -76,6 +80,7 @@ class AnalysisRun:
         semantic_mapping_snapshot: SemanticMappingSnapshot,
         analysis_period_snapshot: AnalysisPeriodSnapshot,
         analysis_selection_snapshot: AnalysisSelectionSnapshot,
+        treatment_control_snapshot: TreatmentControlSnapshot,
         created_by_user_id: UUID,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
@@ -110,10 +115,20 @@ class AnalysisRun:
             raise InvalidAnalysisRunError(
                 "Analysis-period snapshot estimator must match the analysis estimator."
             )
+        if treatment_control_snapshot.estimator_type is not estimator_type:
+            raise InvalidAnalysisRunError(
+                "Treatment/control snapshot estimator must match the analysis estimator."
+            )
+        treatment_control_snapshot.validate_against(
+            semantic_mapping=semantic_mapping_snapshot,
+            analysis_period=analysis_period_snapshot,
+            analysis_selection=analysis_selection_snapshot,
+        )
         canonical_configuration = cls._canonicalize_configuration(
             configuration_json,
             analysis_period_snapshot,
             analysis_selection_snapshot,
+            treatment_control_snapshot,
         )
 
         input_fingerprint_sha256 = cls._build_input_fingerprint_sha256(
@@ -124,6 +139,7 @@ class AnalysisRun:
             semantic_mapping_snapshot=semantic_mapping_snapshot,
             analysis_period_snapshot=analysis_period_snapshot,
             analysis_selection_snapshot=analysis_selection_snapshot,
+            treatment_control_snapshot=treatment_control_snapshot,
             estimator_type=estimator_type,
             estimator_version=normalized_estimator_version,
             application_version=normalized_application_version,
@@ -145,6 +161,7 @@ class AnalysisRun:
             semantic_mapping_snapshot=semantic_mapping_snapshot,
             analysis_period_snapshot=analysis_period_snapshot,
             analysis_selection_snapshot=analysis_selection_snapshot,
+            treatment_control_snapshot=treatment_control_snapshot,
             created_by_user_id=created_by_user_id,
             estimator_type=estimator_type,
             estimator_version=(normalized_estimator_version),
@@ -316,6 +333,7 @@ class AnalysisRun:
         semantic_mapping_snapshot: SemanticMappingSnapshot,
         analysis_period_snapshot: AnalysisPeriodSnapshot,
         analysis_selection_snapshot: AnalysisSelectionSnapshot,
+        treatment_control_snapshot: TreatmentControlSnapshot,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
         application_version: str,
@@ -340,6 +358,7 @@ class AnalysisRun:
                 "semantic_mapping_snapshot": semantic_mapping_snapshot.as_dict(),
                 "analysis_period_snapshot": analysis_period_snapshot.as_dict(),
                 "analysis_selection_snapshot": analysis_selection_snapshot.as_dict(),
+                "treatment_control_snapshot": treatment_control_snapshot.as_dict(),
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -372,6 +391,7 @@ class AnalysisRun:
         configuration_json: str,
         analysis_period_snapshot: AnalysisPeriodSnapshot,
         analysis_selection_snapshot: AnalysisSelectionSnapshot,
+        treatment_control_snapshot: TreatmentControlSnapshot,
     ) -> str:
         if not configuration_json.strip():
             raise InvalidAnalysisRunError("Analysis configuration must not be blank.")
@@ -396,8 +416,11 @@ class AnalysisRun:
         period_configuration = analysis_period_snapshot.canonicalize_configuration(
             configuration
         )
+        selection_configuration = analysis_selection_snapshot.canonicalize_configuration(
+            period_configuration
+        )
         return json.dumps(
-            analysis_selection_snapshot.canonicalize_configuration(period_configuration),
+            treatment_control_snapshot.canonicalize_configuration(selection_configuration),
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,

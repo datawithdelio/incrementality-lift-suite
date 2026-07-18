@@ -62,6 +62,9 @@ from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 from incrementality_api.infrastructure.analysis_execution.selection import (
     AnalysisSelectionRowExecutor,
 )
+from incrementality_api.infrastructure.analysis_execution.treatment_control import (
+    TreatmentControlRowExecutor,
+)
 from incrementality_api.infrastructure.database.analysis_input_metadata import (
     SqlAlchemyAnalysisInputMetadataReader,
 )
@@ -269,6 +272,7 @@ def build_analysis_execution_worker() -> AnalysisExecutionWorker:
         input_builder=DifferenceInDifferencesInputBuilder(),
         period_filter=AnalysisPeriodRowFilter(),
         selection_executor=AnalysisSelectionRowExecutor(),
+        treatment_control_executor=TreatmentControlRowExecutor(),
         additional_builders={
             AnalysisEstimatorType.SYNTHETIC_CONTROL: SyntheticControlInputBuilder(),
             AnalysisEstimatorType.GEO_HOLDOUT: GeoHoldoutInputBuilder(),

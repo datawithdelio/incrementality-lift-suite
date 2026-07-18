@@ -34,6 +34,9 @@ from incrementality_api.domain.analysis_runs.statistical_library_versions import
 from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
 )
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 from incrementality_api.domain.datasets.status import (
     DatasetStatus,
 )
@@ -142,6 +145,13 @@ class QueueAnalysisRun:
                 serialized=command.configuration_json,
                 semantic_mapping=semantic_mapping_snapshot,
             )
+            treatment_control_snapshot = TreatmentControlSnapshot.from_configuration_json(
+                estimator_type=command.estimator_type,
+                serialized=command.configuration_json,
+                semantic_mapping=semantic_mapping_snapshot,
+                analysis_period=analysis_period_snapshot,
+                analysis_selection=analysis_selection_snapshot,
+            )
 
             run = AnalysisRun.queue(
                 workspace_id=command.workspace_id,
@@ -154,6 +164,7 @@ class QueueAnalysisRun:
                 semantic_mapping_snapshot=semantic_mapping_snapshot,
                 analysis_period_snapshot=analysis_period_snapshot,
                 analysis_selection_snapshot=analysis_selection_snapshot,
+                treatment_control_snapshot=treatment_control_snapshot,
                 created_by_user_id=(command.created_by_user_id),
                 estimator_type=command.estimator_type,
                 estimator_version=(command.estimator_version),

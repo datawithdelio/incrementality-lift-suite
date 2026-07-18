@@ -40,6 +40,9 @@ from incrementality_api.domain.analysis_runs.status import (
     AnalysisEstimatorType,
     AnalysisRunStatus,
 )
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 from incrementality_api.domain.datasets.columns import (
     DatasetColumnProfile,
     DatasetColumnType,
@@ -100,6 +103,16 @@ class AnalysisSelectionExecutor(Protocol):
     ) -> tuple[dict[str, str], ...]: ...
 
 
+class TreatmentControlExecutor(Protocol):
+    def filter(
+        self,
+        *,
+        rows: tuple[dict[str, str], ...],
+        mapping: SemanticMappingSnapshot,
+        snapshot: TreatmentControlSnapshot,
+    ) -> tuple[dict[str, str], ...]: ...
+
+
 class AnalysisInputMetadataValidator:
     """Validate ownership and semantic types before object retrieval."""
 
@@ -151,6 +164,25 @@ class AnalysisInputMetadataValidator:
         if configured_selection != selection:
             raise PermanentEstimationError(
                 "Analysis-selection snapshot does not match configuration."
+            )
+        treatment_control = run.treatment_control_snapshot
+        if treatment_control is None:
+            raise PermanentEstimationError("Treatment/control snapshot is unavailable.")
+        try:
+            configured_treatment_control = TreatmentControlSnapshot.from_configuration_json(
+                estimator_type=run.estimator_type,
+                serialized=run.configuration_json,
+                semantic_mapping=mapping,
+                analysis_period=period,
+                analysis_selection=selection,
+            )
+        except InvalidAnalysisRunError as error:
+            raise PermanentEstimationError(
+                "Treatment/control configuration is invalid."
+            ) from error
+        if configured_treatment_control != treatment_control:
+            raise PermanentEstimationError(
+                "Treatment/control snapshot does not match configuration."
             )
 
         columns = {column.normalized_name: column for column in metadata.columns}
@@ -534,19 +566,25 @@ class OffPolicyEvaluationInputBuilder:
     ) -> OffPolicyEvaluationInput:
         del mapping
         configuration = _configuration(run)
-        policy_name = configuration.get("policy_name")
+        assignment = run.treatment_control_snapshot
+        if (
+            assignment is None
+            or assignment.estimator_type is not AnalysisEstimatorType.OFF_POLICY_EVALUATION
+            or assignment.policy_name is None
+            or assignment.behavior_propensity_column is None
+            or assignment.target_propensity_column is None
+        ):
+            raise PermanentEstimationError(
+                "Off-policy treatment/control snapshot is unavailable."
+            )
+        policy_name = assignment.policy_name
         primary_method = configuration.get("primary_method", "doubly_robust")
         columns = {
-            key: configuration.get(key)
-            for key in (
-                "reward_column",
-                "behavior_propensity_column",
-                "target_propensity_column",
-                "expected_reward_column",
-            )
+            "reward_column": configuration.get("reward_column"),
+            "behavior_propensity_column": assignment.behavior_propensity_column,
+            "target_propensity_column": assignment.target_propensity_column,
+            "expected_reward_column": configuration.get("expected_reward_column"),
         }
-        if not isinstance(policy_name, str) or not policy_name.strip():
-            raise PermanentEstimationError("Off-policy evaluation requires policy_name.")
         if not isinstance(primary_method, str) or not all(
             isinstance(column, str) and column for column in columns.values()
         ):
@@ -570,7 +608,7 @@ class OffPolicyEvaluationInputBuilder:
             raise PermanentEstimationError("Off-policy evaluation requires observations.")
         return OffPolicyEvaluationInput(
             observations=tuple(observations),
-            policy_name=policy_name.strip(),
+            policy_name=policy_name,
             primary_method=primary_method,
         )
 
@@ -589,6 +627,7 @@ class ProductionAnalysisInputLoader:
         input_builder: DifferenceInDifferencesInputBuilder,
         period_filter: AnalysisPeriodRowFilter,
         selection_executor: AnalysisSelectionExecutor,
+        treatment_control_executor: TreatmentControlExecutor,
         additional_builders: Mapping[AnalysisEstimatorType, AdditionalEstimatorInputBuilder]
         | None = None,
     ) -> None:
@@ -600,6 +639,7 @@ class ProductionAnalysisInputLoader:
         self._input_builder = input_builder
         self._period_filter = period_filter
         self._selection_executor = selection_executor
+        self._treatment_control_executor = treatment_control_executor
         self._additional_builders = dict(additional_builders or {})
 
     async def load(self, job: AnalysisExecutionJob) -> AnalysisEstimatorInput:
@@ -627,6 +667,18 @@ class ProductionAnalysisInputLoader:
         rows = self._selection_executor.filter(rows=rows, snapshot=selection_snapshot)
         if not rows:
             raise PermanentEstimationError("No dataset rows match the analysis selection.")
+        treatment_control_snapshot = metadata.run.treatment_control_snapshot
+        if treatment_control_snapshot is None:
+            raise PermanentEstimationError("Treatment/control snapshot is unavailable.")
+        rows = self._treatment_control_executor.filter(
+            rows=rows,
+            mapping=metadata.mapping,
+            snapshot=treatment_control_snapshot,
+        )
+        if not rows:
+            raise PermanentEstimationError(
+                "No dataset rows match the treatment/control assignment."
+            )
 
         if metadata.run.estimator_type is not AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES:
             builder = self._additional_builders.get(metadata.run.estimator_type)

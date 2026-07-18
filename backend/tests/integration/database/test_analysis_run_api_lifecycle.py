@@ -603,3 +603,4 @@ async def test_complete_authenticated_analysis_run_api_lifecycle(
     assert persisted_run.estimator_type == ("difference_in_differences")
     assert persisted_run.analysis_period_snapshot_json is not None
     assert persisted_run.analysis_selection_snapshot_json is not None
+    assert persisted_run.treatment_control_snapshot_json is not None

@@ -30,6 +30,9 @@ from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
 )
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.domain.analysis_runs.treatment_control_snapshot import (
+    TreatmentControlSnapshot,
+)
 from incrementality_api.domain.datasets.columns import (
     DatasetColumnProfile,
     DatasetColumnType,
@@ -38,6 +41,9 @@ from incrementality_api.domain.datasets.entities import Dataset
 from incrementality_api.domain.datasets.status import DatasetStatus
 from incrementality_api.infrastructure.analysis_execution.selection import (
     AnalysisSelectionRowExecutor,
+)
+from incrementality_api.infrastructure.analysis_execution.treatment_control import (
+    TreatmentControlRowExecutor,
 )
 
 APPLICATION_VERSION = "0.1.0"
@@ -90,6 +96,13 @@ def build_metadata(
         semantic_mapping_snapshot=mapping_snapshot,
         analysis_period_snapshot=period_snapshot,
         analysis_selection_snapshot=selection_snapshot,
+        treatment_control_snapshot=TreatmentControlSnapshot.from_configuration(
+            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            configuration={},
+            semantic_mapping=mapping_snapshot,
+            analysis_period=period_snapshot,
+            analysis_selection=selection_snapshot,
+        ),
         created_by_user_id=user_id,
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v1",
@@ -192,6 +205,7 @@ async def test_loads_tenant_scoped_csv_and_constructs_did_input() -> None:
         input_builder=DifferenceInDifferencesInputBuilder(),
         period_filter=AnalysisPeriodRowFilter(),
         selection_executor=AnalysisSelectionRowExecutor(),
+        treatment_control_executor=TreatmentControlRowExecutor(),
     ).load(job)
 
     assert loaded.estimator_type is AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
@@ -231,6 +245,7 @@ async def test_worker_filters_rows_with_the_persisted_selection_snapshot() -> No
         input_builder=DifferenceInDifferencesInputBuilder(),
         period_filter=AnalysisPeriodRowFilter(),
         selection_executor=AnalysisSelectionRowExecutor(),
+        treatment_control_executor=TreatmentControlRowExecutor(),
     ).load(job)
 
     assert isinstance(loaded.payload, DifferenceInDifferencesInput)
@@ -276,6 +291,17 @@ def test_rejects_mapping_that_differs_from_persisted_run_snapshot() -> None:
     )
 
     with pytest.raises(PermanentEstimationError, match="snapshot does not match"):
+        AnalysisInputMetadataValidator().validate(job=job, metadata=mismatched)
+
+
+def test_rejects_missing_persisted_treatment_control_snapshot() -> None:
+    job, metadata = build_metadata()
+    mismatched = replace(
+        metadata,
+        run=replace(metadata.run, treatment_control_snapshot=None),
+    )
+
+    with pytest.raises(PermanentEstimationError, match="Treatment/control snapshot is unavailable"):
         AnalysisInputMetadataValidator().validate(job=job, metadata=mismatched)
 
 
