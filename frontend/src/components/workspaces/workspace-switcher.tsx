@@ -1,5 +1,8 @@
 "use client";
 
+import { CaretDownIcon } from "@phosphor-icons/react/CaretDown";
+import { CaretUpIcon } from "@phosphor-icons/react/CaretUp";
+import { CheckIcon } from "@phosphor-icons/react/Check";
 import {
   usePathname,
   useRouter,
@@ -36,6 +39,10 @@ function destinationForWorkspace(
   const currentPrefix =
     `/workspaces/${currentWorkspaceId}`;
 
+  if (pathname.startsWith(`${currentPrefix}/projects/`)) {
+    return `/workspaces/${nextWorkspaceId}`;
+  }
+
   if (pathname.startsWith(currentPrefix)) {
     return pathname.replace(
       currentPrefix,
@@ -43,7 +50,7 @@ function destinationForWorkspace(
     );
   }
 
-  return `/workspaces/${nextWorkspaceId}/results-dashboard`;
+  return `/workspaces/${nextWorkspaceId}`;
 }
 
 export function WorkspaceSwitcher({
@@ -186,7 +193,7 @@ export function WorkspaceSwitcher({
         </span>
 
         <b aria-hidden="true">
-          {open ? "⌃" : "⌄"}
+          {open ? <CaretUpIcon size={14} /> : <CaretDownIcon size={14} />}
         </b>
       </button>
 
@@ -228,7 +235,7 @@ export function WorkspaceSwitcher({
                   {workspace.workspace_id ===
                     workspaceId && (
                     <b aria-hidden="true">
-                      ✓
+                      <CheckIcon size={14} weight="bold" />
                     </b>
                   )}
                 </button>

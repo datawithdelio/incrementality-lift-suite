@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { AppToaster } from "@/components/ui/app-toaster";
 
 import "./globals.css";
 import "./app-shell.css";
 import "./design-system.css";
+import "./project-lifecycle.css";
 
 export const metadata: Metadata = {
   title: {
@@ -21,7 +23,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <AppToaster />
+        </AuthProvider>
       </body>
     </html>
   );

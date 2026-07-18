@@ -15,6 +15,12 @@ from incrementality_api.application.projects.create_project import (
 from incrementality_api.application.projects.errors import (
     DuplicateProjectSlugError,
 )
+from incrementality_api.application.projects.manage_projects import (
+    GetWorkspaceProject,
+    GetWorkspaceProjectOverview,
+    ListWorkspaceProjects,
+    UpdateWorkspaceProject,
+)
 from incrementality_api.infrastructure.database.models.projects import (
     ProjectModel,
 )
@@ -122,6 +128,56 @@ async def test_persists_and_reads_project_from_postgres(
         )
 
     assert loaded == created
+
+
+@pytest.mark.asyncio
+async def test_lists_and_updates_projects_without_crossing_workspace_boundary(
+    tenancy_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    workspace_id, user_id = await seed_workspace(tenancy_session_factory)
+    other_workspace_id, other_user_id = await seed_workspace(tenancy_session_factory)
+    project = await build_service(tenancy_session_factory).execute(
+        CreateProjectCommand(
+            workspace_id=workspace_id,
+            created_by_user_id=user_id,
+            name="Workspace Project",
+            slug="workspace-project",
+        )
+    )
+    await build_service(tenancy_session_factory).execute(
+        CreateProjectCommand(
+            workspace_id=other_workspace_id,
+            created_by_user_id=other_user_id,
+            name="Private Project",
+            slug="private-project",
+        )
+    )
+
+    listed = await ListWorkspaceProjects(
+        unit_of_work=SqlAlchemyProjectUnitOfWork(tenancy_session_factory),
+    ).execute(workspace_id=workspace_id)
+    updated = await UpdateWorkspaceProject(
+        unit_of_work=SqlAlchemyProjectUnitOfWork(tenancy_session_factory),
+    ).execute(
+        workspace_id=workspace_id,
+        project_id=project.id,
+        name="Renamed Workspace Project",
+        description="Updated safely.",
+    )
+    restored = await GetWorkspaceProject(
+        unit_of_work=SqlAlchemyProjectUnitOfWork(tenancy_session_factory),
+    ).execute(workspace_id=workspace_id, project_id=project.id)
+    overview = await GetWorkspaceProjectOverview(
+        unit_of_work=SqlAlchemyProjectUnitOfWork(tenancy_session_factory),
+    ).execute(workspace_id=workspace_id, project_id=project.id)
+
+    assert [item.id for item in listed] == [project.id]
+    assert updated.name == "Renamed Workspace Project"
+    assert updated.slug == "workspace-project"
+    assert restored == updated
+    assert overview.workflow.latest_dataset_id is None
+    assert overview.workflow.latest_analysis_run_id is None
+    assert overview.workflow.semantic_mapping_configured is False
 
 
 @pytest.mark.asyncio

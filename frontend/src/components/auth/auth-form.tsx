@@ -1,8 +1,11 @@
 "use client";
 
+import { ArrowRightIcon } from "@phosphor-icons/react/ArrowRight";
+import { CircleNotchIcon } from "@phosphor-icons/react/CircleNotch";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { toast } from "sonner";
 
 import {
   AuthenticationError,
@@ -40,9 +43,14 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
       const session = await login(email, password);
       auth.establishSession(session);
+      toast.success(isLogin ? "Welcome back" : "Account created", {
+        description: "Your measurement workspace is ready.",
+      });
       router.push("/");
     } catch (caught) {
-      setError(caught instanceof AuthenticationError ? caught.message : "Something went wrong. Please try again.");
+      const message = caught instanceof AuthenticationError ? caught.message : "Something went wrong. Please try again.";
+      setError(message);
+      toast.error(isLogin ? "Sign in failed" : "Account not created", { description: message });
     } finally {
       setPending(false);
     }
@@ -94,7 +102,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
       <button className="auth-submit" type="submit" disabled={pending}>
         <span>{pending ? (isLogin ? "Signing in…" : "Creating account…") : (isLogin ? "Sign in" : "Create account")}</span>
-        {!pending && <span aria-hidden="true">→</span>}
+        {pending ? <CircleNotchIcon className="auth-spinner" size={18} aria-hidden="true" /> : <ArrowRightIcon size={18} aria-hidden="true" />}
       </button>
 
       <p className="auth-switch">

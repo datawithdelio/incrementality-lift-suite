@@ -9,6 +9,7 @@ import {
   useAuth,
 } from "../src/components/auth/auth-provider";
 import { ProtectedRoute } from "../src/components/auth/protected-route";
+import { AppToaster } from "../src/components/ui/app-toaster";
 import { validateSession } from "../src/lib/auth/api";
 
 const push = vi.fn();
@@ -542,7 +543,7 @@ describe("ProtectedRoute", () => {
   });
 });
 describe("application auth integration", () => {
-  it("wires the auth provider at the application root", () => {
+  it("wires authentication and global feedback at the application root", () => {
     const element = RootLayout({
       children: <p>Application content</p>,
     });
@@ -551,6 +552,7 @@ describe("application auth integration", () => {
 
     expect(body.type).toBe("body");
     expect(body.props.children.type).toBe(AuthProvider);
+    expect(body.props.children.props.children[1].type).toBe(AppToaster);
   });
 
   it("wires protected workspace routes through ProtectedRoute", async () => {

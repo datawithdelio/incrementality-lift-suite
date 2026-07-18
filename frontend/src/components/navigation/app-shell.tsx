@@ -1,5 +1,18 @@
 "use client";
 
+import { BellIcon } from "@phosphor-icons/react/Bell";
+import { ChartBarIcon } from "@phosphor-icons/react/ChartBar";
+import { ChartLineUpIcon } from "@phosphor-icons/react/ChartLineUp";
+import { CheckCircleIcon } from "@phosphor-icons/react/CheckCircle";
+import { CirclesThreePlusIcon } from "@phosphor-icons/react/CirclesThreePlus";
+import { FileTextIcon } from "@phosphor-icons/react/FileText";
+import { FolderIcon } from "@phosphor-icons/react/Folder";
+import { GaugeIcon } from "@phosphor-icons/react/Gauge";
+import { GitBranchIcon } from "@phosphor-icons/react/GitBranch";
+import { ListIcon } from "@phosphor-icons/react/List";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/MagnifyingGlass";
+import { SignOutIcon } from "@phosphor-icons/react/SignOut";
+import { TableIcon } from "@phosphor-icons/react/Table";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
@@ -13,27 +26,45 @@ type Destination = {
   label: string;
   description: string;
   href: string;
-  icon: string;
+  icon: ReactNode;
   keywords: string;
 };
 
 function workspaceDestinations(workspaceId: string, pathname: string): Destination[] {
   const base: Destination[] = [
     {
-      label: "Overview",
+      label: "Projects",
+      description: "Workspace projects and measurement setup",
+      href: `/workspaces/${workspaceId}`,
+      icon: <FolderIcon size={18} weight="duotone" />,
+      keywords: "projects workspace setup",
+    },
+    {
+      label: "Measurement",
       description: "All measurement runs and their reliability",
       href: `/workspaces/${workspaceId}/results-dashboard`,
-      icon: "OV",
+      icon: <GaugeIcon size={18} weight="duotone" />,
       keywords: "dashboard runs results measurement",
     },
     {
       label: "Channel performance",
       description: "Incremental return and budget guidance",
       href: `/workspaces/${workspaceId}/channel-performance`,
-      icon: "CH",
+      icon: <ChartLineUpIcon size={18} weight="duotone" />,
       keywords: "channels spend roas budget performance",
     },
   ];
+
+  const project = pathname.match(/\/projects\/([^/]+)/);
+  if (project) {
+    base.push({
+      label: "Project overview",
+      description: "Project details and next measurement step",
+      href: `/workspaces/${workspaceId}/projects/${project[1]}`,
+      icon: <CirclesThreePlusIcon size={18} weight="duotone" />,
+      keywords: "project overview details setup",
+    });
+  }
 
   const dataset = pathname.match(/\/projects\/([^/]+)\/datasets\/([^/]+)\/explore/);
   if (dataset) {
@@ -41,7 +72,7 @@ function workspaceDestinations(workspaceId: string, pathname: string): Destinati
       label: "Current data explorer",
       description: "Profile, filter, and validate this dataset",
       href: pathname,
-      icon: "DX",
+      icon: <TableIcon size={18} weight="duotone" />,
       keywords: "dataset columns profile quality explorer",
     });
   }
@@ -54,21 +85,21 @@ function workspaceDestinations(workspaceId: string, pathname: string): Destinati
         label: "Current analysis result",
         description: "Effect, diagnostics, and business impact",
         href: resultHref,
-        icon: "AR",
+        icon: <ChartBarIcon size={18} weight="duotone" />,
         keywords: "analysis result effect diagnostics",
       },
       {
         label: "Current analysis reproducibility",
         description: "Inspect persisted lineage and execution fingerprints",
         href: `${resultHref}/lineage`,
-        icon: "LN",
+        icon: <GitBranchIcon size={18} weight="duotone" />,
         keywords: "lineage reproducibility fingerprint seed versions estimand",
       },
       {
         label: "Current analysis reports",
         description: "Generate and download versioned reports",
         href: `${resultHref}/reports`,
-        icon: "RP",
+        icon: <FileTextIcon size={18} weight="duotone" />,
         keywords: "pdf csv report export download",
       },
     );
@@ -83,6 +114,8 @@ function currentTitle(pathname: string): string {
   if (pathname.endsWith("/reports")) return "Reports";
   if (pathname.endsWith("/lineage")) return "Reproducibility";
   if (pathname.includes("/analysis-runs/")) return "Analysis result";
+  if (pathname.match(/\/projects\/[^/]+$/)) return "Project overview";
+  if (pathname.match(/\/workspaces\/[^/]+$/)) return "Projects";
   return "Measurement overview";
 }
 
@@ -151,8 +184,8 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
     router.push("/login");
   }
 
-  const primary = destinations.slice(0, 2);
-  const contextual = destinations.slice(2);
+  const primary = destinations.slice(0, 3);
+  const contextual = destinations.slice(3);
 
   return (
     <div className="app-frame">
@@ -191,20 +224,20 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
 
         <div className="sidebar-foot">
           <div className="sidebar-user"><span>ME</span><div><strong>Your account</strong><small>Workspace member</small></div></div>
-          <button type="button" onClick={() => void signOut()}><span aria-hidden="true">↗</span> Sign out</button>
+          <button type="button" onClick={() => void signOut()}><SignOutIcon size={16} aria-hidden="true" /> Sign out</button>
         </div>
       </aside>
 
       <div className="app-stage">
         <header className="app-topbar">
           <div className="topbar-context">
-            <button className="mobile-nav-toggle" type="button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}>☰</button>
+            <button className="mobile-nav-toggle" type="button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><ListIcon size={19} aria-hidden="true" /></button>
             <div><span>Incrementality</span><strong>{currentTitle(pathname)}</strong></div>
           </div>
           <button className="workspace-search-trigger" type="button" aria-label="Search workspace" onClick={() => setSearchOpen(true)}>
-            <span aria-hidden="true">⌕</span><span>Search workspace</span><kbd>⌘ K</kbd>
+            <MagnifyingGlassIcon size={17} aria-hidden="true" /><span>Search workspace</span><kbd>⌘ K</kbd>
           </button>
-          <div className="topbar-actions"><span className="environment-dot">Connected</span><button type="button" aria-label="Notifications">○</button><span className="topbar-avatar">ME</span></div>
+          <div className="topbar-actions"><span className="environment-dot"><CheckCircleIcon size={13} weight="fill" aria-hidden="true" />Connected</span><button type="button" aria-label="Notifications"><BellIcon size={17} aria-hidden="true" /></button><span className="topbar-avatar">ME</span></div>
         </header>
         <div className="app-content">{children}</div>
       </div>
@@ -212,7 +245,7 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
       {searchOpen && (
         <div className="command-backdrop" role="presentation" onMouseDown={() => { setSearchOpen(false); setQuery(""); }}>
           <section className="command-palette" role="dialog" aria-modal="true" aria-label="Search workspace" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="command-input"><span aria-hidden="true">⌕</span><input ref={searchRef} role="combobox" aria-label="Search workspace" aria-controls="workspace-search-results" aria-activedescendant={results[activeResult] ? `workspace-result-${activeResult}` : undefined} aria-expanded="true" placeholder="Search pages, reports, and datasets…" value={query} onChange={(event) => { setQuery(event.target.value); setActiveResult(0); }} onKeyDown={handleSearchKeys} /><kbd>ESC</kbd></div>
+            <div className="command-input"><MagnifyingGlassIcon size={20} aria-hidden="true" /><input ref={searchRef} role="combobox" aria-label="Search workspace" aria-controls="workspace-search-results" aria-activedescendant={results[activeResult] ? `workspace-result-${activeResult}` : undefined} aria-expanded="true" placeholder="Search pages, reports, and datasets…" value={query} onChange={(event) => { setQuery(event.target.value); setActiveResult(0); }} onKeyDown={handleSearchKeys} /><kbd>ESC</kbd></div>
             <div className="command-results" id="workspace-search-results" role="listbox">
               <p>{query ? "Matching destinations" : "Quick navigation"}</p>
               {results.map((destination, index) => (

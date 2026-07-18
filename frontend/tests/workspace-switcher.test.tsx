@@ -124,6 +124,16 @@ describe("WorkspaceSwitcher", () => {
     );
   });
 
+  it("clears project context when switching workspaces", async () => {
+    pathname = "/workspaces/workspace-1/projects/project-private";
+
+    render(<WorkspaceSwitcher workspaceId="workspace-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Measurement Team/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Experimentation/i }));
+
+    expect(push).toHaveBeenCalledWith("/workspaces/workspace-2");
+  });
+
   it("falls back safely when workspace loading fails", async () => {
     listWorkspaces.mockRejectedValueOnce(
       new Error("network failure"),

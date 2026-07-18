@@ -60,3 +60,15 @@ class Project:
             status=ProjectStatus.ARCHIVED,
             archived_at=archived_at,
         )
+
+    def update_details(
+        self,
+        *,
+        name: str,
+        description: str | None,
+    ) -> Self:
+        return replace(
+            self,
+            name=normalize_project_name(name),
+            description=normalize_project_description(description),
+        )

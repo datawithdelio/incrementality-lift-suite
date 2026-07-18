@@ -4,3 +4,7 @@ class ProjectApplicationError(Exception):
 
 class DuplicateProjectSlugError(ProjectApplicationError):
     """Raised when a project slug already exists in a workspace."""
+
+
+class ProjectUnavailableError(ProjectApplicationError):
+    """Raised when a project is missing or outside the requested workspace."""

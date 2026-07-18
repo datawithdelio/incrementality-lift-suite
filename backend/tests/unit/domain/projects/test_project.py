@@ -179,3 +179,24 @@ def test_archiving_is_idempotent_and_preserves_original_time() -> None:
 
     assert second_archive == first_archive
     assert second_archive.archived_at == ARCHIVED_AT
+
+
+def test_updates_project_details_without_changing_identity() -> None:
+    project = create_project(
+        name="Original Study",
+        description="Original description.",
+    )
+
+    updated = project.update_details(
+        name="  Summer Campaign Lift  ",
+        description="  Updated measurement objective.  ",
+    )
+
+    assert updated.id == project.id
+    assert updated.workspace_id == project.workspace_id
+    assert updated.created_by_user_id == project.created_by_user_id
+    assert updated.slug == project.slug
+    assert updated.created_at == project.created_at
+    assert updated.name == "Summer Campaign Lift"
+    assert updated.description == "Updated measurement objective."
+    assert project.name == "Original Study"

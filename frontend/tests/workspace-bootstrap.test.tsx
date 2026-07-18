@@ -96,7 +96,7 @@ describe("WorkspaceBootstrap", () => {
 
     await waitFor(() =>
       expect(push).toHaveBeenCalledWith(
-        "/workspaces/workspace-1/results-dashboard",
+        "/workspaces/workspace-1",
       ),
     );
 
@@ -157,7 +157,7 @@ describe("WorkspaceBootstrap", () => {
     ).toBe("workspace-new");
 
     expect(push).toHaveBeenCalledWith(
-      "/workspaces/workspace-new/results-dashboard",
+      "/workspaces/workspace-new",
     );
   });
 
@@ -202,7 +202,7 @@ describe("WorkspaceBootstrap", () => {
     ).toBe("workspace-2");
 
     expect(push).toHaveBeenCalledWith(
-      "/workspaces/workspace-2/results-dashboard",
+      "/workspaces/workspace-2",
     );
   });
 

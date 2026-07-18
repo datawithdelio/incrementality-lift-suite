@@ -31,10 +31,28 @@ describe("AppShell", () => {
   it("marks the current workspace destination and preserves workspace scope", () => {
     render(<AppShell workspaceId="workspace-1"><p>Dashboard content</p></AppShell>);
 
-    expect(screen.getByRole("link", { name: /overview/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /^measurement$/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /projects/i })).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1",
+    );
     expect(screen.getByRole("link", { name: /channel performance/i })).toHaveAttribute(
       "href",
       "/workspaces/workspace-1/channel-performance",
+    );
+  });
+
+  it("adds a canonical project overview destination in project context", () => {
+    pathname = "/workspaces/workspace-1/projects/project-1";
+    render(<AppShell workspaceId="workspace-1"><p>Project content</p></AppShell>);
+
+    expect(screen.getByRole("link", { name: /project overview/i })).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1",
+    );
+    expect(screen.getByRole("link", { name: /project overview/i })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
   });
 
@@ -65,6 +83,7 @@ describe("AppShell", () => {
     const search = screen.getByRole("combobox", { name: "Search workspace" });
     await waitFor(() => expect(search).toHaveFocus());
 
+    fireEvent.keyDown(search, { key: "ArrowDown" });
     fireEvent.keyDown(search, { key: "ArrowDown" });
     expect(screen.getByRole("option", { name: /channel performance/i })).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(search, { key: "Enter" });

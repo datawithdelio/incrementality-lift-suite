@@ -1,5 +1,8 @@
 "use client";
 
+import { ArrowRightIcon } from "@phosphor-icons/react/ArrowRight";
+import { BuildingsIcon } from "@phosphor-icons/react/Buildings";
+import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
 import { useRouter } from "next/navigation";
 import {
   type FormEvent,
@@ -7,6 +10,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 import { useAuth } from "../auth/auth-provider";
 import {
@@ -54,7 +58,7 @@ export function WorkspaceBootstrap() {
       );
 
       router.push(
-        `/workspaces/${workspaceId}/results-dashboard`,
+        `/workspaces/${workspaceId}`,
       );
     },
     [router],
@@ -167,13 +171,16 @@ export function WorkspaceBootstrap() {
           },
         );
 
+      toast.success("Workspace created", {
+        description: `${workspaceName} is ready for your first project.`,
+      });
       enterWorkspace(
         workspace.workspace_id,
       );
     } catch {
-      setCreationError(
-        "We couldn't create your workspace. Please try again.",
-      );
+      const message = "We couldn't create your workspace. Please try again.";
+      setCreationError(message);
+      toast.error("Workspace not created", { description: message });
     } finally {
       setCreating(false);
     }
@@ -182,17 +189,21 @@ export function WorkspaceBootstrap() {
   if (state.status === "loading") {
     return (
       <div
+        className="bootstrap-loading"
         role="status"
         aria-live="polite"
       >
-        Loading your workspace…
+        <span /><span /><span />
+        <p>Loading your workspace…</p>
       </div>
     );
   }
 
   if (state.status === "error") {
     return (
-      <main>
+      <main className="bootstrap-shell">
+        <section className="bootstrap-state">
+        <WarningCircleIcon size={26} weight="duotone" aria-hidden="true" />
         <div role="alert">
           {state.message}
         </div>
@@ -208,13 +219,16 @@ export function WorkspaceBootstrap() {
         >
           Retry
         </button>
+        </section>
       </main>
     );
   }
 
   if (state.status === "selecting") {
     return (
-      <main>
+      <main className="bootstrap-shell">
+        <section className="bootstrap-card bootstrap-selector">
+        <BuildingsIcon size={28} weight="duotone" aria-hidden="true" />
         <h1>Choose a workspace</h1>
 
         <p>
@@ -222,7 +236,7 @@ export function WorkspaceBootstrap() {
           continue with.
         </p>
 
-        <div>
+        <div className="bootstrap-workspaces">
           {state.workspaces.map(
             (workspace) => (
               <button
@@ -240,16 +254,20 @@ export function WorkspaceBootstrap() {
                 <span>
                   {workspace.role}
                 </span>
+                <ArrowRightIcon size={17} aria-hidden="true" />
               </button>
             ),
           )}
         </div>
+        </section>
       </main>
     );
   }
 
   return (
-    <main>
+    <main className="bootstrap-shell">
+      <section className="bootstrap-card">
+      <BuildingsIcon size={28} weight="duotone" aria-hidden="true" />
       <h1>
         Create your first workspace
       </h1>
@@ -259,7 +277,7 @@ export function WorkspaceBootstrap() {
         measuring incremental impact.
       </p>
 
-      <form
+      <form className="bootstrap-form"
         onSubmit={
           handleCreateWorkspace
         }
@@ -284,12 +302,12 @@ export function WorkspaceBootstrap() {
         </label>
 
         {creationError && (
-          <div role="alert">
+          <div className="bootstrap-error" role="alert">
             {creationError}
           </div>
         )}
 
-        <button
+        <button className="project-button project-button-primary"
           type="submit"
           disabled={creating}
         >
@@ -298,6 +316,7 @@ export function WorkspaceBootstrap() {
             : "Create workspace"}
         </button>
       </form>
+      </section>
     </main>
   );
 }
