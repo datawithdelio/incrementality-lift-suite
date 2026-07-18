@@ -34,3 +34,157 @@ describe("ReportHistory", () => {
     expect(screen.getByRole("link", { name: "Download" })).toBeInTheDocument();
   });
 });
+
+describe("DataExplorer value rendering", () => {
+  it("renders semantic table cells for null, numeric, and boolean backend values", () => {
+    render(
+      <DataExplorer
+        state={{
+          kind: "ready",
+          data: {
+            rows: [
+              {
+                market: "Boston",
+                revenue: 120.5,
+                treated: true,
+                notes: null,
+              },
+            ],
+            columns: [
+              {
+                name: "market",
+                inferred_type: "string",
+                missing_percentage: 0,
+                unique_count: 1,
+                minimum: null,
+                maximum: null,
+                mean: null,
+                median: null,
+              },
+              {
+                name: "revenue",
+                inferred_type: "float",
+                missing_percentage: 0,
+                unique_count: 1,
+                minimum: 120.5,
+                maximum: 120.5,
+                mean: 120.5,
+                median: 120.5,
+              },
+              {
+                name: "treated",
+                inferred_type: "boolean",
+                missing_percentage: 0,
+                unique_count: 1,
+                minimum: null,
+                maximum: null,
+                mean: null,
+                median: null,
+              },
+              {
+                name: "notes",
+                inferred_type: "string",
+                missing_percentage: 100,
+                unique_count: 0,
+                minimum: null,
+                maximum: null,
+                mean: null,
+                median: null,
+              },
+            ],
+            total_rows: 1,
+            page: 1,
+            page_size: 50,
+            total_pages: 1,
+            date_range: null,
+            treatment_distribution: {},
+            outcome_distribution: {},
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("table"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("columnheader", { name: "market" }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("columnheader", { name: "revenue" }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("120.5")).toBeInTheDocument();
+    expect(screen.getByText("true")).toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
+
+describe("DataExplorer dataset metadata", () => {
+  it("shows useful dataset metadata without exposing private storage details", () => {
+    render(
+      <DataExplorer
+        dataset={{
+          id: "dataset-1",
+          workspace_id: "workspace-1",
+          project_id: "project-1",
+          created_by_user_id: "user-1",
+          source_filename: "campaign-results.csv",
+          storage_key: "private/storage/path.csv",
+          media_type: "text/csv",
+          byte_size: 2048,
+          checksum_sha256: "a".repeat(64),
+          status: "ready",
+          created_at: "2026-07-18T12:00:00Z",
+          uploaded_at: "2026-07-18T12:05:00Z",
+          validation_started_at: "2026-07-18T12:06:00Z",
+          validation_completed_at: "2026-07-18T12:07:00Z",
+          row_count: 1537,
+          column_count: 13,
+          failure_reason: null,
+        }}
+        state={{
+          kind: "ready",
+          data: {
+            rows: [{ market: "Boston" }],
+            columns: [],
+            total_rows: 1537,
+            page: 1,
+            page_size: 50,
+            total_pages: 31,
+            date_range: null,
+            treatment_distribution: {},
+            outcome_distribution: {},
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("campaign-results.csv"),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByText("1,537")).toBeInTheDocument();
+    expect(screen.getByText("13")).toBeInTheDocument();
+    expect(screen.getByText("2 KB")).toBeInTheDocument();
+    expect(screen.getByText("Uploaded")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        new Date(
+          "2026-07-18T12:05:00Z",
+        ).toLocaleString(),
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByText("private/storage/path.csv"),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByText("a".repeat(64)),
+    ).not.toBeInTheDocument();
+  });
+});

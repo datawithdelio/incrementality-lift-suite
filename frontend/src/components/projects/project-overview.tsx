@@ -9,7 +9,10 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { SESSION_TOKEN_KEY } from "@/lib/auth/api";
-import { datasetExplorePath } from "@/lib/datasets/routes";
+import {
+  datasetExplorePath,
+  datasetQualityPath,
+} from "@/lib/datasets/routes";
 import {
   getProjectOverview,
   listProjects,
@@ -275,6 +278,17 @@ export function ProjectOverview({
               Explore Dataset
               <ArrowRightIcon size={16} aria-hidden="true" />
             </Link>
+              <Link
+                className="project-next-link"
+                href={datasetQualityPath(
+                  workspaceId,
+                  projectId,
+                  project.latest_dataset_id,
+                )}
+              >
+                View Data Quality
+                <ArrowRightIcon size={16} aria-hidden="true" />
+              </Link>
           </article>
         )}
 

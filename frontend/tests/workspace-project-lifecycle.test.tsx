@@ -232,6 +232,13 @@ describe("workspace project lifecycle", () => {
       "href",
       "/workspaces/workspace-1/projects/project-1/datasets/dataset-1/explore",
     );
+
+    expect(
+      screen.getByRole("link", { name: "View Data Quality" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/dataset-1/quality",
+    );
   });
 
 
