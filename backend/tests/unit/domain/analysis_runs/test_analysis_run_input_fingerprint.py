@@ -8,6 +8,9 @@ import pytest
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
@@ -37,6 +40,11 @@ PERIOD_SNAPSHOT = AnalysisPeriodSnapshot.from_configuration(
         "intervention_date": "2026-01-15",
     },
 )
+SELECTION_SNAPSHOT = AnalysisSelectionSnapshot.from_configuration(
+    estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+    configuration={},
+    semantic_mapping=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
+)
 
 
 def queue_run(
@@ -62,7 +70,11 @@ def queue_run(
     semantic_mapping_snapshot: Mapping[str, object] | None = None,
     random_seed: int = 1_729,
     analysis_period_snapshot: AnalysisPeriodSnapshot | None = None,
+    analysis_selection_snapshot: AnalysisSelectionSnapshot | None = None,
 ) -> AnalysisRun:
+    mapping_snapshot = SemanticMappingSnapshot.from_mapping(
+        semantic_mapping_snapshot or MAPPING_SNAPSHOT
+    )
     return AnalysisRun.queue(
         workspace_id=WORKSPACE_ID,
         project_id=PROJECT_ID,
@@ -83,9 +95,7 @@ def queue_run(
                 "statsmodels": "0.14.5",
             }
         ),
-        semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(
-            semantic_mapping_snapshot or MAPPING_SNAPSHOT
-        ),
+        semantic_mapping_snapshot=mapping_snapshot,
         analysis_period_snapshot=(
             analysis_period_snapshot
             or AnalysisPeriodSnapshot.from_configuration(
@@ -104,6 +114,14 @@ def queue_run(
                         else {}
                     ),
                 },
+            )
+        ),
+        analysis_selection_snapshot=(
+            analysis_selection_snapshot
+            or AnalysisSelectionSnapshot.from_configuration(
+                estimator_type=estimator_type,
+                configuration={},
+                semantic_mapping=mapping_snapshot,
             )
         ),
         random_seed=random_seed,
@@ -185,6 +203,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_version=3,
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         analysis_period_snapshot=PERIOD_SNAPSHOT,
+        analysis_selection_snapshot=SELECTION_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -213,6 +232,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_version=3,
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         analysis_period_snapshot=PERIOD_SNAPSHOT,
+        analysis_selection_snapshot=SELECTION_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -241,6 +261,7 @@ def test_runtime_versions_are_snapshotted_and_fingerprinted() -> None:
         semantic_mapping_version=3,
         semantic_mapping_snapshot=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
         analysis_period_snapshot=PERIOD_SNAPSHOT,
+        analysis_selection_snapshot=SELECTION_SNAPSHOT,
         created_by_user_id=USER_ID,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -344,9 +365,10 @@ def test_changing_each_semantic_mapping_value_changes_fingerprint(
     }
     changed_values = {**baseline_values, changed_field: changed_value}
 
-    assert queue_run(
-        semantic_mapping_snapshot=changed_values
-    ).input_fingerprint_sha256 != queue_run().input_fingerprint_sha256
+    assert (
+        queue_run(semantic_mapping_snapshot=changed_values).input_fingerprint_sha256
+        != queue_run().input_fingerprint_sha256
+    )
 
 
 def test_equivalent_analysis_period_representations_produce_same_fingerprint() -> None:
@@ -367,11 +389,10 @@ def test_equivalent_analysis_period_representations_produce_same_fingerprint() -
         },
     )
 
-    assert queue_run(
-        analysis_period_snapshot=date_snapshot
-    ).input_fingerprint_sha256 == queue_run(
-        analysis_period_snapshot=datetime_snapshot
-    ).input_fingerprint_sha256
+    assert (
+        queue_run(analysis_period_snapshot=date_snapshot).input_fingerprint_sha256
+        == queue_run(analysis_period_snapshot=datetime_snapshot).input_fingerprint_sha256
+    )
 
 
 @pytest.mark.parametrize(
@@ -406,6 +427,83 @@ def test_changing_each_relevant_analysis_date_changes_fingerprint(
         {**values, field_name: changed_value},
     )
 
-    assert queue_run(
-        analysis_period_snapshot=changed
-    ).input_fingerprint_sha256 != queue_run().input_fingerprint_sha256
+    assert (
+        queue_run(analysis_period_snapshot=changed).input_fingerprint_sha256
+        != queue_run().input_fingerprint_sha256
+    )
+
+
+def test_equivalent_selection_ordering_produces_same_fingerprint() -> None:
+    first = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        semantic_mapping=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
+        configuration={
+            "included_values": {
+                "channel": [
+                    {"type": "string", "value": "Social"},
+                    {"type": "string", "value": "Search"},
+                ]
+            }
+        },
+    )
+    second = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        semantic_mapping=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
+        configuration={
+            "included_values": {
+                "channel": [
+                    {"value": "Search", "type": "string"},
+                    {"value": "Social", "type": "string"},
+                ]
+            }
+        },
+    )
+
+    assert (
+        queue_run(analysis_selection_snapshot=first).input_fingerprint_sha256
+        == queue_run(analysis_selection_snapshot=second).input_fingerprint_sha256
+    )
+
+
+@pytest.mark.parametrize(
+    "configuration",
+    [
+        {
+            "row_filters": [
+                {
+                    "column": "revenue",
+                    "operator": "greater_than",
+                    "value": {"type": "number", "value": 100},
+                }
+            ]
+        },
+        {"included_values": {"channel": [{"type": "string", "value": "Search"}]}},
+        {"excluded_values": {"channel": [{"type": "string", "value": "Internal"}]}},
+        {"selected_geographies": ["Boston"]},
+        {"excluded_geographies": ["Test Market"]},
+        {"segment_column": "segment", "selected_segments": ["Enterprise"]},
+        {"segment_column": "segment", "excluded_segments": ["Internal"]},
+        {
+            "eligibility_filters": [
+                {
+                    "column": "eligible",
+                    "operator": "equals",
+                    "value": {"type": "boolean", "value": True},
+                }
+            ]
+        },
+    ],
+)
+def test_changing_each_selection_criterion_changes_fingerprint(
+    configuration: dict[str, object],
+) -> None:
+    changed = AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        semantic_mapping=SemanticMappingSnapshot.from_mapping(MAPPING_SNAPSHOT),
+        configuration=configuration,
+    )
+
+    assert (
+        queue_run(analysis_selection_snapshot=changed).input_fingerprint_sha256
+        != queue_run().input_fingerprint_sha256
+    )

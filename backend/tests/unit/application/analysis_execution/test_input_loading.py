@@ -21,6 +21,9 @@ from incrementality_api.application.analysis_execution.input_loading import (
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
 from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
@@ -33,6 +36,9 @@ from incrementality_api.domain.datasets.columns import (
 )
 from incrementality_api.domain.datasets.entities import Dataset
 from incrementality_api.domain.datasets.status import DatasetStatus
+from incrementality_api.infrastructure.analysis_execution.selection import (
+    AnalysisSelectionRowExecutor,
+)
 
 APPLICATION_VERSION = "0.1.0"
 SOURCE_REVISION = "a" * 40
@@ -68,6 +74,11 @@ def build_metadata(
             "intervention_date": "2026-01-02",
         },
     )
+    selection_snapshot = AnalysisSelectionSnapshot.from_configuration_json(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        serialized=configuration_json,
+        semantic_mapping=mapping_snapshot,
+    )
     run = AnalysisRun.queue(
         workspace_id=workspace_id,
         project_id=project_id,
@@ -78,6 +89,7 @@ def build_metadata(
         semantic_mapping_version=2,
         semantic_mapping_snapshot=mapping_snapshot,
         analysis_period_snapshot=period_snapshot,
+        analysis_selection_snapshot=selection_snapshot,
         created_by_user_id=user_id,
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
         estimator_version="did-v1",
@@ -179,6 +191,7 @@ async def test_loads_tenant_scoped_csv_and_constructs_did_input() -> None:
         configuration_parser=DifferenceInDifferencesConfigurationParser(),
         input_builder=DifferenceInDifferencesInputBuilder(),
         period_filter=AnalysisPeriodRowFilter(),
+        selection_executor=AnalysisSelectionRowExecutor(),
     ).load(job)
 
     assert loaded.estimator_type is AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
@@ -194,6 +207,34 @@ async def test_loads_tenant_scoped_csv_and_constructs_did_input() -> None:
         ("south", True, False, 12.0),
         ("south", True, True, 18.0),
     ]
+
+
+@pytest.mark.asyncio
+async def test_worker_filters_rows_with_the_persisted_selection_snapshot() -> None:
+    job, metadata = build_metadata(
+        configuration_json='{"selected_geographies":["north"]}'
+    )
+    storage = FakeObjectStorage(
+        b"Date,Market,Treated,Revenue\n"
+        b"2026-01-01,north,no,10\n"
+        b"2026-01-02,north,no,11\n"
+        b"2026-01-01,south,yes,12\n"
+        b"2026-01-02,south,yes,18\n"
+    )
+
+    loaded = await ProductionAnalysisInputLoader(
+        metadata_reader=FakeMetadataReader(metadata),
+        object_storage=storage,
+        metadata_validator=AnalysisInputMetadataValidator(),
+        row_loader=CsvAnalysisRowLoader(),
+        configuration_parser=DifferenceInDifferencesConfigurationParser(),
+        input_builder=DifferenceInDifferencesInputBuilder(),
+        period_filter=AnalysisPeriodRowFilter(),
+        selection_executor=AnalysisSelectionRowExecutor(),
+    ).load(job)
+
+    assert isinstance(loaded.payload, DifferenceInDifferencesInput)
+    assert [row.unit for row in loaded.payload.observations] == ["north", "north"]
 
 
 def test_rejects_nullable_required_column_profile() -> None:

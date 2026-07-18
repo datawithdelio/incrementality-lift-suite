@@ -9,6 +9,9 @@ from uuid import UUID, uuid4
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.errors import (
     InvalidAnalysisRunError,
     InvalidAnalysisRunTransitionError,
@@ -42,6 +45,7 @@ class AnalysisRun:
     semantic_mapping_version: int
     semantic_mapping_snapshot: SemanticMappingSnapshot | None
     analysis_period_snapshot: AnalysisPeriodSnapshot | None
+    analysis_selection_snapshot: AnalysisSelectionSnapshot | None
     created_by_user_id: UUID
     estimator_type: AnalysisEstimatorType
     estimator_version: str
@@ -71,6 +75,7 @@ class AnalysisRun:
         semantic_mapping_version: int,
         semantic_mapping_snapshot: SemanticMappingSnapshot,
         analysis_period_snapshot: AnalysisPeriodSnapshot,
+        analysis_selection_snapshot: AnalysisSelectionSnapshot,
         created_by_user_id: UUID,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
@@ -106,7 +111,9 @@ class AnalysisRun:
                 "Analysis-period snapshot estimator must match the analysis estimator."
             )
         canonical_configuration = cls._canonicalize_configuration(
-            configuration_json, analysis_period_snapshot
+            configuration_json,
+            analysis_period_snapshot,
+            analysis_selection_snapshot,
         )
 
         input_fingerprint_sha256 = cls._build_input_fingerprint_sha256(
@@ -116,6 +123,7 @@ class AnalysisRun:
             semantic_mapping_version=semantic_mapping_version,
             semantic_mapping_snapshot=semantic_mapping_snapshot,
             analysis_period_snapshot=analysis_period_snapshot,
+            analysis_selection_snapshot=analysis_selection_snapshot,
             estimator_type=estimator_type,
             estimator_version=normalized_estimator_version,
             application_version=normalized_application_version,
@@ -136,6 +144,7 @@ class AnalysisRun:
             semantic_mapping_version=(semantic_mapping_version),
             semantic_mapping_snapshot=semantic_mapping_snapshot,
             analysis_period_snapshot=analysis_period_snapshot,
+            analysis_selection_snapshot=analysis_selection_snapshot,
             created_by_user_id=created_by_user_id,
             estimator_type=estimator_type,
             estimator_version=(normalized_estimator_version),
@@ -306,6 +315,7 @@ class AnalysisRun:
         semantic_mapping_version: int,
         semantic_mapping_snapshot: SemanticMappingSnapshot,
         analysis_period_snapshot: AnalysisPeriodSnapshot,
+        analysis_selection_snapshot: AnalysisSelectionSnapshot,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
         application_version: str,
@@ -329,6 +339,7 @@ class AnalysisRun:
                 "semantic_mapping_version": semantic_mapping_version,
                 "semantic_mapping_snapshot": semantic_mapping_snapshot.as_dict(),
                 "analysis_period_snapshot": analysis_period_snapshot.as_dict(),
+                "analysis_selection_snapshot": analysis_selection_snapshot.as_dict(),
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -360,6 +371,7 @@ class AnalysisRun:
     def _canonicalize_configuration(
         configuration_json: str,
         analysis_period_snapshot: AnalysisPeriodSnapshot,
+        analysis_selection_snapshot: AnalysisSelectionSnapshot,
     ) -> str:
         if not configuration_json.strip():
             raise InvalidAnalysisRunError("Analysis configuration must not be blank.")
@@ -381,8 +393,11 @@ class AnalysisRun:
         ):
             raise InvalidAnalysisRunError("Analysis configuration must be a JSON object.")
 
+        period_configuration = analysis_period_snapshot.canonicalize_configuration(
+            configuration
+        )
         return json.dumps(
-            analysis_period_snapshot.canonicalize_configuration(configuration),
+            analysis_selection_snapshot.canonicalize_configuration(period_configuration),
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,

@@ -27,6 +27,9 @@ from incrementality_api.application.analysis_execution.estimation import (
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.errors import InvalidAnalysisRunError
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
@@ -88,6 +91,15 @@ class AdditionalEstimatorInputBuilder(Protocol):
     ) -> object: ...
 
 
+class AnalysisSelectionExecutor(Protocol):
+    def filter(
+        self,
+        *,
+        rows: tuple[dict[str, str], ...],
+        snapshot: AnalysisSelectionSnapshot,
+    ) -> tuple[dict[str, str], ...]: ...
+
+
 class AnalysisInputMetadataValidator:
     """Validate ownership and semantic types before object retrieval."""
 
@@ -123,6 +135,23 @@ class AnalysisInputMetadataValidator:
             raise PermanentEstimationError("Analysis-period configuration is invalid.") from error
         if configured_period != period:
             raise PermanentEstimationError("Analysis-period snapshot does not match configuration.")
+        selection = run.analysis_selection_snapshot
+        if selection is None:
+            raise PermanentEstimationError("Analysis-selection snapshot is unavailable.")
+        try:
+            configured_selection = AnalysisSelectionSnapshot.from_configuration_json(
+                estimator_type=run.estimator_type,
+                serialized=run.configuration_json,
+                semantic_mapping=mapping,
+            )
+        except InvalidAnalysisRunError as error:
+            raise PermanentEstimationError(
+                "Analysis-selection configuration is invalid."
+            ) from error
+        if configured_selection != selection:
+            raise PermanentEstimationError(
+                "Analysis-selection snapshot does not match configuration."
+            )
 
         columns = {column.normalized_name: column for column in metadata.columns}
         required = {
@@ -559,6 +588,7 @@ class ProductionAnalysisInputLoader:
         configuration_parser: DifferenceInDifferencesConfigurationParser,
         input_builder: DifferenceInDifferencesInputBuilder,
         period_filter: AnalysisPeriodRowFilter,
+        selection_executor: AnalysisSelectionExecutor,
         additional_builders: Mapping[AnalysisEstimatorType, AdditionalEstimatorInputBuilder]
         | None = None,
     ) -> None:
@@ -569,6 +599,7 @@ class ProductionAnalysisInputLoader:
         self._configuration_parser = configuration_parser
         self._input_builder = input_builder
         self._period_filter = period_filter
+        self._selection_executor = selection_executor
         self._additional_builders = dict(additional_builders or {})
 
     async def load(self, job: AnalysisExecutionJob) -> AnalysisEstimatorInput:
@@ -590,6 +621,12 @@ class ProductionAnalysisInputLoader:
             time_column=metadata.mapping.time_column,
             snapshot=metadata.run.analysis_period_snapshot,
         )
+        selection_snapshot = metadata.run.analysis_selection_snapshot
+        if selection_snapshot is None:
+            raise PermanentEstimationError("Analysis-selection snapshot is unavailable.")
+        rows = self._selection_executor.filter(rows=rows, snapshot=selection_snapshot)
+        if not rows:
+            raise PermanentEstimationError("No dataset rows match the analysis selection.")
 
         if metadata.run.estimator_type is not AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES:
             builder = self._additional_builders.get(metadata.run.estimator_type)

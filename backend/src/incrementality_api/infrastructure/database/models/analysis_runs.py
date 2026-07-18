@@ -134,6 +134,27 @@ class AnalysisRunModel(
             name="ck_analysis_runs_period_snapshot_not_empty",
         ),
         CheckConstraint(
+            (
+                "analysis_selection_snapshot_json IS NULL "
+                "OR btrim(analysis_selection_snapshot_json) <> ''"
+            ),
+            name="ck_analysis_runs_selection_snapshot_not_blank",
+        ),
+        CheckConstraint(
+            (
+                "analysis_selection_snapshot_json IS NULL "
+                "OR jsonb_typeof(analysis_selection_snapshot_json::jsonb) = 'object'"
+            ),
+            name="ck_analysis_runs_selection_snapshot_object",
+        ),
+        CheckConstraint(
+            (
+                "analysis_selection_snapshot_json IS NULL "
+                "OR analysis_selection_snapshot_json::jsonb <> '{}'::jsonb"
+            ),
+            name="ck_analysis_runs_selection_snapshot_not_empty",
+        ),
+        CheckConstraint(
             "btrim(configuration_json) <> ''",
             name=("ck_analysis_runs_configuration_not_blank"),
         ),
@@ -359,6 +380,11 @@ class AnalysisRunModel(
     )
 
     analysis_period_snapshot_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    analysis_selection_snapshot_json: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

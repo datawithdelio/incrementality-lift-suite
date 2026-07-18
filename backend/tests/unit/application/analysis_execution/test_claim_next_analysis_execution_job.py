@@ -13,6 +13,9 @@ from incrementality_api.application.analysis_execution.errors import (
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -32,6 +35,16 @@ from incrementality_api.domain.analysis_runs.status import (
 
 APPLICATION_VERSION = "0.1.0"
 SOURCE_REVISION = "a" * 40
+MAPPING_SNAPSHOT = SemanticMappingSnapshot.create(
+    time_column="date",
+    unit_column="market",
+    treatment_column="treated",
+    outcome_column="revenue",
+    spend_column=None,
+    covariate_columns=(),
+    treatment_value="true",
+    control_value="false",
+)
 
 CREATED_AT = datetime(
     2026,
@@ -83,16 +96,7 @@ def build_queued_run(
         dataset_byte_size=4_096,
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=1,
-        semantic_mapping_snapshot=SemanticMappingSnapshot.create(
-            time_column="date",
-            unit_column="market",
-            treatment_column="treated",
-            outcome_column="revenue",
-            spend_column=None,
-            covariate_columns=(),
-            treatment_value="true",
-            control_value="false",
-        ),
+        semantic_mapping_snapshot=MAPPING_SNAPSHOT,
         analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
             AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             {
@@ -100,6 +104,11 @@ def build_queued_run(
                 "analysis_end_date": "2026-01-31",
                 "intervention_date": "2026-01-15",
             },
+        ),
+        analysis_selection_snapshot=AnalysisSelectionSnapshot.from_configuration(
+            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            configuration={},
+            semantic_mapping=MAPPING_SNAPSHOT,
         ),
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),

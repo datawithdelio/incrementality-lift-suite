@@ -16,6 +16,9 @@ from incrementality_api.application.analysis_runs.ports import (
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -121,6 +124,25 @@ class QueueAnalysisRun:
                 )
             )
 
+            semantic_mapping_snapshot = SemanticMappingSnapshot.create(
+                time_column=mapping.time_column,
+                unit_column=mapping.unit_column,
+                treatment_column=mapping.treatment_column,
+                outcome_column=mapping.outcome_column,
+                spend_column=mapping.spend_column,
+                covariate_columns=mapping.covariate_columns,
+                treatment_value=mapping.treatment_value,
+                control_value=mapping.control_value,
+            )
+            analysis_period_snapshot = AnalysisPeriodSnapshot.from_configuration_json(
+                command.estimator_type, command.configuration_json
+            )
+            analysis_selection_snapshot = AnalysisSelectionSnapshot.from_configuration_json(
+                estimator_type=command.estimator_type,
+                serialized=command.configuration_json,
+                semantic_mapping=semantic_mapping_snapshot,
+            )
+
             run = AnalysisRun.queue(
                 workspace_id=command.workspace_id,
                 project_id=command.project_id,
@@ -129,19 +151,9 @@ class QueueAnalysisRun:
                 dataset_byte_size=dataset.byte_size,
                 semantic_mapping_id=mapping.id,
                 semantic_mapping_version=mapping.version,
-                semantic_mapping_snapshot=SemanticMappingSnapshot.create(
-                    time_column=mapping.time_column,
-                    unit_column=mapping.unit_column,
-                    treatment_column=mapping.treatment_column,
-                    outcome_column=mapping.outcome_column,
-                    spend_column=mapping.spend_column,
-                    covariate_columns=mapping.covariate_columns,
-                    treatment_value=mapping.treatment_value,
-                    control_value=mapping.control_value,
-                ),
-                analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration_json(
-                    command.estimator_type, command.configuration_json
-                ),
+                semantic_mapping_snapshot=semantic_mapping_snapshot,
+                analysis_period_snapshot=analysis_period_snapshot,
+                analysis_selection_snapshot=analysis_selection_snapshot,
                 created_by_user_id=(command.created_by_user_id),
                 estimator_type=command.estimator_type,
                 estimator_version=(command.estimator_version),

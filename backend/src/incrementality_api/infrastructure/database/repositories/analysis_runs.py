@@ -11,6 +11,9 @@ from incrementality_api.application.analysis_runs.errors import (
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -63,6 +66,11 @@ def to_analysis_run_model(
             if run.analysis_period_snapshot is not None
             else None
         ),
+        analysis_selection_snapshot_json=(
+            run.analysis_selection_snapshot.canonical_json
+            if run.analysis_selection_snapshot is not None
+            else None
+        ),
         random_seed=run.random_seed,
         input_fingerprint_sha256=run.input_fingerprint_sha256,
         configuration_json=run.configuration_json,
@@ -98,6 +106,11 @@ def to_analysis_run(
         analysis_period_snapshot=(
             AnalysisPeriodSnapshot.from_json(model.analysis_period_snapshot_json)
             if model.analysis_period_snapshot_json is not None
+            else None
+        ),
+        analysis_selection_snapshot=(
+            AnalysisSelectionSnapshot.from_json(model.analysis_selection_snapshot_json)
+            if model.analysis_selection_snapshot_json is not None
             else None
         ),
         created_by_user_id=model.created_by_user_id,

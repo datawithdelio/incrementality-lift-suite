@@ -19,6 +19,9 @@ from incrementality_api.application.analysis_runs.manage_analysis_runs import (
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -360,7 +363,8 @@ def build_command(
           "alpha": 0.05,
           "analysis_start_date": "2026-01-01",
           "analysis_end_date": "2026-01-31",
-          "intervention_date": "2026-01-15"
+          "intervention_date": "2026-01-15",
+          "selected_geographies": ["New York", "Boston"]
         }
         """,
     )
@@ -431,6 +435,11 @@ async def test_queues_analysis_run_atomically() -> None:
             "intervention_date": "2026-01-15",
         },
     )
+    assert result.analysis_selection_snapshot == AnalysisSelectionSnapshot.from_configuration(
+        estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        configuration={"selected_geographies": ["New York", "Boston"]},
+        semantic_mapping=result.semantic_mapping_snapshot,
+    )
     assert result.created_by_user_id == user_id
 
     assert result.estimator_type is (AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES)
@@ -455,7 +464,8 @@ async def test_queues_analysis_run_atomically() -> None:
         '"analysis_start_date":"2026-01-01","include_unit_fixed_effects":true,'
         '"intervention_date":"2026-01-15","post_period_end_date":"2026-01-31",'
         '"post_period_start_date":"2026-01-15","pre_period_end_date":"2026-01-14",'
-        '"pre_period_start_date":"2026-01-01"}'
+        '"pre_period_start_date":"2026-01-01",'
+        '"selected_geographies":["Boston","New York"]}'
     )
 
     assert result.created_at == RUN_CREATED_AT
@@ -646,6 +656,16 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
         user_id=user_id,
     )
 
+    mapping_snapshot = SemanticMappingSnapshot.create(
+        time_column=mapping.time_column,
+        unit_column=mapping.unit_column,
+        treatment_column=mapping.treatment_column,
+        outcome_column=mapping.outcome_column,
+        spend_column=mapping.spend_column,
+        covariate_columns=mapping.covariate_columns,
+        treatment_value=mapping.treatment_value,
+        control_value=mapping.control_value,
+    )
     run = AnalysisRun.queue(
         workspace_id=workspace_id,
         project_id=project_id,
@@ -654,16 +674,7 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
         dataset_byte_size=dataset.byte_size,
         semantic_mapping_id=mapping.id,
         semantic_mapping_version=(mapping.version),
-        semantic_mapping_snapshot=SemanticMappingSnapshot.create(
-            time_column=mapping.time_column,
-            unit_column=mapping.unit_column,
-            treatment_column=mapping.treatment_column,
-            outcome_column=mapping.outcome_column,
-            spend_column=mapping.spend_column,
-            covariate_columns=mapping.covariate_columns,
-            treatment_value=mapping.treatment_value,
-            control_value=mapping.control_value,
-        ),
+        semantic_mapping_snapshot=mapping_snapshot,
         analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
             AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             {
@@ -671,6 +682,11 @@ async def test_reads_analysis_run_in_tenant_scope() -> None:
                 "analysis_end_date": "2026-01-31",
                 "intervention_date": "2026-01-15",
             },
+        ),
+        analysis_selection_snapshot=AnalysisSelectionSnapshot.from_configuration(
+            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            configuration={},
+            semantic_mapping=mapping_snapshot,
         ),
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),

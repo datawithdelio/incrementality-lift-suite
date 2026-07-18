@@ -6,6 +6,9 @@ import pytest
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
@@ -40,6 +43,11 @@ PERIOD_SNAPSHOT = AnalysisPeriodSnapshot.from_configuration(
         "analysis_end_date": "2026-01-31",
         "intervention_date": "2026-01-15",
     },
+)
+SELECTION_SNAPSHOT = AnalysisSelectionSnapshot.from_configuration(
+    estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+    configuration={},
+    semantic_mapping=MAPPING_SNAPSHOT,
 )
 
 CREATED_AT = datetime(
@@ -99,6 +107,7 @@ def queue_run(
         semantic_mapping_version=(semantic_mapping_version),
         semantic_mapping_snapshot=MAPPING_SNAPSHOT,
         analysis_period_snapshot=PERIOD_SNAPSHOT,
+        analysis_selection_snapshot=SELECTION_SNAPSHOT,
         created_by_user_id=uuid4(),
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version=estimator_version,
@@ -134,6 +143,7 @@ def test_queues_analysis_run_with_reproducible_snapshot() -> None:
         semantic_mapping_version=3,
         semantic_mapping_snapshot=MAPPING_SNAPSHOT,
         analysis_period_snapshot=PERIOD_SNAPSHOT,
+        analysis_selection_snapshot=SELECTION_SNAPSHOT,
         created_by_user_id=user_id,
         estimator_type=(AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES),
         estimator_version="did-v1",
@@ -268,6 +278,7 @@ def test_runtime_lineage_must_not_be_blank_for_new_runs(
             semantic_mapping_version=1,
             semantic_mapping_snapshot=MAPPING_SNAPSHOT,
             analysis_period_snapshot=PERIOD_SNAPSHOT,
+            analysis_selection_snapshot=SELECTION_SNAPSHOT,
             created_by_user_id=uuid4(),
             estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             estimator_version="did-v1",
@@ -325,6 +336,7 @@ def test_lifecycle_transitions_preserve_runtime_lineage() -> None:
         assert run.statistical_library_versions == queued.statistical_library_versions
         assert run.semantic_mapping_snapshot == queued.semantic_mapping_snapshot
         assert run.analysis_period_snapshot == queued.analysis_period_snapshot
+        assert run.analysis_selection_snapshot == queued.analysis_selection_snapshot
 
 
 def test_start_cannot_precede_creation() -> None:

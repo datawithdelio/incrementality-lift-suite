@@ -32,6 +32,9 @@ from incrementality_api.application.analysis_execution.settle_execution import (
     RecordAnalysisExecutionFailure,
 )
 from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
+from incrementality_api.infrastructure.analysis_execution.selection import (
+    AnalysisSelectionRowExecutor,
+)
 from incrementality_api.infrastructure.database.analysis_input_metadata import (
     SqlAlchemyAnalysisInputMetadataReader,
 )
@@ -255,6 +258,13 @@ async def seed_did_execution(
                     '"pre_period_start_date":"2026-01-01",'
                     '"validation_end_date":null,"validation_start_date":null}'
                 ),
+                analysis_selection_snapshot_json=(
+                    '{"eligibility_filters":[],"excluded_geographies":[],'
+                    '"excluded_segments":[],"excluded_values":{},'
+                    '"geography_column":null,"included_values":{},"row_filters":[],'
+                    '"segment_column":null,"selected_geographies":[],'
+                    '"selected_segments":[]}'
+                ),
                 configuration_json=(
                     '{"analysis_start_date":"2026-01-01",'
                     '"analysis_end_date":"2026-01-04",'
@@ -334,6 +344,7 @@ async def test_real_postgresql_s3_did_execution_workflow(
                 configuration_parser=DifferenceInDifferencesConfigurationParser(),
                 input_builder=DifferenceInDifferencesInputBuilder(),
                 period_filter=AnalysisPeriodRowFilter(),
+                selection_executor=AnalysisSelectionRowExecutor(),
             ),
             estimator_selector=AnalysisEstimatorRegistry(
                 {

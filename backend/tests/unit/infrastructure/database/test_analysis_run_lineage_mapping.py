@@ -4,6 +4,9 @@ from uuid import uuid4
 from incrementality_api.domain.analysis_runs.analysis_period_snapshot import (
     AnalysisPeriodSnapshot,
 )
+from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import (
+    AnalysisSelectionSnapshot,
+)
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
@@ -16,6 +19,16 @@ from incrementality_api.infrastructure.database.repositories.analysis_runs impor
 
 
 def test_analysis_run_repository_preserves_dataset_lineage() -> None:
+    mapping_snapshot = SemanticMappingSnapshot.create(
+        time_column="date",
+        unit_column="market",
+        treatment_column="treated",
+        outcome_column="revenue",
+        spend_column="spend",
+        covariate_columns=("promotion", "temperature"),
+        treatment_value="yes",
+        control_value="no",
+    )
     run = AnalysisRun.queue(
         workspace_id=uuid4(),
         project_id=uuid4(),
@@ -24,16 +37,7 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
         dataset_byte_size=4_096,
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=3,
-        semantic_mapping_snapshot=SemanticMappingSnapshot.create(
-            time_column="date",
-            unit_column="market",
-            treatment_column="treated",
-            outcome_column="revenue",
-            spend_column="spend",
-            covariate_columns=("promotion", "temperature"),
-            treatment_value="yes",
-            control_value="no",
-        ),
+        semantic_mapping_snapshot=mapping_snapshot,
         analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
             AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             {
@@ -41,6 +45,11 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
                 "analysis_end_date": "2026-01-31",
                 "intervention_date": "2026-01-15",
             },
+        ),
+        analysis_selection_snapshot=AnalysisSelectionSnapshot.from_configuration(
+            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            semantic_mapping=mapping_snapshot,
+            configuration={"selected_geographies": ["Boston", "New York"]},
         ),
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
@@ -77,6 +86,12 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
         '"pre_period_end_date":"2026-01-14","pre_period_start_date":"2026-01-01",'
         '"validation_end_date":null,"validation_start_date":null}'
     )
+    assert model.analysis_selection_snapshot_json == (
+        '{"eligibility_filters":[],"excluded_geographies":[],'
+        '"excluded_segments":[],"excluded_values":{},"geography_column":"market",'
+        '"included_values":{},"row_filters":[],"segment_column":null,'
+        '"selected_geographies":["Boston","New York"],"selected_segments":[]}'
+    )
     assert model.random_seed == run.random_seed
     assert model.input_fingerprint_sha256 == run.input_fingerprint_sha256
 
@@ -86,6 +101,16 @@ def test_analysis_run_repository_preserves_dataset_lineage() -> None:
 
 
 def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historical_rows() -> None:
+    mapping_snapshot = SemanticMappingSnapshot.create(
+        time_column="date",
+        unit_column="market",
+        treatment_column="treated",
+        outcome_column="revenue",
+        spend_column=None,
+        covariate_columns=(),
+        treatment_value="yes",
+        control_value="no",
+    )
     run = AnalysisRun.queue(
         workspace_id=uuid4(),
         project_id=uuid4(),
@@ -94,16 +119,7 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
         dataset_byte_size=4_096,
         semantic_mapping_id=uuid4(),
         semantic_mapping_version=3,
-        semantic_mapping_snapshot=SemanticMappingSnapshot.create(
-            time_column="date",
-            unit_column="market",
-            treatment_column="treated",
-            outcome_column="revenue",
-            spend_column=None,
-            covariate_columns=(),
-            treatment_value="yes",
-            control_value="no",
-        ),
+        semantic_mapping_snapshot=mapping_snapshot,
         analysis_period_snapshot=AnalysisPeriodSnapshot.from_configuration(
             AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
             {
@@ -111,6 +127,11 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
                 "analysis_end_date": "2026-01-31",
                 "intervention_date": "2026-01-15",
             },
+        ),
+        analysis_selection_snapshot=AnalysisSelectionSnapshot.from_configuration(
+            estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+            configuration={},
+            semantic_mapping=mapping_snapshot,
         ),
         created_by_user_id=uuid4(),
         estimator_type=AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
@@ -131,6 +152,7 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
     historical_model.statistical_library_versions_json = None
     historical_model.semantic_mapping_snapshot_json = None
     historical_model.analysis_period_snapshot_json = None
+    historical_model.analysis_selection_snapshot_json = None
 
     restored = to_analysis_run(historical_model)
 
@@ -139,3 +161,4 @@ def test_analysis_run_repository_restores_nullable_runtime_lineage_for_historica
     assert restored.statistical_library_versions is None
     assert restored.semantic_mapping_snapshot is None
     assert restored.analysis_period_snapshot is None
+    assert restored.analysis_selection_snapshot is None
