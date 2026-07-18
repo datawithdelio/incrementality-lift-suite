@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -638,3 +639,269 @@ async def test_queue_request_requires_configuration_object() -> None:
 
     assert response.status_code == 422
     assert queue_service.commands == []
+
+
+@pytest.mark.asyncio
+async def test_reads_complete_persisted_analysis_lineage() -> None:
+    workspace_id = uuid4()
+    project_id = uuid4()
+    user_id = uuid4()
+
+    run = build_run(
+        workspace_id=workspace_id,
+        project_id=project_id,
+        user_id=user_id,
+    )
+
+    get_service = FakeGetAnalysisRun(
+        result=run,
+    )
+
+    application = build_application(
+        user_id=user_id,
+        queue_service=FakeQueueAnalysisRun(
+            result=run,
+        ),
+        get_service=get_service,
+    )
+
+    transport = ASGITransport(
+        app=application,
+    )
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/projects/{project_id}"
+            f"/analysis-runs/{run.id}/lineage"
+        )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["analysis_run_id"] == str(run.id)
+    assert payload["dataset_id"] == str(run.dataset_id)
+    assert payload["dataset_checksum_sha256"] == run.dataset_checksum_sha256
+    assert payload["dataset_byte_size"] == run.dataset_byte_size
+
+    assert payload["semantic_mapping_id"] == str(run.semantic_mapping_id)
+    assert payload["semantic_mapping_version"] == run.semantic_mapping_version
+    assert payload["semantic_mapping_snapshot"] == (
+        run.semantic_mapping_snapshot.as_dict()
+        if run.semantic_mapping_snapshot is not None
+        else None
+    )
+
+    assert payload["analysis_period_snapshot"] == (
+        run.analysis_period_snapshot.as_dict()
+        if run.analysis_period_snapshot is not None
+        else None
+    )
+
+    assert payload["analysis_selection_snapshot"] == (
+        run.analysis_selection_snapshot.as_dict()
+        if run.analysis_selection_snapshot is not None
+        else None
+    )
+
+    assert payload["treatment_control_snapshot"] == (
+        run.treatment_control_snapshot.as_dict()
+        if run.treatment_control_snapshot is not None
+        else None
+    )
+
+    assert payload["estimand_snapshot"] == (
+        run.estimand_snapshot.as_dict()
+        if run.estimand_snapshot is not None
+        else None
+    )
+
+    assert payload["estimator_type"] == run.estimator_type.value
+    assert payload["estimator_version"] == run.estimator_version
+    assert payload["estimator_configuration"] == json.loads(
+        run.configuration_json
+    )
+
+    assert payload["random_seed"] == run.random_seed
+    assert payload["application_version"] == run.application_version
+    assert payload["source_revision"] == run.source_revision
+    assert payload["statistical_library_versions"] == (
+        run.statistical_library_versions.as_dict()
+        if run.statistical_library_versions is not None
+        else None
+    )
+    assert payload["input_fingerprint_sha256"] == run.input_fingerprint_sha256
+    assert datetime.fromisoformat(
+        payload["created_at"].replace("Z", "+00:00")
+    ) == run.created_at
+
+    assert get_service.queries == [
+        GetAnalysisRunQuery(
+            workspace_id=workspace_id,
+            project_id=project_id,
+            analysis_run_id=run.id,
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_lineage_does_not_expose_secret_configuration_values() -> None:
+    workspace_id = uuid4()
+    project_id = uuid4()
+    user_id = uuid4()
+
+    run = build_run(
+        workspace_id=workspace_id,
+        project_id=project_id,
+        user_id=user_id,
+    )
+
+    run = replace(
+        run,
+        configuration_json=json.dumps(
+            {
+                **json.loads(run.configuration_json),
+                "api_key": "super-secret-value",
+                "access_token": "private-token",
+                "password": "private-password",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
+
+    application = build_application(
+        user_id=user_id,
+        queue_service=FakeQueueAnalysisRun(result=run),
+        get_service=FakeGetAnalysisRun(result=run),
+    )
+
+    transport = ASGITransport(app=application)
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/projects/{project_id}"
+            f"/analysis-runs/{run.id}/lineage"
+        )
+
+    assert response.status_code == 200
+
+    configuration = response.json()["estimator_configuration"]
+
+    assert "api_key" not in configuration
+    assert "access_token" not in configuration
+    assert "password" not in configuration
+
+    serialized_response = json.dumps(response.json())
+
+    assert "super-secret-value" not in serialized_response
+    assert "private-token" not in serialized_response
+    assert "private-password" not in serialized_response
+
+
+@pytest.mark.asyncio
+async def test_lineage_maps_unavailable_run_to_not_found() -> None:
+    workspace_id = uuid4()
+    project_id = uuid4()
+    user_id = uuid4()
+
+    error = AnalysisRunUnavailableError(
+        "Analysis run is unavailable."
+    )
+
+    run = build_run(
+        workspace_id=workspace_id,
+        project_id=project_id,
+        user_id=user_id,
+    )
+
+    application = build_application(
+        user_id=user_id,
+        queue_service=FakeQueueAnalysisRun(
+            result=run,
+        ),
+        get_service=FakeGetAnalysisRun(
+            error=error,
+        ),
+    )
+
+    transport = ASGITransport(
+        app=application,
+    )
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/projects/{project_id}"
+            f"/analysis-runs/{run.id}/lineage"
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Analysis run is unavailable.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_lineage_preserves_unavailable_historical_snapshots_as_null() -> None:
+    workspace_id = uuid4()
+    project_id = uuid4()
+    user_id = uuid4()
+
+    run = build_run(
+        workspace_id=workspace_id,
+        project_id=project_id,
+        user_id=user_id,
+    )
+
+    historical_run = replace(
+        run,
+        semantic_mapping_snapshot=None,
+        analysis_period_snapshot=None,
+        analysis_selection_snapshot=None,
+        treatment_control_snapshot=None,
+        estimand_snapshot=None,
+        statistical_library_versions=None,
+    )
+
+    application = build_application(
+        user_id=user_id,
+        queue_service=FakeQueueAnalysisRun(
+            result=historical_run,
+        ),
+        get_service=FakeGetAnalysisRun(
+            result=historical_run,
+        ),
+    )
+
+    transport = ASGITransport(
+        app=application,
+    )
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/projects/{project_id}"
+            f"/analysis-runs/{historical_run.id}/lineage"
+        )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["semantic_mapping_snapshot"] is None
+    assert payload["analysis_period_snapshot"] is None
+    assert payload["analysis_selection_snapshot"] is None
+    assert payload["treatment_control_snapshot"] is None
+    assert payload["estimand_snapshot"] is None
+    assert payload["statistical_library_versions"] is None

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from uuid import uuid4
@@ -301,3 +302,64 @@ async def test_explorer_hides_cross_tenant_dataset() -> None:
         await service.preview(
             DatasetProductQuery(uuid4(), uuid4(), uuid4()), DatasetExplorerQuery()
         )
+
+
+
+def test_all_report_formats_include_persisted_lineage() -> None:
+    lineage = {
+        "input_fingerprint_sha256": "a" * 64,
+        "dataset_checksum_sha256": "b" * 64,
+        "estimator_type": "difference_in_differences",
+        "estimator_version": "did-v2",
+        "random_seed": 1729,
+        "application_version": "0.1.0",
+        "source_revision": "c" * 40,
+        "statistical_library_versions": {
+            "numpy": "2.3.1",
+            "statsmodels": "0.14.5",
+        },
+        "estimand_snapshot": {
+            "estimand_type": "average_differential_change",
+            "target_outcome": "revenue",
+        },
+        "semantic_mapping_snapshot": {
+            "outcome_column": "revenue",
+        },
+        "analysis_period_snapshot": {
+            "analysis_start_date": "2026-01-01",
+            "analysis_end_date": "2026-01-31",
+        },
+        "analysis_selection_snapshot": {
+            "selected_geographies": [],
+        },
+        "treatment_control_snapshot": {
+            "treated_population": "yes",
+        },
+    }
+
+    model = replace(
+        report_model(),
+        lineage=lineage,
+    )
+
+    csv_payload = CsvReportRenderer().render(model)
+    pdf_payload = PdfReportRenderer().render(model)
+
+    assert b"input_fingerprint_sha256" in csv_payload
+    assert ("a" * 64).encode() in csv_payload
+    assert b"estimand_snapshot" in csv_payload
+    assert b"average_differential_change" in csv_payload
+    assert b"source_revision" in csv_payload
+    assert ("c" * 40).encode() in csv_payload
+
+    changed_lineage = dict(lineage)
+    changed_lineage["input_fingerprint_sha256"] = "f" * 64
+
+    changed_model = replace(
+        model,
+        lineage=changed_lineage,
+    )
+
+    changed_pdf_payload = PdfReportRenderer().render(changed_model)
+
+    assert pdf_payload != changed_pdf_payload

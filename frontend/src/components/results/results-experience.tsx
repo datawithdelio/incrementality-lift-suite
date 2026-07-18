@@ -59,7 +59,20 @@ export function ResultsExperience({ state }: { state: ResultsState }) {
     <main className="results-shell">
       <header className="topbar">
         <Link href="/" className="brand"><span>∆</span> Incrementality</Link>
-        <Link className="button secondary" href={`/workspaces/${data.workspace_id}/projects/${data.project_id}/analysis-runs/${data.analysis_run_id}/reports`}>Reports</Link>
+        <div>
+          <Link
+            className="button secondary"
+            href={`/workspaces/${data.workspace_id}/projects/${data.project_id}/analysis-runs/${data.analysis_run_id}/lineage`}
+          >
+            Reproducibility
+          </Link>
+          <Link
+            className="button secondary"
+            href={`/workspaces/${data.workspace_id}/projects/${data.project_id}/analysis-runs/${data.analysis_run_id}/reports`}
+          >
+            Reports
+          </Link>
+        </div>
       </header>
       <section className={`conclusion ${decisionReady ? "trusted" : "caution"}`}>
         <div>

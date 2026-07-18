@@ -340,3 +340,46 @@ def test_rejects_missing_required_csv_value() -> None:
             mapping=metadata.mapping,
             configuration=configuration,
         )
+
+
+def test_rejects_missing_persisted_estimand_snapshot() -> None:
+    job, metadata = build_metadata()
+    mismatched = replace(
+        metadata,
+        run=replace(metadata.run, estimand_snapshot=None),
+    )
+
+    with pytest.raises(
+        PermanentEstimationError,
+        match="Estimand snapshot is unavailable",
+    ):
+        AnalysisInputMetadataValidator().validate(
+            job=job,
+            metadata=mismatched,
+        )
+
+
+def test_rejects_estimand_snapshot_that_differs_from_configuration() -> None:
+    job, metadata = build_metadata()
+
+    assert metadata.run.estimand_snapshot is not None
+
+    mismatched = replace(
+        metadata,
+        run=replace(
+            metadata.run,
+            estimand_snapshot=replace(
+                metadata.run.estimand_snapshot,
+                estimand_type="different_estimand",
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        PermanentEstimationError,
+        match="Estimand snapshot does not match configuration",
+    ):
+        AnalysisInputMetadataValidator().validate(
+            job=job,
+            metadata=mismatched,
+        )

@@ -1,3 +1,4 @@
+import json
 from dataclasses import asdict
 from datetime import datetime
 from uuid import UUID
@@ -15,6 +16,59 @@ from incrementality_api.infrastructure.database.models.data_products import (
 )
 from incrementality_api.infrastructure.database.models.datasets import DatasetModel
 from incrementality_api.infrastructure.database.models.projects import ProjectModel
+
+
+def _optional_json_object(
+    serialized: str | None,
+) -> dict[str, object] | None:
+    if serialized is None:
+        return None
+
+    parsed: object = json.loads(serialized)
+
+    if not isinstance(parsed, dict):
+        raise RuntimeError(
+            "Persisted report lineage snapshot must be a JSON object."
+        )
+
+    return parsed
+
+
+def _report_lineage_snapshot(
+    run: AnalysisRunModel,
+) -> dict[str, object]:
+    return {
+        "analysis_run_id": str(run.id),
+        "dataset_id": str(run.dataset_id),
+        "dataset_checksum_sha256": run.dataset_checksum_sha256,
+        "dataset_byte_size": run.dataset_byte_size,
+        "semantic_mapping_id": str(run.semantic_mapping_id),
+        "semantic_mapping_version": run.semantic_mapping_version,
+        "semantic_mapping_snapshot": _optional_json_object(
+            run.semantic_mapping_snapshot_json
+        ),
+        "analysis_period_snapshot": _optional_json_object(
+            run.analysis_period_snapshot_json
+        ),
+        "analysis_selection_snapshot": _optional_json_object(
+            run.analysis_selection_snapshot_json
+        ),
+        "treatment_control_snapshot": _optional_json_object(
+            run.treatment_control_snapshot_json
+        ),
+        "estimand_snapshot": _optional_json_object(
+            run.estimand_snapshot_json
+        ),
+        "estimator_type": run.estimator_type,
+        "estimator_version": run.estimator_version,
+        "random_seed": run.random_seed,
+        "application_version": run.application_version,
+        "source_revision": run.source_revision,
+        "statistical_library_versions": _optional_json_object(
+            run.statistical_library_versions_json
+        ),
+        "input_fingerprint_sha256": run.input_fingerprint_sha256,
+    }
 
 
 def _job(model: ReportGenerationModel) -> ReportJob:
@@ -167,9 +221,9 @@ class SqlAlchemyReportRepository:
                 "estimator": run.estimator_type,
                 "estimator_version": run.estimator_version,
                 "dataset_id": str(dataset.id),
-                "dataset_checksum": dataset.checksum_sha256,
+                "dataset_checksum": run.dataset_checksum_sha256,
                 "mapping_version": run.semantic_mapping_version,
-                "configuration": __import__("json").loads(run.configuration_json),
+                "configuration": json.loads(run.configuration_json),
                 "estimate": result.effect,
                 "confidence_low": result.confidence_interval_low,
                 "confidence_high": result.confidence_interval_high,
@@ -184,6 +238,7 @@ class SqlAlchemyReportRepository:
                 if latest_quality
                 else {"score": None, "ready": None},
                 "limitations": tuple(str(item) for item in diagnostics.get("limitations", [])),
+                "lineage": _report_lineage_snapshot(run),
             }
             model = ReportGenerationModel(
                 workspace_id=workspace_id,

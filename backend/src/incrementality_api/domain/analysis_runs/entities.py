@@ -16,6 +16,9 @@ from incrementality_api.domain.analysis_runs.errors import (
     InvalidAnalysisRunError,
     InvalidAnalysisRunTransitionError,
 )
+from incrementality_api.domain.analysis_runs.estimand_snapshot import (
+    EstimandSnapshot,
+)
 from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
 )
@@ -65,6 +68,7 @@ class AnalysisRun:
     completed_at: datetime | None
     failure_reason: str | None
     cancellation_reason: str | None
+    estimand_snapshot: EstimandSnapshot | None = None
 
     @classmethod
     def queue(
@@ -130,6 +134,14 @@ class AnalysisRun:
             analysis_selection_snapshot,
             treatment_control_snapshot,
         )
+        estimand_snapshot = EstimandSnapshot.from_validated_run_configuration(
+            estimator_type=estimator_type,
+            semantic_mapping=semantic_mapping_snapshot,
+            analysis_period=analysis_period_snapshot,
+            analysis_selection=analysis_selection_snapshot,
+            treatment_control=treatment_control_snapshot,
+            serialized=canonical_configuration,
+        )
 
         input_fingerprint_sha256 = cls._build_input_fingerprint_sha256(
             dataset_checksum_sha256=dataset_checksum_sha256,
@@ -140,6 +152,7 @@ class AnalysisRun:
             analysis_period_snapshot=analysis_period_snapshot,
             analysis_selection_snapshot=analysis_selection_snapshot,
             treatment_control_snapshot=treatment_control_snapshot,
+            estimand_snapshot=estimand_snapshot,
             estimator_type=estimator_type,
             estimator_version=normalized_estimator_version,
             application_version=normalized_application_version,
@@ -177,6 +190,7 @@ class AnalysisRun:
             completed_at=None,
             failure_reason=None,
             cancellation_reason=None,
+            estimand_snapshot=estimand_snapshot,
         )
 
     def start(
@@ -334,6 +348,7 @@ class AnalysisRun:
         analysis_period_snapshot: AnalysisPeriodSnapshot,
         analysis_selection_snapshot: AnalysisSelectionSnapshot,
         treatment_control_snapshot: TreatmentControlSnapshot,
+        estimand_snapshot: EstimandSnapshot,
         estimator_type: AnalysisEstimatorType,
         estimator_version: str,
         application_version: str,
@@ -359,6 +374,7 @@ class AnalysisRun:
                 "analysis_period_snapshot": analysis_period_snapshot.as_dict(),
                 "analysis_selection_snapshot": analysis_selection_snapshot.as_dict(),
                 "treatment_control_snapshot": treatment_control_snapshot.as_dict(),
+                "estimand_snapshot": estimand_snapshot.as_dict(),
             },
             sort_keys=True,
             separators=(",", ":"),

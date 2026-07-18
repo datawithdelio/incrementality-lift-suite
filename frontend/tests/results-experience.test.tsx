@@ -166,4 +166,26 @@ describe("ResultsExperience", () => {
     expect(screen.getByText("Effective sample size")).toBeInTheDocument();
     expect(screen.getByText("growth_policy")).toBeInTheDocument();
   });
+
+
+  it("links completed results to reproducibility lineage", () => {
+    render(
+      <ResultsExperience
+        state={{ kind: "ready", data: base }}
+      />,
+    );
+
+    const link = screen.getByRole(
+      "link",
+      {
+        name: "Reproducibility",
+      },
+    );
+
+    expect(link).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1/lineage",
+    );
+  });
+
 });

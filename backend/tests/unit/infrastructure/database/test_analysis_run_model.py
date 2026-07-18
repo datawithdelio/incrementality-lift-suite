@@ -58,6 +58,7 @@ def test_analysis_run_table_and_columns() -> None:
         "analysis_period_snapshot_json",
         "analysis_selection_snapshot_json",
         "treatment_control_snapshot_json",
+        "estimand_snapshot_json",
         "random_seed",
         "input_fingerprint_sha256",
         "configuration_json",
@@ -158,6 +159,9 @@ def test_analysis_run_table_and_columns() -> None:
 
     assert isinstance(table.c.treatment_control_snapshot_json.type, Text)
     assert table.c.treatment_control_snapshot_json.nullable
+
+    assert isinstance(table.c.estimand_snapshot_json.type, Text)
+    assert table.c.estimand_snapshot_json.nullable
 
     assert isinstance(
         table.c.random_seed.type,
@@ -347,3 +351,11 @@ def test_analysis_run_has_query_indexes() -> None:
         "ix_analysis_runs_semantic_mapping_id",
         "ix_analysis_runs_created_by_user_id",
     }
+
+
+def test_analysis_run_estimand_snapshot_has_json_constraints() -> None:
+    names = constraint_names(AnalysisRunModel)
+
+    assert "ck_analysis_runs_estimand_snapshot_not_blank" in names
+    assert "ck_analysis_runs_estimand_snapshot_object" in names
+    assert "ck_analysis_runs_estimand_snapshot_not_empty" in names

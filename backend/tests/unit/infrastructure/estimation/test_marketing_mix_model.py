@@ -102,3 +102,27 @@ def test_short_history_receives_weak_data_warning() -> None:
 
     assert result.diagnostics["design_assessment"] == "weak"
     assert result.diagnostics["warnings"]
+
+def test_identical_seeded_mmm_contract_produces_identical_results() -> None:
+    first_runner = FakeModelRunner()
+    second_runner = FakeModelRunner()
+
+    first = BayesianMarketingMixEstimator(
+        model_runner=first_runner,
+        transformer=MarketingMixTransformer(),
+    ).estimate(
+        mmm_input(),
+        random_seed=1_729,
+    )
+
+    second = BayesianMarketingMixEstimator(
+        model_runner=second_runner,
+        transformer=MarketingMixTransformer(),
+    ).estimate(
+        mmm_input(),
+        random_seed=1_729,
+    )
+
+    assert first_runner.random_seeds == [1_729]
+    assert second_runner.random_seeds == [1_729]
+    assert first == second

@@ -64,3 +64,18 @@ def test_poor_pre_period_fit_is_invalid_and_blocks_causal_claim() -> None:
     assert result.diagnostics["design_assessment"] == "invalid"
     assert result.diagnostics["causal_claim_allowed"] is False
     assert result.diagnostics["warnings"]
+
+def test_identical_synthetic_control_inputs_produce_identical_results() -> None:
+    estimator = ScipySyntheticControlEstimator()
+    estimator_input = build_panel()
+
+    first = estimator.estimate(
+        estimator_input,
+        random_seed=1_729,
+    )
+    second = estimator.estimate(
+        estimator_input,
+        random_seed=1_729,
+    )
+
+    assert first == second

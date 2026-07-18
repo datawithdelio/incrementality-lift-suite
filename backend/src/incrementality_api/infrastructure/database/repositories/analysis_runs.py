@@ -17,6 +17,9 @@ from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import 
 from incrementality_api.domain.analysis_runs.entities import (
     AnalysisRun,
 )
+from incrementality_api.domain.analysis_runs.estimand_snapshot import (
+    EstimandSnapshot,
+)
 from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
 )
@@ -79,6 +82,11 @@ def to_analysis_run_model(
             if run.treatment_control_snapshot is not None
             else None
         ),
+        estimand_snapshot_json=(
+            run.estimand_snapshot.canonical_json
+            if run.estimand_snapshot is not None
+            else None
+        ),
         random_seed=run.random_seed,
         input_fingerprint_sha256=run.input_fingerprint_sha256,
         configuration_json=run.configuration_json,
@@ -124,6 +132,11 @@ def to_analysis_run(
         treatment_control_snapshot=(
             TreatmentControlSnapshot.from_json(model.treatment_control_snapshot_json)
             if model.treatment_control_snapshot_json is not None
+            else None
+        ),
+        estimand_snapshot=(
+            EstimandSnapshot.from_json(model.estimand_snapshot_json)
+            if model.estimand_snapshot_json is not None
             else None
         ),
         created_by_user_id=model.created_by_user_id,

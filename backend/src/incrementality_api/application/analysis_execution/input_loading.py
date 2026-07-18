@@ -32,6 +32,9 @@ from incrementality_api.domain.analysis_runs.analysis_selection_snapshot import 
 )
 from incrementality_api.domain.analysis_runs.entities import AnalysisRun
 from incrementality_api.domain.analysis_runs.errors import InvalidAnalysisRunError
+from incrementality_api.domain.analysis_runs.estimand_snapshot import (
+    EstimandSnapshot,
+)
 from incrementality_api.domain.analysis_runs.execution_jobs import AnalysisExecutionJob
 from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
     SemanticMappingSnapshot,
@@ -183,6 +186,31 @@ class AnalysisInputMetadataValidator:
         if configured_treatment_control != treatment_control:
             raise PermanentEstimationError(
                 "Treatment/control snapshot does not match configuration."
+            )
+
+        estimand = run.estimand_snapshot
+        if estimand is None:
+            raise PermanentEstimationError(
+                "Estimand snapshot is unavailable."
+            )
+
+        try:
+            configured_estimand = EstimandSnapshot.from_validated_run_configuration(
+                estimator_type=run.estimator_type,
+                semantic_mapping=mapping,
+                analysis_period=period,
+                analysis_selection=selection,
+                treatment_control=treatment_control,
+                serialized=run.configuration_json,
+            )
+        except (InvalidAnalysisRunError, ValueError) as error:
+            raise PermanentEstimationError(
+                "Estimand configuration is invalid."
+            ) from error
+
+        if configured_estimand != estimand:
+            raise PermanentEstimationError(
+                "Estimand snapshot does not match configuration."
             )
 
         columns = {column.normalized_name: column for column in metadata.columns}

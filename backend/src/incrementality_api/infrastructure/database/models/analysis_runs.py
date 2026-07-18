@@ -176,6 +176,27 @@ class AnalysisRunModel(
             name="ck_analysis_runs_treatment_control_snapshot_not_empty",
         ),
         CheckConstraint(
+            (
+                "estimand_snapshot_json IS NULL "
+                "OR btrim(estimand_snapshot_json) <> ''"
+            ),
+            name="ck_analysis_runs_estimand_snapshot_not_blank",
+        ),
+        CheckConstraint(
+            (
+                "estimand_snapshot_json IS NULL "
+                "OR jsonb_typeof(estimand_snapshot_json::jsonb) = 'object'"
+            ),
+            name="ck_analysis_runs_estimand_snapshot_object",
+        ),
+        CheckConstraint(
+            (
+                "estimand_snapshot_json IS NULL "
+                "OR estimand_snapshot_json::jsonb <> '{}'::jsonb"
+            ),
+            name="ck_analysis_runs_estimand_snapshot_not_empty",
+        ),
+        CheckConstraint(
             "btrim(configuration_json) <> ''",
             name=("ck_analysis_runs_configuration_not_blank"),
         ),
@@ -411,6 +432,11 @@ class AnalysisRunModel(
     )
 
     treatment_control_snapshot_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    estimand_snapshot_json: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

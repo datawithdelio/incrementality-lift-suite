@@ -57,6 +57,13 @@ function workspaceDestinations(workspaceId: string, pathname: string): Destinati
         keywords: "analysis result effect diagnostics",
       },
       {
+        label: "Current analysis reproducibility",
+        description: "Inspect persisted lineage and execution fingerprints",
+        href: `${resultHref}/lineage`,
+        icon: "LN",
+        keywords: "lineage reproducibility fingerprint seed versions estimand",
+      },
+      {
         label: "Current analysis reports",
         description: "Generate and download versioned reports",
         href: `${resultHref}/reports`,
@@ -73,6 +80,7 @@ function currentTitle(pathname: string): string {
   if (pathname.includes("channel-performance")) return "Channel performance";
   if (pathname.includes("/datasets/")) return "Data explorer";
   if (pathname.endsWith("/reports")) return "Reports";
+  if (pathname.endsWith("/lineage")) return "Reproducibility";
   if (pathname.includes("/analysis-runs/")) return "Analysis result";
   return "Measurement overview";
 }

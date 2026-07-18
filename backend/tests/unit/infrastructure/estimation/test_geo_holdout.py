@@ -71,3 +71,18 @@ def test_noncomparable_pretrends_make_geo_design_invalid() -> None:
 
     assert result.diagnostics["design_assessment"] == "invalid"
     assert result.diagnostics["causal_claim_allowed"] is False
+
+def test_identical_geo_holdout_inputs_produce_identical_results() -> None:
+    estimator = StatsmodelsGeoHoldoutEstimator()
+    estimator_input = geo_panel()
+
+    first = estimator.estimate(
+        estimator_input,
+        random_seed=1_729,
+    )
+    second = estimator.estimate(
+        estimator_input,
+        random_seed=1_729,
+    )
+
+    assert first == second

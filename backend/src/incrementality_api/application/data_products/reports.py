@@ -1,7 +1,8 @@
 import csv
 import io
+import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
@@ -28,6 +29,9 @@ class ReportModel:
     business_impact: Mapping[str, object]
     quality_summary: Mapping[str, object]
     limitations: tuple[str, ...]
+    lineage: Mapping[str, object] = field(
+        default_factory=dict,
+    )
 
     @property
     def conclusion(self) -> str:
@@ -36,6 +40,28 @@ class ReportModel:
         return (
             f"Estimated directional association: {self.estimate:.2f}; do not interpret as causal."
         )
+
+
+def _canonical_json(
+    value: object,
+) -> str:
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _lineage_rows(
+    model: ReportModel,
+) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (
+            key,
+            _canonical_json(model.lineage[key]),
+        )
+        for key in sorted(model.lineage)
+    )
 
 
 class ReportRenderer(Protocol):
@@ -64,6 +90,14 @@ class CsvReportRenderer:
             ("quality", "summary", dict(model.quality_summary)),
         ]
         writer.writerows(rows)
+        for key, value in _lineage_rows(model):
+            writer.writerow(
+                (
+                    "lineage",
+                    key,
+                    value,
+                )
+            )
         for warning in model.warnings:
             writer.writerow(("diagnostics", "warning", warning))
         for limitation in model.limitations:
@@ -122,5 +156,71 @@ class PdfReportRenderer:
         span = max(model.confidence_high - model.confidence_low, 1e-9)
         estimate_x = 90 + 410 * (model.estimate - model.confidence_low) / span
         document.circle(estimate_x, 112, 5, fill=1)
+
+        if model.lineage:
+            document.showPage()
+            lineage_text = document.beginText(
+                54,
+                738,
+            )
+            lineage_text.setFont(
+                "Helvetica-Bold",
+                16,
+            )
+            lineage_text.textLine(
+                "Reproducibility lineage"
+            )
+            lineage_text.setFont(
+                "Helvetica",
+                8,
+            )
+
+            for key, value in _lineage_rows(model):
+                lineage_text.moveCursor(
+                    0,
+                    -12,
+                )
+                lineage_text.setFont(
+                    "Helvetica-Bold",
+                    9,
+                )
+                lineage_text.textLine(key)
+                lineage_text.setFont(
+                    "Helvetica",
+                    7,
+                )
+
+                chunks = tuple(
+                    value[index : index + 90]
+                    for index in range(
+                        0,
+                        len(value),
+                        90,
+                    )
+                ) or ("",)
+
+                for chunk in chunks:
+                    if lineage_text.getY() < 60:
+                        document.drawText(
+                            lineage_text
+                        )
+                        document.showPage()
+                        lineage_text = document.beginText(
+                            54,
+                            738,
+                        )
+                        lineage_text.setFont(
+                            "Helvetica",
+                            7,
+                        )
+
+                    lineage_text.textLine(
+                        chunk
+                    )
+
+            document.drawText(
+                lineage_text
+            )
+
         document.save()
         return output.getvalue()

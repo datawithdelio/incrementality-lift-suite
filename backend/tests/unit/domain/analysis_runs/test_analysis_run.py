@@ -555,3 +555,62 @@ def test_transition_timestamps_must_be_timezone_aware() -> None:
                 1,
             ),
         )
+
+
+def test_queue_derives_estimand_snapshot_from_validated_lineage_inputs() -> None:
+    run = queue_run()
+
+    assert run.estimand_snapshot is not None
+    assert run.estimand_snapshot.estimator_type is (
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
+    )
+    assert run.estimand_snapshot.target_outcome == MAPPING_SNAPSHOT.outcome_column
+    assert run.estimand_snapshot.treated_population == MAPPING_SNAPSHOT.treatment_value
+    assert run.estimand_snapshot.estimand_type == "average_differential_change"
+
+def test_lifecycle_transitions_preserve_complete_reproducibility_contract() -> None:
+    queued = queue_run()
+    running = queued.start(
+        started_at=STARTED_AT,
+    )
+    succeeded = running.mark_succeeded(
+        completed_at=COMPLETED_AT,
+    )
+
+    for run in (
+        queued,
+        running,
+        succeeded,
+    ):
+        assert (
+            run.configuration_json
+            == queued.configuration_json
+        )
+        assert (
+            run.input_fingerprint_sha256
+            == queued.input_fingerprint_sha256
+        )
+        assert (
+            run.estimand_snapshot
+            == queued.estimand_snapshot
+        )
+        assert (
+            run.semantic_mapping_snapshot
+            == queued.semantic_mapping_snapshot
+        )
+        assert (
+            run.analysis_period_snapshot
+            == queued.analysis_period_snapshot
+        )
+        assert (
+            run.analysis_selection_snapshot
+            == queued.analysis_selection_snapshot
+        )
+        assert (
+            run.treatment_control_snapshot
+            == queued.treatment_control_snapshot
+        )
+        assert (
+            run.random_seed
+            == queued.random_seed
+        )

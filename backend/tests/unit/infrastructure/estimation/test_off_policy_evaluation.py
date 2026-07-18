@@ -75,3 +75,18 @@ def test_unsupported_primary_method_is_rejected() -> None:
 
     with pytest.raises(PermanentEstimationError, match="Unsupported off-policy method"):
         StatsmodelsOffPolicyEstimator().estimate(estimator_input, random_seed=1_729)
+
+def test_identical_off_policy_inputs_produce_identical_results() -> None:
+    estimator = StatsmodelsOffPolicyEstimator()
+    estimator_input = policy_input()
+
+    first = estimator.estimate(
+        estimator_input,
+        random_seed=1_729,
+    )
+    second = estimator.estimate(
+        estimator_input,
+        random_seed=1_729,
+    )
+
+    assert first == second
