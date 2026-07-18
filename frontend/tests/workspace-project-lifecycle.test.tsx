@@ -167,6 +167,21 @@ describe("workspace project lifecycle", () => {
     );
   });
 
+  it("shows an Upload Dataset entry point when the project has no dataset", async () => {
+    render(<ProjectOverview workspaceId="workspace-1" projectId="project-1" />);
+
+    expect(
+      await screen.findByText("No dataset uploaded"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "Upload Dataset" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/upload",
+    );
+  });
+
   it("renames a project while preserving its canonical URL", async () => {
     updateProject.mockResolvedValueOnce({ ...project, name: "Search Incrementality" });
     render(<ProjectOverview workspaceId="workspace-1" projectId="project-1" />);
@@ -189,4 +204,154 @@ describe("workspace project lifecycle", () => {
     );
     expect(screen.getByText("paid-search-lift")).toBeInTheDocument();
   });
+
+  it("shows Explore Dataset when the project's latest dataset is ready", async () => {
+    getProjectOverview.mockResolvedValueOnce({
+      ...project,
+      latest_dataset_id: "dataset-1",
+      latest_dataset_status: "ready",
+      semantic_mapping_configured: false,
+      latest_analysis_run_id: null,
+      latest_analysis_run_status: null,
+    });
+
+    render(
+      <ProjectOverview
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Dataset ready"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "Explore Dataset" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/dataset-1/explore",
+    );
+  });
+
+
+  it("shows validation in progress when the latest dataset is validating", async () => {
+    getProjectOverview.mockResolvedValueOnce({
+      ...project,
+      latest_dataset_id: "dataset-1",
+      latest_dataset_status: "validating",
+      semantic_mapping_configured: false,
+      latest_analysis_run_id: null,
+      latest_analysis_run_status: null,
+    });
+
+    render(
+      <ProjectOverview
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Validation in progress"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "View Status" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/upload",
+    );
+  });
+
+
+  it("shows upload pending when the latest dataset is pending upload", async () => {
+    getProjectOverview.mockResolvedValueOnce({
+      ...project,
+      latest_dataset_id: "dataset-1",
+      latest_dataset_status: "pending_upload",
+      semantic_mapping_configured: false,
+      latest_analysis_run_id: null,
+      latest_analysis_run_status: null,
+    });
+
+    render(
+      <ProjectOverview
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Upload pending"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "Resume Upload" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/upload",
+    );
+  });
+
+
+  it("shows validation pending when the latest dataset is uploaded", async () => {
+    getProjectOverview.mockResolvedValueOnce({
+      ...project,
+      latest_dataset_id: "dataset-1",
+      latest_dataset_status: "uploaded",
+      semantic_mapping_configured: false,
+      latest_analysis_run_id: null,
+      latest_analysis_run_status: null,
+    });
+
+    render(
+      <ProjectOverview
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Validation pending"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "View Status" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/upload",
+    );
+  });
+
+
+  it("shows validation failed when the latest dataset failed validation", async () => {
+    getProjectOverview.mockResolvedValueOnce({
+      ...project,
+      latest_dataset_id: "dataset-1",
+      latest_dataset_status: "failed",
+      semantic_mapping_configured: false,
+      latest_analysis_run_id: null,
+      latest_analysis_run_status: null,
+    });
+
+    render(
+      <ProjectOverview
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Dataset validation failed"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "Review Failure" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/upload",
+    );
+  });
+
 });

@@ -9,6 +9,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { SESSION_TOKEN_KEY } from "@/lib/auth/api";
+import { datasetExplorePath } from "@/lib/datasets/routes";
 import {
   getProjectOverview,
   listProjects,
@@ -17,7 +18,11 @@ import {
   ProjectApiError,
   updateProject,
 } from "@/lib/projects/api";
-import { projectPath, workspacePath } from "@/lib/projects/routes";
+import {
+  datasetUploadPath,
+  projectPath,
+  workspacePath,
+} from "@/lib/projects/routes";
 import { projectNextAction } from "@/lib/projects/next-action";
 
 type OverviewState =
@@ -149,6 +154,130 @@ export function ProjectOverview({
             <span className="project-muted-action" aria-disabled="true">This next workflow is not part of the project-lifecycle release</span>
           )}
         </article>
+        {!project.latest_dataset_id && (
+          <article className="project-details-card" aria-labelledby="project-data-heading">
+            <h2 id="project-data-heading">Data</h2>
+            <p><strong>No dataset uploaded</strong></p>
+            <p>Upload a dataset to begin configuring your analysis.</p>
+            <Link
+              className="project-next-link"
+              href={datasetUploadPath(workspaceId, projectId)}
+            >
+              Upload Dataset
+              <ArrowRightIcon size={16} aria-hidden="true" />
+            </Link>
+          </article>
+        )}
+
+        {project.latest_dataset_id
+          && project.latest_dataset_status === "pending_upload" && (
+          <article
+            className="project-details-card"
+            aria-labelledby="project-data-pending-heading"
+          >
+            <h2 id="project-data-pending-heading">Data</h2>
+            <p><strong>Upload pending</strong></p>
+            <p>
+              The dataset was registered, but its file upload has not completed.
+            </p>
+            <Link
+              className="project-next-link"
+              href={datasetUploadPath(workspaceId, projectId)}
+            >
+              Resume Upload
+              <ArrowRightIcon size={16} aria-hidden="true" />
+            </Link>
+          </article>
+        )}
+
+        {project.latest_dataset_id
+          && project.latest_dataset_status === "uploaded" && (
+          <article
+            className="project-details-card"
+            aria-labelledby="project-data-uploaded-heading"
+          >
+            <h2 id="project-data-uploaded-heading">Data</h2>
+            <p><strong>Validation pending</strong></p>
+            <p>
+              Your dataset upload is complete and is waiting for backend validation.
+            </p>
+            <Link
+              className="project-next-link"
+              href={datasetUploadPath(workspaceId, projectId)}
+            >
+              View Status
+              <ArrowRightIcon size={16} aria-hidden="true" />
+            </Link>
+          </article>
+        )}
+
+        {project.latest_dataset_id
+          && project.latest_dataset_status === "validating" && (
+          <article
+            className="project-details-card"
+            aria-labelledby="project-data-validating-heading"
+          >
+            <h2 id="project-data-validating-heading">Data</h2>
+            <p><strong>Validation in progress</strong></p>
+            <p>
+              Your dataset is being validated by the backend.
+            </p>
+            <Link
+              className="project-next-link"
+              href={datasetUploadPath(workspaceId, projectId)}
+            >
+              View Status
+              <ArrowRightIcon size={16} aria-hidden="true" />
+            </Link>
+          </article>
+        )}
+
+        {project.latest_dataset_id
+          && project.latest_dataset_status === "failed" && (
+          <article
+            className="project-details-card"
+            aria-labelledby="project-data-failed-heading"
+          >
+            <h2 id="project-data-failed-heading">Data</h2>
+            <p><strong>Dataset validation failed</strong></p>
+            <p>
+              Review the validation failure and upload a corrected dataset when ready.
+            </p>
+            <Link
+              className="project-next-link"
+              href={datasetUploadPath(workspaceId, projectId)}
+            >
+              Review Failure
+              <ArrowRightIcon size={16} aria-hidden="true" />
+            </Link>
+          </article>
+        )}
+
+        {project.latest_dataset_id
+          && project.latest_dataset_status === "ready" && (
+          <article
+            className="project-details-card"
+            aria-labelledby="project-data-ready-heading"
+          >
+            <h2 id="project-data-ready-heading">Data</h2>
+            <p><strong>Dataset ready</strong></p>
+            <p>
+              Your dataset passed validation and is ready to explore.
+            </p>
+            <Link
+              className="project-next-link"
+              href={datasetExplorePath(
+                workspaceId,
+                projectId,
+                project.latest_dataset_id,
+              )}
+            >
+              Explore Dataset
+              <ArrowRightIcon size={16} aria-hidden="true" />
+            </Link>
+          </article>
+        )}
+
         <article className="project-details-card">
           <h2>Project details</h2>
           <dl><div><dt>Status</dt><dd>Active</dd></div><div><dt>Project URL</dt><dd>{project.slug}</dd></div><div><dt>Created</dt><dd>{new Date(project.created_at).toLocaleDateString()}</dd></div></dl>
