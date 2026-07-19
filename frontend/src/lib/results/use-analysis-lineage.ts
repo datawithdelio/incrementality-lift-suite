@@ -15,10 +15,21 @@ export function useAnalysisLineage(
   projectId: string,
   analysisRunId: string,
 ): AnalysisLineageState {
-  const [state, setState] =
-    useState<AnalysisLineageState>({
+  const requestKey =
+    `${workspaceId}:${projectId}:${analysisRunId}`;
+
+  const [
+    storedState,
+    setStoredState,
+  ] = useState<{
+    requestKey: string;
+    state: AnalysisLineageState;
+  }>({
+    requestKey,
+    state: {
       kind: "loading",
-    });
+    },
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -29,8 +40,11 @@ export function useAnalysisLineage(
       );
 
       if (!token) {
-        setState({
-          kind: "permission",
+        setStoredState({
+          requestKey,
+          state: {
+            kind: "permission",
+          },
         });
         return;
       }
@@ -44,9 +58,12 @@ export function useAnalysisLineage(
           controller.signal,
         );
 
-        setState({
-          kind: "ready",
-          data,
+        setStoredState({
+          requestKey,
+          state: {
+            kind: "ready",
+            data,
+          },
         });
       } catch (error) {
         if (controller.signal.aborted) {
@@ -57,19 +74,28 @@ export function useAnalysisLineage(
           error instanceof ResultsApiError &&
           [401, 403].includes(error.status)
         ) {
-          setState({
-            kind: "permission",
+          setStoredState({
+            requestKey,
+            state: {
+              kind: "permission",
+            },
           });
         } else if (
           error instanceof ResultsApiError &&
           error.status === 404
         ) {
-          setState({
-            kind: "missing",
+          setStoredState({
+            requestKey,
+            state: {
+              kind: "missing",
+            },
           });
         } else {
-          setState({
-            kind: "error",
+          setStoredState({
+            requestKey,
+            state: {
+              kind: "error",
+            },
           });
         }
       }
@@ -84,7 +110,17 @@ export function useAnalysisLineage(
     workspaceId,
     projectId,
     analysisRunId,
+    requestKey,
   ]);
 
-  return state;
+  if (
+    storedState.requestKey
+    !== requestKey
+  ) {
+    return {
+      kind: "loading",
+    };
+  }
+
+  return storedState.state;
 }

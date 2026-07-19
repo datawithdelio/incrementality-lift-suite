@@ -203,6 +203,151 @@ describe("ReproducibilityExperience", () => {
   });
 
 
+  it("copies the exact persisted dataset checksum and source revision", () => {
+    const writeText = vi.fn();
+
+    Object.defineProperty(
+      navigator,
+      "clipboard",
+      {
+        configurable: true,
+        value: {
+          writeText,
+        },
+      },
+    );
+
+    render(
+      <ReproducibilityExperience
+        state={{
+          kind: "ready",
+          data: lineage,
+        }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Copy dataset checksum",
+      }),
+    );
+
+    expect(writeText).toHaveBeenLastCalledWith(
+      "b".repeat(64),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Copy source revision",
+      }),
+    );
+
+    expect(writeText).toHaveBeenLastCalledWith(
+      "c".repeat(40),
+    );
+  });
+
+
+
+  it("links back to the exact analysis run status", () => {
+    render(
+      <ReproducibilityExperience
+        workspaceId="workspace-1"
+        projectId="project-1"
+        analysisRunId="run-1"
+        state={{
+          kind: "ready",
+          data: lineage,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: "View Analysis Status",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1",
+    );
+  });
+
+
+
+  it("links completed runs to exact Results and Reports destinations", () => {
+    render(
+      <ReproducibilityExperience
+        workspaceId="workspace-1"
+        projectId="project-1"
+        analysisRunId="run-1"
+        resultAvailable
+        reportsAvailable
+        state={{
+          kind: "ready",
+          data: lineage,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: "View Results",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1/result",
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: "View Reports",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1/reports",
+    );
+  });
+
+
+  it("does not expose unavailable Results or Reports destinations", () => {
+    render(
+      <ReproducibilityExperience
+        workspaceId="workspace-1"
+        projectId="project-1"
+        analysisRunId="run-1"
+        resultAvailable={false}
+        reportsAvailable={false}
+        state={{
+          kind: "ready",
+          data: lineage,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: "View Analysis Status",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1",
+    );
+
+    expect(
+      screen.queryByRole("link", {
+        name: "View Results",
+      }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("link", {
+        name: "View Reports",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+
+
   it("states the supported reproducibility boundary", () => {
     render(
       <ReproducibilityExperience

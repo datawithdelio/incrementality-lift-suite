@@ -213,6 +213,15 @@ export function AnalysisRunStatusExperience({
         }
       />
 
+      <div className="state-actions">
+        <Link
+          className="button secondary"
+          href={`${runPath}/lineage`}
+        >
+          View Reproducibility
+        </Link>
+      </div>
+
       <AnalysisRunSummary
         estimatorType={data.estimator_type}
         configuration={

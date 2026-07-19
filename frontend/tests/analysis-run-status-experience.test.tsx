@@ -208,6 +208,60 @@ describe(
       },
     );
 
+    it.each([
+      ["queued", "queued"],
+      ["running", "running"],
+      ["running", "retrying"],
+      ["failed", "failed"],
+      ["cancelled", "cancelled"],
+    ] as const)(
+      "links %s/%s runs to their exact persisted reproducibility receipt",
+      (
+        runStatus,
+        lifecycleStatus,
+      ) => {
+        render(
+          <AnalysisRunStatusExperience
+            state={{
+              kind: "ready",
+              refreshError: false,
+              data: {
+                ...base,
+                run_status: runStatus,
+                lifecycle_status:
+                  lifecycleStatus,
+                result: null,
+              },
+            }}
+          />,
+        );
+
+        expect(
+          screen.getByRole(
+            "link",
+            {
+              name:
+                "View Reproducibility",
+            },
+          ),
+        ).toHaveAttribute(
+          "href",
+          "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1/lineage",
+        );
+
+        expect(
+          screen.queryByRole(
+            "link",
+            {
+              name: "View Results",
+            },
+          ),
+        ).not.toBeInTheDocument();
+      },
+    );
+
+
+
     it(
       "shows the persisted immutable analysis configuration as read only",
       () => {

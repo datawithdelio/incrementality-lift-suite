@@ -1,5 +1,14 @@
 "use client";
 
+import Link from "next/link";
+
+import {
+  analysisResultPath,
+  analysisRunPath,
+} from "@/lib/projects/routes";
+
+
+
 import type {
   AnalysisLineageState,
   AnalysisRunLineageResponse,
@@ -90,7 +99,17 @@ function isLegacy(
 
 export function ReproducibilityExperience({
   state,
+  workspaceId,
+  projectId,
+  analysisRunId,
+  resultAvailable = false,
+  reportsAvailable = false,
 }: {
+  workspaceId?: string;
+  projectId?: string;
+  analysisRunId?: string;
+  resultAvailable?: boolean;
+  reportsAvailable?: boolean;
   state: AnalysisLineageState;
 }) {
   if (state.kind === "loading") {
@@ -193,7 +212,51 @@ export function ReproducibilityExperience({
         </section>
       ) : null}
 
-      <section className="panel">
+            {workspaceId && projectId && analysisRunId ? (
+        <nav
+          className="state-actions"
+          aria-label="Analysis run navigation"
+        >
+          <Link
+            className="button secondary"
+            href={analysisRunPath(
+              workspaceId,
+              projectId,
+              analysisRunId,
+            )}
+          >
+            View Analysis Status
+          </Link>
+
+          {resultAvailable ? (
+            <Link
+              className="button secondary"
+              href={analysisResultPath(
+                workspaceId,
+                projectId,
+                analysisRunId,
+              )}
+            >
+              View Results
+            </Link>
+          ) : null}
+
+          {reportsAvailable ? (
+            <Link
+              className="button secondary"
+              href={`${analysisRunPath(
+                workspaceId,
+                projectId,
+                analysisRunId,
+              )}/reports`}
+            >
+              View Reports
+            </Link>
+          ) : null}
+        </nav>
+      ) : null}
+
+<section className="panel">
         <p className="eyebrow">
           Reproducibility boundary
         </p>
