@@ -67,6 +67,11 @@ def _to_response(view: AnalysisResultView) -> AnalysisResultResponse:
         semantic_mapping_version=(
             view.run.semantic_mapping_version
         ),
+        target_outcome=(
+            view.run.estimand_snapshot.target_outcome
+            if view.run.estimand_snapshot is not None
+            else None
+        ),
         created_at=view.run.created_at,
         started_at=view.run.started_at,
         completed_at=view.run.completed_at,

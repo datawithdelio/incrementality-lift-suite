@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ResultsExperience } from "../src/components/results/results-experience";
 import type { AnalysisResultResponse } from "../src/lib/results/types";
@@ -258,5 +258,421 @@ describe("ResultsExperience", () => {
       "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1/lineage",
     );
   });
+
+  it("shows a finalizing state when a succeeded run result is not available yet", () => {
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: {
+            ...base,
+            run_status: "succeeded",
+            lifecycle_status: "succeeded",
+            result: null,
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Your analysis completed, but the result is still being finalized.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", {
+        name: "Return to Status",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1",
+    );
+  });
+
+
+  it("calls retry when a finalized analysis result is not available yet", () => {
+    const retry = vi.fn();
+
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: {
+            ...base,
+            run_status: "succeeded",
+            lifecycle_status: "succeeded",
+            result: null,
+          },
+        }}
+        onRetry={retry}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Retry",
+      }),
+    );
+
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+
+  it("labels the off-policy primary effect as estimated policy value", () => {
+    const ope = structuredClone(base);
+
+    ope.estimator_type =
+      "off_policy_evaluation";
+
+    ope.result!.business_impact = {
+      incremental_outcome: null,
+      relative_lift: null,
+      incremental_revenue: null,
+      incremental_conversions: null,
+    };
+
+    ope.result!.effect_estimate = 4.2;
+
+    ope.result!.technical_diagnostics = {
+      ...ope.result!.technical_diagnostics,
+      policy_name: "growth_policy",
+      primary_method: "doubly_robust",
+      policy_estimates: {
+        importance_sampling: 4.1,
+        self_normalized_importance_sampling: 3.9,
+        doubly_robust: 4.2,
+      },
+      effective_sample_size: 180,
+      reliability: "strong",
+      propensity_overlap: {
+        maximum_importance_weight: 2.4,
+      },
+    };
+
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: ope,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Estimated policy value",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByText(
+        "treatment effect",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+
+  it("does not expose raw result JSON in technical details", () => {
+    const { container } = render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: base,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Technical details",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      container.querySelector("pre"),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByText(
+        /"analysis_configuration"/,
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+
+  it("uses average media contribution as the MMM primary result", () => {
+    const mmm = structuredClone(base);
+
+    mmm.estimator_type =
+      "marketing_mix_model";
+
+    mmm.result!.effect_estimate = 50;
+
+    mmm.result!.business_impact = {
+      incremental_outcome: 1200,
+      relative_lift: 0.1,
+      incremental_revenue: null,
+      incremental_conversions: null,
+    };
+
+    mmm.result!.technical_diagnostics = {
+      ...mmm.result!.technical_diagnostics,
+      causal_claim_allowed: false,
+      recommendations_allowed: true,
+      channel_contributions: {
+        search: 800,
+        social: 400,
+      },
+      posterior_intervals: {
+        search: {
+          low: 500,
+          high: 1000,
+        },
+      },
+      convergence: {
+        max_r_hat: 1.01,
+        min_effective_sample_size: 800,
+        divergences: 0,
+      },
+    };
+
+    const { container } = render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: mmm,
+        }}
+      />,
+    );
+
+    const heroMetric =
+      container.querySelector(
+        ".hero-metric",
+      );
+
+    expect(heroMetric).toHaveTextContent(
+      "50",
+    );
+
+    expect(heroMetric).toHaveTextContent(
+      "Average media contribution",
+    );
+
+    expect(heroMetric).not.toHaveTextContent(
+      "estimated lift",
+    );
+  });
+
+
+  it("explains when DiD trend-series data is unavailable", () => {
+    const historical = structuredClone(base);
+
+    historical.result!.technical_diagnostics = {
+      ...historical.result!.technical_diagnostics,
+      observed_vs_counterfactual: [],
+    };
+
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: historical,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Trend-series data is not available for this historical result.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+
+  it("separates the off-policy method assumption from its overlap diagnostics", () => {
+    const ope = structuredClone(base);
+
+    ope.estimator_type =
+      "off_policy_evaluation";
+
+    ope.result!.business_impact = {
+      incremental_outcome: null,
+      relative_lift: null,
+      incremental_revenue: null,
+      incremental_conversions: null,
+    };
+
+    ope.result!.technical_diagnostics = {
+      ...ope.result!.technical_diagnostics,
+      policy_name: "growth_policy",
+      primary_method: "doubly_robust",
+      policy_estimates: {
+        doubly_robust: 4.2,
+      },
+      effective_sample_size: 180,
+      reliability: "strong",
+      propensity_overlap: {
+        minimum_behavior_propensity: 0.2,
+        maximum_importance_weight: 2.4,
+      },
+    };
+
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: ope,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole(
+        "heading",
+        {
+          name: "Method assumption",
+        },
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        /adequate support and overlap between the behavior and target policies/i,
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        /Effective sample size/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+
+  it.each([
+    [
+      "difference_in_differences",
+      /parallel trends/i,
+    ],
+    [
+      "synthetic_control",
+      /donor pool can approximate the treated unit/i,
+    ],
+    [
+      "geo_holdout",
+      /treated and holdout geographies remain comparable/i,
+    ],
+    [
+      "marketing_mix_model",
+      /media effects can be separated from seasonality and other modeled factors/i,
+    ],
+  ] as const)(
+    "shows the methodological assumption for each non-OPE estimator: %s",
+    (
+      estimatorType,
+      expectedAssumption,
+    ) => {
+      const result = structuredClone(base);
+
+      result.estimator_type =
+        estimatorType;
+
+      render(
+        <ResultsExperience
+          state={{
+            kind: "ready",
+            refreshError: false,
+            data: result,
+          }}
+        />,
+      );
+
+      expect(
+        screen.getByRole(
+          "heading",
+          {
+            name: "Method assumption",
+          },
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByText(
+          expectedAssumption,
+        ),
+      ).toBeInTheDocument();
+
+      cleanup();
+    },
+  );
+
+
+  it("shows the persisted analysis period and completion time in the completed result header", () => {
+    const completed = structuredClone(base);
+
+    completed.analysis_configuration = {
+      ...completed.analysis_configuration,
+      analysis_start_date: "2026-01-01",
+      analysis_end_date: "2026-03-31",
+    };
+
+    completed.completed_at =
+      "2026-04-01T15:30:00Z";
+
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: completed,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        /Jan 1, 2026.*Mar 31, 2026/i,
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        /Completed Apr 1, 2026/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+
+  it("shows the persisted target outcome in the completed result header", () => {
+    const completed = {
+      ...structuredClone(base),
+      target_outcome: "revenue",
+    };
+
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: completed,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        /Outcome revenue/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
 
 });

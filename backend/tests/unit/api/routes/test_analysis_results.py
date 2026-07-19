@@ -219,6 +219,8 @@ async def test_returns_persisted_analysis_run_metadata() -> None:
     assert payload["semantic_mapping_version"] == (
         view.run.semantic_mapping_version
     )
+
+    assert payload["target_outcome"] == "revenue"
     assert datetime.fromisoformat(
         payload["created_at"].replace(
             "Z",

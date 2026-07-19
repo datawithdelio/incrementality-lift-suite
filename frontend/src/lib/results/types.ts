@@ -12,6 +12,7 @@ export type AnalysisResultResponse = {
   project_id: string;
   dataset_id?: string;
   semantic_mapping_version?: number;
+  target_outcome?: string;
   created_at?: string;
   started_at?: string | null;
   completed_at?: string | null;

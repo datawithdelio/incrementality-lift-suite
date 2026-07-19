@@ -9,6 +9,7 @@ export function useAnalysisResult(
   workspaceId: string,
   projectId: string,
   analysisRunId: string,
+  retryKey = 0,
 ): ResultsState {
   const requestKey =
     `${workspaceId}:${projectId}:${analysisRunId}`;
@@ -137,6 +138,7 @@ export function useAnalysisResult(
     projectId,
     analysisRunId,
     requestKey,
+    retryKey,
   ]);
 
   if (

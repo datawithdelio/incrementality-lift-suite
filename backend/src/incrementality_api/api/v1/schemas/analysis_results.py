@@ -40,6 +40,7 @@ class AnalysisResultResponse(BaseModel):
     project_id: UUID
     dataset_id: UUID
     semantic_mapping_version: int
+    target_outcome: str | None
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
