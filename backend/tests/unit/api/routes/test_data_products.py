@@ -23,15 +23,22 @@ async def test_dataset_preview_requires_authentication() -> None:
 class FakeDownloadReportRepository:
     def __init__(self, job: ReportJob) -> None:
         self._job = job
+        self.requested_run_id: UUID | None = None
 
     async def get(
         self,
         *,
         workspace_id: UUID,
         project_id: UUID,
+        run_id: UUID,
         report_id: UUID,
     ) -> ReportJob | None:
         del workspace_id, project_id, report_id
+        self.requested_run_id = run_id
+
+        if run_id != self._job.analysis_run_id:
+            return None
+
         return self._job
 
 
@@ -57,13 +64,14 @@ async def test_download_report_streams_storage_chunks_lazily() -> None:
     workspace_id = uuid4()
     project_id = uuid4()
     report_id = uuid4()
+    run_id = uuid4()
     storage_key = f"reports/{workspace_id}/analysis/v4.pdf"
 
     job = ReportJob(
         id=report_id,
         workspace_id=workspace_id,
         project_id=project_id,
-        analysis_run_id=uuid4(),
+        analysis_run_id=run_id,
         version=4,
         format="pdf",
         status="succeeded",
@@ -76,14 +84,19 @@ async def test_download_report_streams_storage_chunks_lazily() -> None:
     )
     storage = LazyReportStorage()
 
+    repository = FakeDownloadReportRepository(job)
+
     response = await download_report(
         workspace_id=workspace_id,
         project_id=project_id,
+        run_id=run_id,
         report_id=report_id,
         principal=object(),
-        repository=FakeDownloadReportRepository(job),
+        repository=repository,
         storage=storage,
     )  # type: ignore[arg-type]
+
+    assert repository.requested_run_id == run_id
 
     assert storage.events == []
     assert isinstance(response, StreamingResponse)

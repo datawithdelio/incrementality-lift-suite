@@ -5,7 +5,152 @@ import { assessQuality, DataProductApiError, ExplorerOptions, fetchDatasetVersio
 import type { DataQuality, DatasetPreview, DatasetVersion, LoadState, ReportJob } from "./types";
 const failure = (error: unknown): "permission" | "error" => error instanceof DataProductApiError && [401, 403].includes(error.status) ? "permission" : "error";
 export function useDatasetExplorer(workspace: string, project: string, dataset: string, options: ExplorerOptions, estimator: string) { const [state, setState] = useState<LoadState<DatasetPreview>>({ kind: "loading" }); const [quality, setQuality] = useState<DataQuality>(); const [versions, setVersions] = useState<DatasetVersion[]>([]); const [datasetMetadata, setDatasetMetadata] = useState<Awaited<ReturnType<typeof getDataset>>>(); useEffect(() => { const controller = new AbortController(); const token = localStorage.getItem("incrementality_session_token"); if (!token) { queueMicrotask(() => setState({ kind: "permission" })); return; } queueMicrotask(() => { if (!controller.signal.aborted) setState({ kind: "loading" }); }); Promise.all([fetchPreview(workspace, project, dataset, options, token, controller.signal), assessQuality(workspace, project, dataset, estimator, token, controller.signal), fetchDatasetVersions(workspace, project, token, controller.signal), getDataset(token, workspace, project, dataset)]).then(([data, assessment, datasetVersions, datasetRecord]) => { setState({ kind: "ready", data }); setQuality(assessment); setVersions(datasetVersions); setDatasetMetadata(datasetRecord); }).catch((error) => { if (!controller.signal.aborted) setState({ kind: failure(error) }); }); return () => controller.abort(); }, [workspace, project, dataset, options, estimator]); return { state, quality, versions, dataset: datasetMetadata }; }
-export function useReports(workspace: string, project: string, run: string) { const [reports, setReports] = useState<ReportJob[]>([]); useEffect(() => { const controller = new AbortController(); const token = localStorage.getItem("incrementality_session_token"); if (token) fetchReports(workspace, project, run, token, controller.signal).then(setReports).catch(() => undefined); return () => controller.abort(); }, [workspace, project, run]); return reports; }
+export function useReports(
+  workspace: string,
+  project: string,
+  run: string,
+  refreshGeneration = 0,
+): LoadState<ReportJob[]> {
+  const scopeKey =
+    `${workspace}:${project}:${run}`;
+
+  const [scopedState, setScopedState] = useState<{
+    scopeKey: string;
+    state: LoadState<ReportJob[]>;
+  }>({
+    scopeKey,
+    state: {
+      kind: "loading",
+    },
+  });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const token = localStorage.getItem("incrementality_session_token");
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastReports: ReportJob[] | null = null;
+
+    if (!token) {
+      queueMicrotask(() => {
+        if (!controller.signal.aborted) {
+          setScopedState({
+            scopeKey,
+            state: {
+              kind: "permission",
+            },
+          });
+        }
+      });
+
+      return () => controller.abort();
+    }
+
+    const sessionToken: string = token;
+
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) {
+        setScopedState({
+          scopeKey,
+          state: {
+            kind: "loading",
+          },
+        });
+      }
+    });
+
+    async function loadReports(): Promise<void> {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      try {
+        const reports = await fetchReports(
+          workspace,
+          project,
+          run,
+          sessionToken,
+          controller.signal,
+        );
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        lastReports = reports;
+
+        setScopedState({
+          scopeKey,
+          state: {
+            kind: "ready",
+            data: reports,
+          },
+        });
+
+        const hasActiveReport = reports.some(
+          (report) =>
+            report.status === "pending" ||
+            report.status === "running",
+        );
+
+        if (hasActiveReport) {
+          pollTimer = setTimeout(() => {
+            void loadReports();
+          }, 3000);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const hasActiveReport =
+          lastReports?.some(
+            (report) =>
+              report.status === "pending"
+              || report.status === "running",
+          ) ?? false;
+
+        if (hasActiveReport) {
+          pollTimer = setTimeout(() => {
+            void loadReports();
+          }, 3000);
+
+          return;
+        }
+
+        setScopedState({
+          scopeKey,
+          state: {
+            kind: failure(error),
+          },
+        });
+      }
+    }
+
+    void loadReports();
+
+    return () => {
+      controller.abort();
+
+      if (pollTimer !== undefined) {
+        clearTimeout(pollTimer);
+      }
+    };
+  }, [
+    workspace,
+    project,
+    run,
+    scopeKey,
+    refreshGeneration,
+  ]);
+
+  if (scopedState.scopeKey !== scopeKey) {
+    return {
+      kind: "loading",
+    };
+  }
+
+  return scopedState.state;
+}
 
 export function useDataQuality(
   workspace: string,

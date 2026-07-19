@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class ColumnSummaryResponse(BaseModel):
@@ -69,6 +69,22 @@ class ReportJobResponse(BaseModel):
     status: str
     attempt_count: int
     max_attempts: int
-    storage_key: str | None
     failure_reason: str | None
     created_at: datetime
+
+    @field_validator(
+        "failure_reason",
+        mode="before",
+    )
+    @classmethod
+    def sanitize_failure_reason(
+        cls,
+        value: object,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        return (
+            "Report generation failed. "
+            "Please regenerate the report."
+        )

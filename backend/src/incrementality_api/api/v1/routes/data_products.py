@@ -214,10 +214,13 @@ async def list_reports(
     )
 
 
-@router.get("/reports/{report_id}/download")
+@router.get(
+    "/analysis-runs/{run_id}/reports/{report_id}/download"
+)
 async def download_report(
     workspace_id: UUID,
     project_id: UUID,
+    run_id: UUID,
     report_id: UUID,
     principal: Annotated[AuthorizedWorkspacePrincipal, Depends(_reports)],
     repository: Annotated[SqlAlchemyReportRepository, Depends(get_report_repository)],
@@ -225,7 +228,10 @@ async def download_report(
 ) -> Response:
     del principal
     job = await repository.get(
-        workspace_id=workspace_id, project_id=project_id, report_id=report_id
+        workspace_id=workspace_id,
+        project_id=project_id,
+        run_id=run_id,
+        report_id=report_id,
     )
     if job is None or job.status != "succeeded" or job.storage_key is None:
         raise HTTPException(404, "Completed report is unavailable.")

@@ -280,7 +280,12 @@ class SqlAlchemyReportRepository:
             return tuple(_job(model) for model in models)
 
     async def get(
-        self, *, workspace_id: UUID, project_id: UUID, report_id: UUID
+        self,
+        *,
+        workspace_id: UUID,
+        project_id: UUID,
+        run_id: UUID,
+        report_id: UUID,
     ) -> ReportJob | None:
         async with self._sessions() as session:
             model = await session.scalar(
@@ -288,6 +293,7 @@ class SqlAlchemyReportRepository:
                     ReportGenerationModel.id == report_id,
                     ReportGenerationModel.workspace_id == workspace_id,
                     ReportGenerationModel.project_id == project_id,
+                    ReportGenerationModel.analysis_run_id == run_id,
                 )
             )
             return None if model is None else _job(model)

@@ -27,11 +27,11 @@ describe("DataExplorer", () => {
 
 describe("ReportHistory", () => {
   it("shows generation, retry, failure, and downloadable versions", () => {
-    render(<ReportHistory reports={[{ id: "1", version: 3, format: "pdf", status: "succeeded", attempt_count: 1, max_attempts: 3, failure_reason: null, created_at: "2026-07-14" }, { id: "2", version: 2, format: "csv", status: "pending", attempt_count: 1, max_attempts: 3, failure_reason: "Report generation failed safely.", created_at: "2026-07-13" }, { id: "3", version: 1, format: "pdf", status: "failed", attempt_count: 3, max_attempts: 3, failure_reason: "Report generation failed safely.", created_at: "2026-07-12" }]} downloadBase="/api" />);
+    render(<ReportHistory reports={[{ id: "1", version: 3, format: "pdf", status: "succeeded", attempt_count: 1, max_attempts: 3, failure_reason: null, created_at: "2026-07-14" }, { id: "2", version: 2, format: "csv", status: "pending", attempt_count: 1, max_attempts: 3, failure_reason: "Report generation failed safely.", created_at: "2026-07-13" }, { id: "3", version: 1, format: "pdf", status: "failed", attempt_count: 3, max_attempts: 3, failure_reason: "Report generation failed safely.", created_at: "2026-07-12" }]} workspaceId="workspace-1" projectId="project-1" runId="run-1" />);
     expect(screen.getByText("PDF · version 3")).toBeInTheDocument();
     expect(screen.getByText("Retrying")).toBeInTheDocument();
     expect(screen.getByText("Failed")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Download" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
   });
 });
 
