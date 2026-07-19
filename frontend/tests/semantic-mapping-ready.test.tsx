@@ -1266,80 +1266,69 @@ describe("semantic mapping ready dataset experience", () => {
       },
     );
 
-    const covariates =
+    const competitorCovariate =
       screen.getByLabelText(
-        "Covariate columns",
-      ) as HTMLSelectElement;
+        "Covariate competitor_index",
+      );
 
-    expect(covariates).toHaveAttribute(
-      "multiple",
+    const holidayCovariate =
+      screen.getByLabelText(
+        "Covariate holiday_flag",
+      );
+
+    expect(
+      competitorCovariate,
+    ).not.toBeDisabled();
+
+    expect(
+      holidayCovariate,
+    ).not.toBeDisabled();
+
+    expect(
+      screen.getByLabelText(
+        "Covariate event_date",
+      ),
+    ).toBeDisabled();
+
+    expect(
+      screen.getByLabelText(
+        "Covariate region",
+      ),
+    ).toBeDisabled();
+
+    expect(
+      screen.getByLabelText(
+        "Covariate treated",
+      ),
+    ).toBeDisabled();
+
+    expect(
+      screen.getByLabelText(
+        "Covariate revenue",
+      ),
+    ).toBeDisabled();
+
+    expect(
+      screen.getByLabelText(
+        "Covariate ad_spend",
+      ),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      competitorCovariate,
+    );
+
+    fireEvent.click(
+      holidayCovariate,
     );
 
     expect(
-      within(covariates).getByRole("option", {
-        name: "competitor_index — float",
-      }),
-    ).not.toBeDisabled();
+      competitorCovariate,
+    ).toBeChecked();
 
     expect(
-      within(covariates).getByRole("option", {
-        name: "holiday_flag — boolean",
-      }),
-    ).not.toBeDisabled();
-
-    expect(
-      within(covariates).getByRole("option", {
-        name: "event_date — date",
-      }),
-    ).toBeDisabled();
-
-    expect(
-      within(covariates).getByRole("option", {
-        name: "region — string",
-      }),
-    ).toBeDisabled();
-
-    expect(
-      within(covariates).getByRole("option", {
-        name: "treated — integer",
-      }),
-    ).toBeDisabled();
-
-    expect(
-      within(covariates).getByRole("option", {
-        name: "revenue — float",
-      }),
-    ).toBeDisabled();
-
-    expect(
-      within(covariates).getByRole("option", {
-        name: "ad_spend — float",
-      }),
-    ).toBeDisabled();
-
-    const competitorOption =
-      within(covariates).getByRole("option", {
-        name: "competitor_index — float",
-      }) as HTMLOptionElement;
-
-    const holidayOption =
-      within(covariates).getByRole("option", {
-        name: "holiday_flag — boolean",
-      }) as HTMLOptionElement;
-
-    competitorOption.selected = true;
-    holidayOption.selected = true;
-
-    fireEvent.change(covariates);
-
-    expect(
-      Array.from(covariates.selectedOptions).map(
-        (option) => option.value,
-      ),
-    ).toEqual([
-      "competitor_index",
-      "holiday_flag",
-    ]);
+      holidayCovariate,
+    ).toBeChecked();
   });
 
 
@@ -1441,31 +1430,17 @@ describe("semantic mapping ready dataset experience", () => {
       },
     );
 
-    const covariates =
+    fireEvent.click(
       screen.getByLabelText(
-        "Covariate columns",
-      ) as HTMLSelectElement;
+        "Covariate competitor_index",
+      ),
+    );
 
-    const competitorOption =
-      within(covariates).getByRole(
-        "option",
-        {
-          name: "competitor_index — float",
-        },
-      ) as HTMLOptionElement;
-
-    const holidayOption =
-      within(covariates).getByRole(
-        "option",
-        {
-          name: "holiday_flag — boolean",
-        },
-      ) as HTMLOptionElement;
-
-    competitorOption.selected = true;
-    holidayOption.selected = true;
-
-    fireEvent.change(covariates);
+    fireEvent.click(
+      screen.getByLabelText(
+        "Covariate holiday_flag",
+      ),
+    );
 
     fireEvent.click(
       screen.getByRole("button", {

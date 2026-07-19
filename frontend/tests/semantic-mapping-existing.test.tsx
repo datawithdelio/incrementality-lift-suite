@@ -274,21 +274,17 @@ describe("existing semantic mapping editing", () => {
       screen.getByLabelText("Spend column"),
     ).toHaveValue("ad_spend");
 
-    const covariates =
+    expect(
       screen.getByLabelText(
-        "Covariate columns",
-      ) as HTMLSelectElement;
+        "Covariate competitor_index",
+      ),
+    ).toBeChecked();
 
     expect(
-      Array.from(
-        covariates.selectedOptions,
-      ).map(
-        (option) => option.value,
+      screen.getByLabelText(
+        "Covariate holiday_flag",
       ),
-    ).toEqual([
-      "competitor_index",
-      "holiday_flag",
-    ]);
+    ).toBeChecked();
 
     // Edit the existing mapping.
     fireEvent.change(

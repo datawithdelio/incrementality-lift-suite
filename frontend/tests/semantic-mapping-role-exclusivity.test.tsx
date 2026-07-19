@@ -193,19 +193,11 @@ async function reachSpendAndCovariates() {
 function selectCovariate(
   columnName: string,
 ) {
-  const select = screen.getByLabelText(
-    "Covariate columns",
-  ) as HTMLSelectElement;
-
-  const option = within(select).getByRole(
-    "option",
-    {
-      name: new RegExp(columnName),
-    },
-  ) as HTMLOptionElement;
-
-  option.selected = true;
-  fireEvent.change(select);
+  fireEvent.click(
+    screen.getByLabelText(
+      `Covariate ${columnName}`,
+    ),
+  );
 }
 
 describe(

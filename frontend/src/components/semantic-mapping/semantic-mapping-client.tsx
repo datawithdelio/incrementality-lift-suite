@@ -1513,37 +1513,88 @@ export function SemanticMappingClient({
               ))}
             </select>
 
-            <label htmlFor="semantic-covariate-columns">
-              Covariate columns
-            </label>
+            <div className="semantic-covariate-field">
+              <span
+                id="semantic-covariate-columns-label"
+                className="semantic-covariate-label"
+              >
+                Covariate columns
+              </span>
 
-            <select
-              id="semantic-covariate-columns"
-              aria-label="Covariate columns"
-              multiple
-              value={state.draft.covariate_columns}
-              onChange={(event) =>
-                updateCovariateColumns(
-                  Array.from(
-                    event.currentTarget.selectedOptions,
-                    (option) => option.value,
-                  ),
-                )}
-            >
-              {state.columns.map((column) => (
-                <option
-                  key={column.name}
-                  value={column.name}
-                  disabled={isColumnAssignedElsewhere(
-                    state.draft,
-                    column.name,
-                    "covariate_columns",
-                  )}
+              <details className="semantic-covariate-dropdown">
+                <summary>
+                  {state.draft.covariate_columns.length === 0
+                    ? "Select covariate columns"
+                    : `${state.draft.covariate_columns.length} covariate${
+                        state.draft.covariate_columns.length === 1
+                          ? ""
+                          : "s"
+                      } selected`}
+                </summary>
+
+                <div
+                  className="semantic-covariate-options"
+                  role="group"
+                  aria-labelledby="semantic-covariate-columns-label"
                 >
-                  {column.name} — {column.inferred_type}
-                </option>
-              ))}
-            </select>
+                  {state.columns.map((column) => {
+                    const checked =
+                      state.draft.covariate_columns.includes(
+                        column.name,
+                      );
+
+                    const disabled =
+                      isColumnAssignedElsewhere(
+                        state.draft,
+                        column.name,
+                        "covariate_columns",
+                      );
+
+                    return (
+                      <label
+                        key={column.name}
+                        className="semantic-covariate-option"
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={
+                            `Covariate ${column.name}`
+                          }
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={(event) => {
+                            const nextColumns =
+                              event.target.checked
+                                ? [
+                                    ...state.draft
+                                      .covariate_columns,
+                                    column.name,
+                                  ]
+                                : state.draft
+                                    .covariate_columns
+                                    .filter(
+                                      (candidate) =>
+                                        candidate
+                                        !== column.name,
+                                    );
+
+                            updateCovariateColumns(
+                              nextColumns,
+                            );
+                          }}
+                        />
+
+                        <span>
+                          {column.name}
+                          {" — "}
+                          {column.inferred_type}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </details>
+            </div>
 
             {stepError !== null ? (
               <p role="alert">
