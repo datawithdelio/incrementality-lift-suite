@@ -38,6 +38,11 @@ class AnalysisResultResponse(BaseModel):
     analysis_run_id: UUID
     workspace_id: UUID
     project_id: UUID
+    dataset_id: UUID
+    semantic_mapping_version: int
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
     run_status: AnalysisRunStatus
     lifecycle_status: Literal[
         "queued", "running", "retrying", "succeeded", "failed", "cancelled"

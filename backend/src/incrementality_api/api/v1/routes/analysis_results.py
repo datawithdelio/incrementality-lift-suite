@@ -63,6 +63,13 @@ def _to_response(view: AnalysisResultView) -> AnalysisResultResponse:
         analysis_run_id=view.run.id,
         workspace_id=view.run.workspace_id,
         project_id=view.run.project_id,
+        dataset_id=view.run.dataset_id,
+        semantic_mapping_version=(
+            view.run.semantic_mapping_version
+        ),
+        created_at=view.run.created_at,
+        started_at=view.run.started_at,
+        completed_at=view.run.completed_at,
         run_status=view.run.status,
         lifecycle_status=view.lifecycle_status,  # type: ignore[arg-type]
         estimator_type=view.run.estimator_type,

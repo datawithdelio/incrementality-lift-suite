@@ -181,5 +181,43 @@ describe(
       );
     });
 
+
+    it("routes a succeeded analysis directly to its completed result", async () => {
+      getProjectOverviewMock.mockResolvedValue({
+        ...baseProject,
+        semantic_mapping_configured: true,
+        latest_analysis_run_id: "run-1",
+        latest_analysis_run_status: "succeeded",
+      });
+
+      render(
+        <ProjectOverview
+          workspaceId="workspace-1"
+          projectId="project-1"
+        />,
+      );
+
+      expect(
+        await screen.findByRole(
+          "heading",
+          {
+            name: "Review the latest result",
+          },
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByRole(
+          "link",
+          {
+            name: /Open current step/i,
+          },
+        ),
+      ).toHaveAttribute(
+        "href",
+        "/workspaces/workspace-1/projects/project-1/analysis-runs/run-1/result",
+      );
+    });
+
   },
 );

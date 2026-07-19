@@ -1,8 +1,8 @@
 import {
-  AnalysisRunStatusPageClient,
-} from "@/components/analysis-runs/analysis-run-status-page-client";
+  ResultsPageClient,
+} from "@/components/results/results-page-client";
 
-export default async function AnalysisRunPage({
+export default async function AnalysisResultPage({
   params,
 }: {
   params: Promise<{
@@ -18,7 +18,7 @@ export default async function AnalysisRunPage({
   } = await params;
 
   return (
-    <AnalysisRunStatusPageClient
+    <ResultsPageClient
       workspaceId={workspaceId}
       projectId={projectId}
       analysisRunId={analysisRunId}

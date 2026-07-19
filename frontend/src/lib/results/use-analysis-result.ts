@@ -10,15 +10,47 @@ export function useAnalysisResult(
   projectId: string,
   analysisRunId: string,
 ): ResultsState {
-  const [state, setState] = useState<ResultsState>({ kind: "loading" });
+  const requestKey =
+    `${workspaceId}:${projectId}:${analysisRunId}`;
+
+  const [
+    storedState,
+    setStoredState,
+  ] = useState<{
+    requestKey: string;
+    state: ResultsState;
+  }>({
+    requestKey,
+    state: {
+      kind: "loading",
+    },
+  });
 
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastKnownData:
+      | Extract<ResultsState, { kind: "ready" }>["data"]
+      | undefined;
+
+    const isNonTerminal = (
+      status: string,
+    ) =>
+      [
+        "queued",
+        "running",
+        "retrying",
+      ].includes(status);
+
     const load = async () => {
       const token = window.localStorage.getItem("incrementality_session_token");
       if (!token) {
-        setState({ kind: "permission" });
+        setStoredState({
+          requestKey,
+          state: {
+            kind: "permission",
+          },
+        });
         return;
       }
       try {
@@ -29,18 +61,69 @@ export function useAnalysisResult(
           token,
           controller.signal,
         );
-        setState({ kind: "ready", data });
-        if (["queued", "running", "retrying"].includes(data.lifecycle_status)) {
-          timer = setTimeout(load, 3000);
+        lastKnownData = data;
+        setStoredState({
+          requestKey,
+          state: {
+            kind: "ready",
+            data,
+            refreshError: false,
+          },
+        });
+
+        if (
+          isNonTerminal(
+            data.lifecycle_status,
+          )
+        ) {
+          timer = setTimeout(
+            load,
+            3000,
+          );
         }
       } catch (error) {
         if (controller.signal.aborted) return;
         if (error instanceof ResultsApiError && [401, 403].includes(error.status)) {
-          setState({ kind: "permission" });
+          setStoredState({
+          requestKey,
+          state: {
+            kind: "permission",
+          },
+        });
         } else if (error instanceof ResultsApiError && error.status === 404) {
-          setState({ kind: "missing" });
+          setStoredState({
+            requestKey,
+            state: {
+              kind: "missing",
+            },
+          });
+        } else if (
+          lastKnownData
+          && isNonTerminal(
+            lastKnownData
+              .lifecycle_status,
+          )
+        ) {
+          setStoredState({
+            requestKey,
+            state: {
+              kind: "ready",
+              data: lastKnownData,
+              refreshError: true,
+            },
+          });
+
+          timer = setTimeout(
+            load,
+            3000,
+          );
         } else {
-          setState({ kind: "error" });
+          setStoredState({
+            requestKey,
+            state: {
+              kind: "error",
+            },
+          });
         }
       }
     };
@@ -49,6 +132,21 @@ export function useAnalysisResult(
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [workspaceId, projectId, analysisRunId]);
-  return state;
+  }, [
+    workspaceId,
+    projectId,
+    analysisRunId,
+    requestKey,
+  ]);
+
+  if (
+    storedState.requestKey
+    !== requestKey
+  ) {
+    return {
+      kind: "loading",
+    };
+  }
+
+  return storedState.state;
 }

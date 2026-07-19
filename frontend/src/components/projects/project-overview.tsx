@@ -24,6 +24,8 @@ import {
 } from "@/lib/projects/api";
 import {
   analysisConfigurationPath,
+  analysisResultPath,
+  analysisRunPath,
   datasetUploadPath,
   projectPath,
   workspacePath,
@@ -158,7 +160,17 @@ export function ProjectOverview({
           )
         : nextAction.destination === "analysis"
           && project.latest_analysis_run_id
-          ? `/workspaces/${workspaceId}/projects/${projectId}/analysis-runs/${project.latest_analysis_run_id}`
+          ? project.latest_analysis_run_status === "succeeded"
+            ? analysisResultPath(
+                workspaceId,
+                projectId,
+                project.latest_analysis_run_id,
+              )
+            : analysisRunPath(
+                workspaceId,
+                projectId,
+                project.latest_analysis_run_id,
+              )
           : null;
   return (
     <main className="project-shell project-overview">

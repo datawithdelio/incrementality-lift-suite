@@ -10,6 +10,11 @@ export type AnalysisResultResponse = {
   analysis_run_id: string;
   workspace_id: string;
   project_id: string;
+  dataset_id?: string;
+  semantic_mapping_version?: number;
+  created_at?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
   run_status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   lifecycle_status: LifecycleStatus;
   estimator_type: string;
@@ -43,4 +48,8 @@ export type ResultsState =
   | { kind: "permission" }
   | { kind: "missing" }
   | { kind: "error" }
-  | { kind: "ready"; data: AnalysisResultResponse };
+  | {
+      kind: "ready";
+      data: AnalysisResultResponse;
+      refreshError: boolean;
+    };

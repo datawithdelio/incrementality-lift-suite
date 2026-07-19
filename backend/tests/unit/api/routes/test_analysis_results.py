@@ -201,6 +201,47 @@ async def test_returns_stable_contract_for_run_states(state: str) -> None:
 
 
 @pytest.mark.asyncio
+async def test_returns_persisted_analysis_run_metadata() -> None:
+    view = build_view(succeeded=True)
+
+    response = await request(
+        app_for(FakeService(view)),
+        view,
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["dataset_id"] == str(
+        view.run.dataset_id
+    )
+    assert payload["semantic_mapping_version"] == (
+        view.run.semantic_mapping_version
+    )
+    assert datetime.fromisoformat(
+        payload["created_at"].replace(
+            "Z",
+            "+00:00",
+        )
+    ) == view.run.created_at
+
+    assert datetime.fromisoformat(
+        payload["started_at"].replace(
+            "Z",
+            "+00:00",
+        )
+    ) == view.run.started_at
+
+    assert datetime.fromisoformat(
+        payload["completed_at"].replace(
+            "Z",
+            "+00:00",
+        )
+    ) == view.run.completed_at
+
+
+@pytest.mark.asyncio
 async def test_missing_run_is_404() -> None:
     view = build_view()
     response = await request(app_for(FakeService()), view)

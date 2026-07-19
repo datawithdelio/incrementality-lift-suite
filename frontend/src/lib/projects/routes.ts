@@ -27,6 +27,18 @@ export function analysisRunPath(
   )}/analysis-runs/${analysisRunId}`;
 }
 
+export function analysisResultPath(
+  workspaceId: string,
+  projectId: string,
+  analysisRunId: string,
+): string {
+  return `${analysisRunPath(
+    workspaceId,
+    projectId,
+    analysisRunId,
+  )}/result`;
+}
+
 export function datasetUploadPath(
   workspaceId: string,
   projectId: string,

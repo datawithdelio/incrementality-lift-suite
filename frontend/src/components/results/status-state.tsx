@@ -3,17 +3,17 @@ import type { LifecycleStatus } from "@/lib/results/types";
 const copy: Record<LifecycleStatus, { eyebrow: string; title: string; body: string }> = {
   queued: {
     eyebrow: "Queued",
-    title: "Your analysis is in line",
+    title: "Analysis queued",
     body: "We’ll start as soon as processing capacity is available. This page updates automatically.",
   },
   running: {
     eyebrow: "Running",
-    title: "Estimating incremental impact",
-    body: "We’re validating the design, estimating lift, and checking the assumptions behind the result.",
+    title: "Analysis running",
+    body: "Your analysis is currently being processed.",
   },
   retrying: {
     eyebrow: "Retrying",
-    title: "We’re retrying your analysis",
+    title: "Retrying analysis",
     body: "A temporary service issue interrupted the first attempt. No action is needed from you.",
   },
   failed: {
@@ -23,7 +23,7 @@ const copy: Record<LifecycleStatus, { eyebrow: string; title: string; body: stri
   },
   cancelled: {
     eyebrow: "Cancelled",
-    title: "This analysis was cancelled",
+    title: "Analysis cancelled",
     body: "Start a new run whenever you’re ready.",
   },
   succeeded: { eyebrow: "Complete", title: "Analysis complete", body: "" },
@@ -38,6 +38,15 @@ export function StatusState({ status, attempt }: { status: LifecycleStatus; atte
         <p className="eyebrow">{content.eyebrow}</p>
         <h1>{content.title}</h1>
         <p>{content.body}</p>
+
+        {status === "running" ? (
+          <div
+            role="progressbar"
+            aria-label="Analysis running"
+            className="analysis-running-progress"
+          />
+        ) : null}
+
         {attempt ? <p className="attempt">{attempt}</p> : null}
       </section>
     </main>

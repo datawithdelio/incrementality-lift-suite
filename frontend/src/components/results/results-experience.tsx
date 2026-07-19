@@ -18,13 +18,38 @@ function number(value: number, digits = 1): string { return new Intl.NumberForma
 function percent(value: number): string { return `${value >= 0 ? "+" : ""}${number(value * 100, 1)}%`; }
 
 export function ResultsExperience({ state }: { state: ResultsState }) {
-  if (state.kind === "loading") return <StatusState status="running" />;
+  if (state.kind === "loading") return <LoadingAnalysisStatus />;
   if (state.kind === "permission") return <Message title="You don’t have access to this result" body="Ask a workspace administrator for access, or switch to the correct workspace." />;
   if (state.kind === "missing") return <Message title="We couldn’t find this analysis" body="It may have been removed or belong to another project." />;
   if (state.kind === "error") return <Message title="Results are temporarily unavailable" body="Refresh in a moment. Your completed analysis remains safely stored." />;
   const data = state.data;
-  if (data.lifecycle_status !== "succeeded" || !data.result) {
-    return <StatusState status={data.lifecycle_status} attempt={data.attempt_count ? `Attempt ${data.attempt_count} of ${data.max_attempts}` : undefined} />;
+
+  if (
+    data.lifecycle_status !== "succeeded"
+    || !data.result
+  ) {
+    return (
+      <>
+        {state.refreshError ? (
+          <div
+            role="alert"
+            className="status-refresh-alert"
+          >
+            Unable to refresh analysis status.
+            Showing the last known status.
+          </div>
+        ) : null}
+
+        <StatusState
+          status={data.lifecycle_status}
+          attempt={
+            data.attempt_count
+              ? `Attempt ${data.attempt_count} of ${data.max_attempts}`
+              : undefined
+          }
+        />
+      </>
+    );
   }
 
   const result = data.result;
@@ -110,6 +135,28 @@ export function ResultsExperience({ state }: { state: ResultsState }) {
       <section className="panel"><div className="panel-heading"><div><p className="eyebrow">Assumption check</p><h2>Effect over time</h2></div><p>Pre-treatment estimates should remain close to zero.</p></div><EventStudyChart points={arrayValue(diagnostics.event_study)} /></section></> : null}
 
       <details className="technical"><summary>Technical details</summary><div className="technical-grid"><Metric label="Standard error" value={number(result.standard_error, 3)} /><Metric label="Estimator" value={`${result.estimator_version} · ${result.library_name} ${result.library_version}`} /><Metric label="Model" value={String(objectValue(diagnostics.model_specification).formula ?? "Difference-in-differences")} /><Metric label="Design assessment" value={String(diagnostics.design_assessment ?? "Not available")} /></div><pre>{JSON.stringify({ analysis_configuration: data.analysis_configuration, diagnostics }, null, 2)}</pre></details>
+    </main>
+  );
+}
+
+function LoadingAnalysisStatus() {
+  return (
+    <main className="state-shell">
+      <section
+        className="state-card"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <p className="eyebrow">
+          Analysis status
+        </p>
+        <h1>
+          Loading analysis status
+        </h1>
+        <p>
+          Checking the latest status from the server.
+        </p>
+      </section>
     </main>
   );
 }

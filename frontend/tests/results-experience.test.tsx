@@ -47,9 +47,16 @@ const base: AnalysisResultResponse = {
 afterEach(cleanup);
 
 describe("ResultsExperience", () => {
-  it("shows a focused loading state", () => {
+  it("does not report execution as running before status is loaded", () => {
     render(<ResultsExperience state={{ kind: "loading" }} />);
-    expect(screen.getByText("Estimating incremental impact")).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Loading analysis status"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByText("Analysis running"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows an empty state when no result exists", () => {
@@ -58,12 +65,76 @@ describe("ResultsExperience", () => {
   });
 
   it("shows queued and retrying states in customer language", () => {
-    render(<ResultsExperience state={{ kind: "ready", data: { ...base, lifecycle_status: "retrying", run_status: "running", result: null } }} />);
-    expect(screen.getByText("We’re retrying your analysis")).toBeInTheDocument();
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: { ...base, lifecycle_status: "retrying", run_status: "running", result: null } }} />);
+    expect(screen.getByText("Retrying analysis")).toBeInTheDocument();
+  });
+
+  it("shows honest indeterminate progress while analysis is running", () => {
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data: {
+            ...base,
+            lifecycle_status: "running",
+            run_status: "running",
+            result: null,
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Your analysis is currently being processed.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("progressbar", {
+        name: "Analysis running",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByText(
+        /validating the design/i,
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a refresh warning without replacing the last known running state", () => {
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: true,
+          data: {
+            ...base,
+            lifecycle_status: "running",
+            run_status: "running",
+            result: null,
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Analysis running",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("alert"),
+    ).toHaveTextContent(
+      "Unable to refresh analysis status",
+    );
   });
 
   it("places the main conclusion before technical detail", () => {
-    render(<ResultsExperience state={{ kind: "ready", data: base }} />);
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: base }} />);
     expect(screen.getByRole("heading", { name: /estimated causal increase/i })).toBeInTheDocument();
     expect(screen.getByText("+8.2%")).toBeInTheDocument();
     expect(screen.getByText("Technical details")).toBeInTheDocument();
@@ -78,13 +149,13 @@ describe("ResultsExperience", () => {
       plain_language_conclusion: "The design does not support a causal claim.",
       warnings: ["Pre-treatment trends differ."],
     };
-    render(<ResultsExperience state={{ kind: "ready", data: invalid }} />);
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: invalid }} />);
     expect(screen.getByText("Use this result with caution")).toBeInTheDocument();
     expect(screen.getByText("Pre-treatment trends differ.")).toBeInTheDocument();
   });
 
   it("shows a recoverable failure", () => {
-    render(<ResultsExperience state={{ kind: "ready", data: { ...base, lifecycle_status: "failed", run_status: "failed", result: null, failure_information: "Analysis could not be completed." } }} />);
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: { ...base, lifecycle_status: "failed", run_status: "failed", result: null, failure_information: "Analysis could not be completed." } }} />);
     expect(screen.getByText("This analysis needs attention")).toBeInTheDocument();
   });
 
@@ -105,7 +176,7 @@ describe("ResultsExperience", () => {
       treatment_effects_over_time: [{ period: "2026-01-01", effect: 8.2 }],
       placebo_tests: [{ unit: "donor-a", rmspe_ratio: 1.1 }],
     };
-    render(<ResultsExperience state={{ kind: "ready", data: synthetic }} />);
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: synthetic }} />);
     expect(screen.getByText("Synthetic control fit")).toBeInTheDocument();
     expect(screen.getByText("Donor weights")).toBeInTheDocument();
     expect(screen.getByText("Placebo evidence")).toBeInTheDocument();
@@ -123,7 +194,7 @@ describe("ResultsExperience", () => {
       balance_diagnostics: { standardized_mean_difference: 0.1 },
       spillover_warnings: [],
     };
-    render(<ResultsExperience state={{ kind: "ready", data: geo }} />);
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: geo }} />);
     expect(screen.getByText("Geographic lift")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Geographic treatment and holdout assignments" })).toBeInTheDocument();
   });
@@ -143,7 +214,7 @@ describe("ResultsExperience", () => {
       scenario_plan: [{ scenario: "Shift 10%", recommended_channel: "search", budget_to_reallocate: 1000 }],
       convergence: { max_r_hat: 1.01, min_effective_sample_size: 800, divergences: 0 },
     };
-    render(<ResultsExperience state={{ kind: "ready", data: mmm }} />);
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: mmm }} />);
     expect(screen.getByText("Channel contribution")).toBeInTheDocument();
     expect(screen.getByText("Budget scenario")).toBeInTheDocument();
     expect(screen.getAllByText("search")).toHaveLength(2);
@@ -161,7 +232,7 @@ describe("ResultsExperience", () => {
       plain_language_warning: "Historical decisions provide strong overlap.",
       propensity_overlap: { maximum_importance_weight: 2.4 },
     };
-    render(<ResultsExperience state={{ kind: "ready", data: ope }} />);
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: ope }} />);
     expect(screen.getByText("Policy comparison")).toBeInTheDocument();
     expect(screen.getByText("Effective sample size")).toBeInTheDocument();
     expect(screen.getByText("growth_policy")).toBeInTheDocument();
@@ -171,7 +242,7 @@ describe("ResultsExperience", () => {
   it("links completed results to reproducibility lineage", () => {
     render(
       <ResultsExperience
-        state={{ kind: "ready", data: base }}
+        state={{ kind: "ready", refreshError: false, data: base }}
       />,
     );
 
