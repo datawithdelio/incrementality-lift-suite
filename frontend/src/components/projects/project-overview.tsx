@@ -23,6 +23,7 @@ import {
   updateProject,
 } from "@/lib/projects/api";
 import {
+  analysisConfigurationPath,
   datasetUploadPath,
   projectPath,
   workspacePath,
@@ -150,10 +151,15 @@ export function ProjectOverview({
   const actionHref =
     nextAction.destination === "dataset"
       ? datasetActionHref
-      : nextAction.destination === "analysis"
-        && project.latest_analysis_run_id
-        ? `/workspaces/${workspaceId}/projects/${projectId}/analysis-runs/${project.latest_analysis_run_id}`
-        : null;
+      : nextAction.destination === "configuration"
+        ? analysisConfigurationPath(
+            workspaceId,
+            projectId,
+          )
+        : nextAction.destination === "analysis"
+          && project.latest_analysis_run_id
+          ? `/workspaces/${workspaceId}/projects/${projectId}/analysis-runs/${project.latest_analysis_run_id}`
+          : null;
   return (
     <main className="project-shell project-overview">
       <nav className="project-breadcrumb" aria-label="Breadcrumb"><Link href={workspacePath(workspaceId)}>Projects</Link><span aria-hidden="true">/</span><span>{project.name}</span></nav>

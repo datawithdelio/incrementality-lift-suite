@@ -146,5 +146,40 @@ describe(
         "/workspaces/workspace-1/projects/project-1/datasets/dataset-1/mapping",
       );
     });
+    it("routes the recommended next step to analysis configuration for a ready mapped dataset", async () => {
+      getProjectOverviewMock.mockResolvedValue({
+        ...baseProject,
+        semantic_mapping_configured: true,
+      });
+
+      render(
+        <ProjectOverview
+          workspaceId="workspace-1"
+          projectId="project-1"
+        />,
+      );
+
+      expect(
+        await screen.findByRole(
+          "heading",
+          {
+            name: "Configure the first analysis",
+          },
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByRole(
+          "link",
+          {
+            name: /Open current step/i,
+          },
+        ),
+      ).toHaveAttribute(
+        "href",
+        "/workspaces/workspace-1/projects/project-1/analyses/new",
+      );
+    });
+
   },
 );

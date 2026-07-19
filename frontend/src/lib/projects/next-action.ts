@@ -9,7 +9,7 @@ export type ProjectWorkflowState = {
 export type ProjectNextAction = {
   title: string;
   description: string;
-  destination: "dataset" | "analysis" | null;
+  destination: "dataset" | "analysis" | "configuration" | null;
   stage: 1 | 2 | 3 | 4;
 };
 
@@ -54,7 +54,7 @@ export function projectNextAction(workflow: ProjectWorkflowState): ProjectNextAc
     return {
       title: "Configure the first analysis",
       description: "The data is ready. Choose a causal method and define the analysis period.",
-      destination: null,
+      destination: "configuration",
       stage: 3,
     };
   }

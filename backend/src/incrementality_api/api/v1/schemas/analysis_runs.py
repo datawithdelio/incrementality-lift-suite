@@ -19,7 +19,8 @@ class QueueAnalysisRunRequest(BaseModel):
         gt=0,
     )
     estimator_type: AnalysisEstimatorType
-    estimator_version: str = Field(
+    estimator_version: str | None = Field(
+        default=None,
         min_length=1,
         max_length=255,
     )

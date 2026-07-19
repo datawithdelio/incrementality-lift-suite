@@ -45,6 +45,7 @@ from incrementality_api.domain.analysis_runs.entities import (
 from incrementality_api.domain.analysis_runs.errors import (
     InvalidAnalysisRunError,
 )
+from incrementality_api.domain.analysis_runs.estimator_versions import estimator_version_for
 from incrementality_api.domain.authorization.permissions import (
     WorkspacePermission,
 )
@@ -241,7 +242,9 @@ async def queue_project_analysis_run(
                 semantic_mapping_version=(request.semantic_mapping_version),
                 created_by_user_id=(principal.user_id),
                 estimator_type=(request.estimator_type),
-                estimator_version=(request.estimator_version),
+                estimator_version=estimator_version_for(
+                    request.estimator_type,
+                ),
                 random_seed=secrets.randbits(32),
                 configuration_json=json.dumps(
                     request.configuration,
