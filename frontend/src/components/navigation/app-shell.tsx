@@ -20,6 +20,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/auth-provider";
 import { BrandMark } from "../brand/brand-mark";
+import {
+  projectSettingsPath,
+  workspaceMembersPath,
+  workspaceSettingsPath,
+} from "@/lib/projects/routes";
+
 import { WorkspaceSwitcher } from "../workspaces/workspace-switcher";
 
 type Destination = {
@@ -53,17 +59,43 @@ function workspaceDestinations(workspaceId: string, pathname: string): Destinati
       icon: <ChartLineUpIcon size={18} weight="duotone" />,
       keywords: "channels spend roas budget performance",
     },
+    {
+      label: "Workspace settings",
+      description: "Workspace information and your access level",
+      href: workspaceSettingsPath(workspaceId),
+      icon: <ListIcon size={18} weight="duotone" />,
+      keywords: "workspace settings access role configuration",
+    },
+    {
+      label: "Members & Access",
+      description: "Workspace membership and access controls",
+      href: workspaceMembersPath(workspaceId),
+      icon: <CirclesThreePlusIcon size={18} weight="duotone" />,
+      keywords: "members access users roles permissions workspace",
+    },
   ];
 
   const project = pathname.match(/\/projects\/([^/]+)/);
   if (project) {
-    base.push({
-      label: "Project overview",
-      description: "Project details and next measurement step",
-      href: `/workspaces/${workspaceId}/projects/${project[1]}`,
-      icon: <CirclesThreePlusIcon size={18} weight="duotone" />,
-      keywords: "project overview details setup",
-    });
+    base.push(
+      {
+        label: "Project overview",
+        description: "Project details and next measurement step",
+        href: `/workspaces/${workspaceId}/projects/${project[1]}`,
+        icon: <CirclesThreePlusIcon size={18} weight="duotone" />,
+        keywords: "project overview details setup",
+      },
+      {
+        label: "Project settings",
+        description: "Review and manage supported project details",
+        href: projectSettingsPath(
+          workspaceId,
+          project[1],
+        ),
+        icon: <ListIcon size={18} weight="duotone" />,
+        keywords: "project settings configuration name description",
+      },
+    );
   }
 
   const dataset = pathname.match(/\/projects\/([^/]+)\/datasets\/([^/]+)\/explore/);
@@ -109,6 +141,9 @@ function workspaceDestinations(workspaceId: string, pathname: string): Destinati
 }
 
 function currentTitle(pathname: string): string {
+  if (pathname.match(/\/workspaces\/[^/]+\/members$/)) return "Members & Access";
+  if (pathname.match(/\/projects\/[^/]+\/settings$/)) return "Project settings";
+  if (pathname.match(/\/workspaces\/[^/]+\/settings$/)) return "Workspace settings";
   if (pathname.includes("channel-performance")) return "Channel performance";
   if (pathname.includes("/datasets/")) return "Data explorer";
   if (pathname.endsWith("/reports")) return "Reports";
@@ -184,8 +219,8 @@ export function AppShell({ workspaceId, children }: { workspaceId: string; child
     router.push("/login");
   }
 
-  const primary = destinations.slice(0, 3);
-  const contextual = destinations.slice(3);
+  const primary = destinations.slice(0, 5);
+  const contextual = destinations.slice(5);
 
   return (
     <div className="app-frame">

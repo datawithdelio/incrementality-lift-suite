@@ -18,6 +18,9 @@ import {
   ProjectApiError,
 } from "@/lib/projects/api";
 import { projectPath } from "@/lib/projects/routes";
+import {
+  canManageProjects,
+} from "@/lib/settings/permissions";
 import { listWorkspaces, type AccessibleWorkspace } from "@/lib/workspaces/api";
 
 type WorkspaceHomeState =
@@ -78,7 +81,16 @@ export function WorkspaceHome({ workspaceId }: { workspaceId: string }) {
 
   async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (creating) return;
+
+    if (
+      creating
+      || state.status !== "ready"
+      || !canManageProjects(
+        state.workspace.role,
+      )
+    ) {
+      return;
+    }
 
     const token = currentToken();
     if (!token) {
@@ -129,6 +141,11 @@ export function WorkspaceHome({ workspaceId }: { workspaceId: string }) {
     );
   }
 
+  const canCreateProject =
+    canManageProjects(
+      state.workspace.role,
+    );
+
   return (
     <main className="project-shell">
       <header className="workspace-heading">
@@ -137,9 +154,11 @@ export function WorkspaceHome({ workspaceId }: { workspaceId: string }) {
           <h1>{state.workspace.name}</h1>
           <p>Organize datasets, analysis runs, and decision-ready results by project.</p>
         </div>
-        <button type="button" className="project-button project-button-primary" onClick={() => setCreateOpen(true)}>
-          <PlusIcon size={17} weight="bold" aria-hidden="true" /> New project
-        </button>
+        {canCreateProject && (
+          <button type="button" className="project-button project-button-primary" onClick={() => setCreateOpen(true)}>
+            <PlusIcon size={17} weight="bold" aria-hidden="true" /> New project
+          </button>
+        )}
       </header>
 
       <section className="project-section" aria-labelledby="projects-heading">
@@ -152,7 +171,9 @@ export function WorkspaceHome({ workspaceId }: { workspaceId: string }) {
             <span aria-hidden="true"><FolderPlusIcon size={24} weight="duotone" /></span>
             <h3>No projects yet</h3>
             <p>Create a project to give your first measurement workflow a stable home.</p>
-            <button type="button" className="project-button project-button-primary" onClick={() => setCreateOpen(true)}>Create your first project</button>
+            {canCreateProject && (
+              <button type="button" className="project-button project-button-primary" onClick={() => setCreateOpen(true)}>Create your first project</button>
+            )}
           </div>
         ) : (
           <div className="project-grid">
@@ -171,7 +192,7 @@ export function WorkspaceHome({ workspaceId }: { workspaceId: string }) {
         )}
       </section>
 
-      {createOpen && (
+      {canCreateProject && createOpen && (
         <div className="project-dialog-backdrop" role="presentation" onMouseDown={() => !creating && setCreateOpen(false)}>
           <section className="project-dialog" role="dialog" aria-modal="true" aria-labelledby="create-project-heading" onMouseDown={(event) => event.stopPropagation()}>
             <div className="project-dialog-heading">

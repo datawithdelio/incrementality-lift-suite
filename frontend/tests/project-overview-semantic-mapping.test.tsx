@@ -18,11 +18,13 @@ import { SESSION_TOKEN_KEY } from "@/lib/auth/api";
 const {
   getProjectOverviewMock,
   listProjectsMock,
+  listWorkspacesMock,
   routerPushMock,
   updateProjectMock,
 } = vi.hoisted(() => ({
   getProjectOverviewMock: vi.fn(),
   listProjectsMock: vi.fn(),
+  listWorkspacesMock: vi.fn(),
   routerPushMock: vi.fn(),
   updateProjectMock: vi.fn(),
 }));
@@ -31,6 +33,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: routerPushMock,
   }),
+}));
+
+vi.mock("@/lib/workspaces/api", () => ({
+  listWorkspaces:
+    listWorkspacesMock,
 }));
 
 vi.mock("@/lib/projects/api", () => ({
@@ -70,6 +77,21 @@ describe(
 
       listProjectsMock.mockResolvedValue([
         baseProject,
+      ]);
+
+      listWorkspacesMock.mockResolvedValue([
+        {
+          workspace_id:
+            "workspace-1",
+          organization_id:
+            "organization-1",
+          name:
+            "Measurement Team",
+          slug:
+            "measurement-team",
+          role:
+            "owner",
+        },
       ]);
     });
 

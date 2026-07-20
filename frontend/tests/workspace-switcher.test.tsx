@@ -158,4 +158,75 @@ describe("WorkspaceSwitcher", () => {
       screen.queryByRole("alert"),
     ).not.toBeInTheDocument();
   });
+
+  it("preserves Workspace Settings when switching workspaces", async () => {
+    pathname =
+      "/workspaces/workspace-1/settings";
+
+    render(
+      <WorkspaceSwitcher
+        workspaceId="workspace-1"
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole(
+        "button",
+        {
+          name: /Measurement Team/i,
+        },
+      ),
+    );
+
+    fireEvent.click(
+      screen.getByRole(
+        "menuitem",
+        {
+          name: /Experimentation/i,
+        },
+      ),
+    );
+
+    expect(
+      push,
+    ).toHaveBeenCalledWith(
+      "/workspaces/workspace-2/settings",
+    );
+  });
+
+  it("preserves Members & Access when switching workspaces", async () => {
+    pathname =
+      "/workspaces/workspace-1/members";
+
+    render(
+      <WorkspaceSwitcher
+        workspaceId="workspace-1"
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole(
+        "button",
+        {
+          name: /Measurement Team/i,
+        },
+      ),
+    );
+
+    fireEvent.click(
+      screen.getByRole(
+        "menuitem",
+        {
+          name: /Experimentation/i,
+        },
+      ),
+    );
+
+    expect(
+      push,
+    ).toHaveBeenCalledWith(
+      "/workspaces/workspace-2/members",
+    );
+  });
+
 });

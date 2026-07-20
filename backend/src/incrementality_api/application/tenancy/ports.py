@@ -6,6 +6,9 @@ if TYPE_CHECKING:
     from incrementality_api.application.tenancy.list_user_workspaces import (
         AccessibleWorkspace,
     )
+    from incrementality_api.application.tenancy.list_workspace_members import (
+        WorkspaceMember,
+    )
 
 from incrementality_api.domain.authentication.entities import (
     PasswordCredential,
@@ -82,3 +85,11 @@ class WorkspaceAccessReader(Protocol):
         user_id: UUID,
     ) -> list["AccessibleWorkspace"]:
         """List workspaces accessible to one user."""
+
+class WorkspaceMemberReader(Protocol):
+    async def list_for_workspace(
+        self,
+        *,
+        workspace_id: UUID,
+    ) -> list["WorkspaceMember"]:
+        """List safe member details for one workspace."""

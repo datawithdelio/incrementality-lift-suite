@@ -361,4 +361,89 @@ describe("workspace project lifecycle", () => {
     );
   });
 
+
+  it("keeps project creation read-only for viewers", async () => {
+    listWorkspaces.mockResolvedValueOnce([
+      {
+        ...workspace,
+        role: "viewer",
+      },
+    ]);
+
+    listProjects.mockResolvedValueOnce([]);
+
+    render(
+      <WorkspaceHome
+        workspaceId="workspace-1"
+      />,
+    );
+
+    expect(
+      await screen.findByRole(
+        "heading",
+        {
+          name: "Northstar Measurement",
+        },
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole(
+        "button",
+        {
+          name: /new project/i,
+        },
+      ),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByRole(
+        "button",
+        {
+          name: /create your first project/i,
+        },
+      ),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        "No projects yet",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps project editing read-only for viewers", async () => {
+    listWorkspaces.mockResolvedValueOnce([
+      {
+        ...workspace,
+        role: "viewer",
+      },
+    ]);
+
+    render(
+      <ProjectOverview
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    expect(
+      await screen.findByRole(
+        "heading",
+        {
+          name: "Paid Search Lift",
+        },
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole(
+        "button",
+        {
+          name: "Edit project",
+        },
+      ),
+    ).not.toBeInTheDocument();
+  });
+
 });

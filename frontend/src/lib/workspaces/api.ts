@@ -12,6 +12,13 @@ export type CreatedWorkspace = {
   membership_id: string;
 };
 
+export type WorkspaceMember = {
+  display_name: string;
+  email: string;
+  role: string;
+  joined_at: string;
+};
+
 export class WorkspaceApiError extends Error {}
 
 async function readErrorMessage(
@@ -57,6 +64,41 @@ export async function listWorkspaces(
   }
 
   return await response.json() as AccessibleWorkspace[];
+}
+
+export async function listWorkspaceMembers(
+  token: string,
+  workspaceId: string,
+): Promise<WorkspaceMember[]> {
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `/api/v1/workspaces/${workspaceId}/members`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      },
+    );
+  } catch {
+    throw new WorkspaceApiError(
+      "We couldn't load workspace members. Please check your connection and try again.",
+    );
+  }
+
+  if (!response.ok) {
+    throw new WorkspaceApiError(
+      await readErrorMessage(
+        response,
+        "We couldn't load workspace members.",
+      ),
+    );
+  }
+
+  return await response.json() as WorkspaceMember[];
 }
 
 export async function createWorkspace(

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createWorkspace,
+  listWorkspaceMembers,
   listWorkspaces,
 } from "../src/lib/workspaces/api";
 
@@ -42,6 +43,48 @@ describe("workspace API", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/v1/workspaces",
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer session-token",
+        },
+        cache: "no-store",
+      },
+    );
+  });
+
+  it("lists members inside the authorized workspace scope", async () => {
+    const members = [
+      {
+        display_name: "Delio Rincon",
+        email: "delio@example.com",
+        role: "owner",
+        joined_at: "2026-07-01T12:00:00Z",
+      },
+      {
+        display_name: "Jane Analyst",
+        email: "jane@example.com",
+        role: "analyst",
+        joined_at: "2026-07-02T12:00:00Z",
+      },
+    ];
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(members),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      listWorkspaceMembers(
+        "session-token",
+        "workspace-1",
+      ),
+    ).resolves.toEqual(members);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/workspaces/workspace-1/members",
       {
         method: "GET",
         headers: {

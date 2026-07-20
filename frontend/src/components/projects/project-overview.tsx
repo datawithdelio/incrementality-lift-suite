@@ -31,10 +31,21 @@ import {
   workspacePath,
 } from "@/lib/projects/routes";
 import { projectNextAction } from "@/lib/projects/next-action";
+import {
+  canManageProjects,
+} from "@/lib/settings/permissions";
+import {
+  listWorkspaces,
+} from "@/lib/workspaces/api";
 
 type OverviewState =
   | { status: "loading" }
-  | { status: "ready"; project: ProjectOverviewData; projects: Project[] }
+  | {
+      status: "ready";
+      project: ProjectOverviewData;
+      projects: Project[];
+      role: string;
+    }
   | { status: "error"; message: string };
 
 function currentToken(): string | null {
@@ -63,11 +74,48 @@ export function ProjectOverview({
     }
 
     try {
-      const [project, projects] = await Promise.all([
-        getProjectOverview(token, workspaceId, projectId),
-        listProjects(token, workspaceId),
+      const [
+        project,
+        projects,
+        workspaces,
+      ] = await Promise.all([
+        getProjectOverview(
+          token,
+          workspaceId,
+          projectId,
+        ),
+        listProjects(
+          token,
+          workspaceId,
+        ),
+        listWorkspaces(
+          token,
+        ),
       ]);
-      setState({ status: "ready", project, projects });
+
+      const workspace =
+        workspaces.find(
+          (candidate) =>
+            candidate.workspace_id
+            === workspaceId,
+        );
+
+      if (!workspace) {
+        setState({
+          status: "error",
+          message:
+            "This project is unavailable or you no longer have access.",
+        });
+        return;
+      }
+
+      setState({
+        status: "ready",
+        project,
+        projects,
+        role:
+          workspace.role,
+      });
     } catch (error) {
       setState({
         status: "error",
@@ -84,7 +132,17 @@ export function ProjectOverview({
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving || state.status !== "ready") return;
+
+    if (
+      saving
+      || state.status !== "ready"
+      || !canManageProjects(
+        state.role,
+      )
+    ) {
+      return;
+    }
+
     const token = currentToken();
     if (!token) {
       setSaveError("Your session is no longer available. Please sign in again.");
@@ -132,7 +190,17 @@ export function ProjectOverview({
     );
   }
 
-  const { project, projects } = state;
+  const {
+    project,
+    projects,
+    role,
+  } = state;
+
+  const canEditProject =
+    canManageProjects(
+      role,
+    );
+
   const nextAction = projectNextAction(project);
 
   const datasetActionHref = project.latest_dataset_id
@@ -179,7 +247,9 @@ export function ProjectOverview({
         <div><p className="project-eyebrow">Active project</p><h1>{project.name}</h1><p>{project.description ?? "No description added yet."}</p></div>
         <div className="project-overview-actions">
           <label><span>Switch project</span><select aria-label="Switch project" value={project.id} onChange={(event) => router.push(projectPath(workspaceId, event.target.value))}>{projects.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
-          <button type="button" className="project-button project-button-secondary" onClick={() => setEditing(true)}>Edit project</button>
+          {canEditProject && (
+            <button type="button" className="project-button project-button-secondary" onClick={() => setEditing(true)}>Edit project</button>
+          )}
         </div>
       </header>
 
@@ -353,7 +423,7 @@ export function ProjectOverview({
         <ol><li className={nextAction.stage === 1 ? "is-current" : "is-complete"}><span>01</span><div><strong>Project</strong><small>Ready</small></div></li><li className={nextAction.stage === 2 ? "is-current" : nextAction.stage > 2 ? "is-complete" : undefined}><span>02</span><div><strong>Data</strong><small>{project.latest_dataset_status ?? "Not connected"}</small></div></li><li className={nextAction.stage === 3 ? "is-current" : nextAction.stage > 3 ? "is-complete" : undefined}><span>03</span><div><strong>Analysis</strong><small>{project.latest_analysis_run_status ?? "Not started"}</small></div></li><li className={nextAction.stage === 4 ? "is-current" : undefined}><span>04</span><div><strong>Decision</strong><small>Results and reports</small></div></li></ol>
       </section>
 
-      {editing && (
+      {canEditProject && editing && (
         <div className="project-dialog-backdrop" role="presentation" onMouseDown={() => !saving && setEditing(false)}><section className="project-dialog" role="dialog" aria-modal="true" aria-labelledby="edit-project-heading" onMouseDown={(event) => event.stopPropagation()}>
           <div className="project-dialog-heading"><div><p className="project-eyebrow">Project settings</p><h2 id="edit-project-heading">Edit project</h2></div><button type="button" aria-label="Close project form" disabled={saving} onClick={() => setEditing(false)}><XIcon size={17} aria-hidden="true" /></button></div>
           <form onSubmit={(event) => void save(event)}>

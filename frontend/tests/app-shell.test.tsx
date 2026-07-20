@@ -56,6 +56,109 @@ describe("AppShell", () => {
     );
   });
 
+  it("exposes Members & Access with the active workspace scope", () => {
+    pathname =
+      "/workspaces/workspace-1/members";
+
+    render(
+      <AppShell workspaceId="workspace-1">
+        <p>Members content</p>
+      </AppShell>,
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: /members & access/i,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/members",
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: /members & access/i,
+      }),
+    ).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("exposes workspace settings with the active workspace scope", () => {
+    pathname = "/workspaces/workspace-1/settings";
+
+    render(
+      <AppShell workspaceId="workspace-1">
+        <p>Workspace settings content</p>
+      </AppShell>,
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: /workspace settings/i,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/settings",
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: /workspace settings/i,
+      }),
+    ).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("exposes project settings only inside the current project context", () => {
+    pathname =
+      "/workspaces/workspace-1/projects/project-1/settings";
+
+    render(
+      <AppShell workspaceId="workspace-1">
+        <p>Project settings content</p>
+      </AppShell>,
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: /project settings/i,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/settings",
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: /project settings/i,
+      }),
+    ).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("does not expose stale project settings outside project context", () => {
+    pathname =
+      "/workspaces/workspace-1/results-dashboard";
+
+    render(
+      <AppShell workspaceId="workspace-1">
+        <p>Dashboard content</p>
+      </AppShell>,
+    );
+
+    expect(
+      screen.queryByRole("link", {
+        name: /project settings/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens searchable navigation with the keyboard and filters destinations", async () => {
     render(<AppShell workspaceId="workspace-1"><p>Dashboard content</p></AppShell>);
 

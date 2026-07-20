@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import (
     APIRouter,
@@ -7,20 +8,28 @@ from fastapi import (
     status,
 )
 
+from incrementality_api.api.dependencies.authorization import (
+    RequireWorkspacePermission,
+)
 from incrementality_api.api.dependencies.session import (
     get_validated_session,
 )
 from incrementality_api.api.dependencies.tenancy import (
     get_create_workspace_service,
     get_list_user_workspaces_service,
+    get_list_workspace_members_service,
 )
 from incrementality_api.api.v1.schemas.tenancy import (
     AccessibleWorkspaceResponse,
     CreateWorkspaceRequest,
     CreateWorkspaceResponse,
+    WorkspaceMemberResponse,
 )
 from incrementality_api.application.authentication.validate_session import (
     ValidatedSession,
+)
+from incrementality_api.application.authorization.authenticate_workspace import (
+    AuthorizedWorkspacePrincipal,
 )
 from incrementality_api.application.tenancy.create_workspace import (
     CreateWorkspace,
@@ -32,10 +41,20 @@ from incrementality_api.application.tenancy.errors import (
 from incrementality_api.application.tenancy.list_user_workspaces import (
     ListUserWorkspaces,
 )
+from incrementality_api.application.tenancy.list_workspace_members import (
+    ListWorkspaceMembers,
+)
+from incrementality_api.domain.authorization.permissions import (
+    WorkspacePermission,
+)
 
 router = APIRouter(
     prefix="/workspaces",
     tags=["workspaces"],
+)
+
+_require_manage_members = RequireWorkspacePermission(
+    WorkspacePermission.MANAGE_MEMBERS,
 )
 
 
@@ -67,6 +86,38 @@ async def list_workspaces(
             role=workspace.role,
         )
         for workspace in workspaces
+    ]
+
+
+
+@router.get(
+    "/{workspace_id}/members",
+    response_model=list[WorkspaceMemberResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def list_workspace_members(
+    workspace_id: UUID,
+    _principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_require_manage_members),
+    ],
+    workspace_service: Annotated[
+        ListWorkspaceMembers,
+        Depends(get_list_workspace_members_service),
+    ],
+) -> list[WorkspaceMemberResponse]:
+    members = await workspace_service.execute(
+        workspace_id=workspace_id,
+    )
+
+    return [
+        WorkspaceMemberResponse(
+            display_name=member.display_name,
+            email=member.email,
+            role=member.role,
+            joined_at=member.joined_at,
+        )
+        for member in members
     ]
 
 

@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -82,3 +83,10 @@ class CreateWorkspaceResponse(BaseModel):
     organization_id: UUID
     workspace_id: UUID
     membership_id: UUID
+
+
+class WorkspaceMemberResponse(BaseModel):
+    display_name: str
+    email: str
+    role: str
+    joined_at: datetime

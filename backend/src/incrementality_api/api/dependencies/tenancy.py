@@ -6,11 +6,15 @@ from incrementality_api.application.tenancy.create_workspace import (
 from incrementality_api.application.tenancy.list_user_workspaces import (
     ListUserWorkspaces,
 )
+from incrementality_api.application.tenancy.list_workspace_members import (
+    ListWorkspaceMembers,
+)
 from incrementality_api.application.tenancy.provision_tenant import (
     ProvisionTenant,
 )
 from incrementality_api.infrastructure.database.repositories.tenancy import (
     SqlAlchemyWorkspaceAccessReader,
+    SqlAlchemyWorkspaceMemberReader,
 )
 from incrementality_api.infrastructure.database.session import (
     get_session_factory,
@@ -52,6 +56,19 @@ async def get_list_user_workspaces_service() -> AsyncIterator[ListUserWorkspaces
     async with session_factory() as session:
         yield ListUserWorkspaces(
             reader=SqlAlchemyWorkspaceAccessReader(
+                session=session,
+            ),
+        )
+
+
+async def get_list_workspace_members_service() -> AsyncIterator[ListWorkspaceMembers]:
+    """Build a workspace-member reader with a request-scoped session."""
+
+    session_factory = get_session_factory()
+
+    async with session_factory() as session:
+        yield ListWorkspaceMembers(
+            reader=SqlAlchemyWorkspaceMemberReader(
                 session=session,
             ),
         )

@@ -10,6 +10,9 @@ from incrementality_api.application.tenancy.errors import (
 from incrementality_api.application.tenancy.list_user_workspaces import (
     AccessibleWorkspace,
 )
+from incrementality_api.application.tenancy.list_workspace_members import (
+    WorkspaceMember,
+)
 from incrementality_api.domain.authentication.entities import (
     PasswordCredential,
 )
@@ -23,6 +26,7 @@ from incrementality_api.infrastructure.database.models.authentication import (
     UserCredentialModel,
 )
 from incrementality_api.infrastructure.database.models.tenancy import (
+    UserModel,
     WorkspaceMembershipModel,
     WorkspaceModel,
 )
@@ -166,4 +170,54 @@ class SqlAlchemyWorkspaceAccessReader:
                 role=membership.role,
             )
             for membership, workspace in result.all()
+        ]
+
+
+class SqlAlchemyWorkspaceMemberReader:
+    """Read safe member details scoped to one workspace."""
+
+    def __init__(
+        self,
+        session: AsyncSession,
+    ) -> None:
+        self._session = session
+
+    async def list_for_workspace(
+        self,
+        *,
+        workspace_id: UUID,
+    ) -> list[WorkspaceMember]:
+        statement = (
+            select(
+                WorkspaceMembershipModel,
+                UserModel,
+            )
+            .join(
+                UserModel,
+                UserModel.id
+                == WorkspaceMembershipModel.user_id,
+            )
+            .where(
+                WorkspaceMembershipModel.workspace_id
+                == workspace_id,
+            )
+            .order_by(
+                UserModel.display_name.asc(),
+                UserModel.email.asc(),
+                WorkspaceMembershipModel.id.asc(),
+            )
+        )
+
+        result = await self._session.execute(
+            statement,
+        )
+
+        return [
+            WorkspaceMember(
+                display_name=user.display_name,
+                email=user.email,
+                role=membership.role,
+                joined_at=membership.created_at,
+            )
+            for membership, user in result.all()
         ]

@@ -6,6 +6,21 @@ export function projectPath(workspaceId: string, projectId: string): string {
   return `${workspacePath(workspaceId)}/projects/${projectId}`;
 }
 
+export function workspaceSettingsPath(workspaceId: string): string {
+  return `${workspacePath(workspaceId)}/settings`;
+}
+
+export function workspaceMembersPath(workspaceId: string): string {
+  return `${workspacePath(workspaceId)}/members`;
+}
+
+export function projectSettingsPath(
+  workspaceId: string,
+  projectId: string,
+): string {
+  return `${projectPath(workspaceId, projectId)}/settings`;
+}
+
 
 export function analysisConfigurationPath(
   workspaceId: string,
