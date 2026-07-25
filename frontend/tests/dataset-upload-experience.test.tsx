@@ -163,6 +163,66 @@ describe("dataset upload experience", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows focused drag feedback without changing the upload behavior", () => {
+    render(
+      <DatasetUpload
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    const dropArea = screen.getByRole("button", {
+      name: "Drop CSV file here",
+    });
+
+    expect(dropArea).toHaveAttribute(
+      "data-drag-active",
+      "false",
+    );
+
+    fireEvent.dragEnter(dropArea);
+
+    expect(dropArea).toHaveAttribute(
+      "data-drag-active",
+      "true",
+    );
+
+    fireEvent.dragLeave(dropArea);
+
+    expect(dropArea).toHaveAttribute(
+      "data-drag-active",
+      "false",
+    );
+  });
+
+  it("presents a selected CSV as a clear review step", () => {
+    render(
+      <DatasetUpload
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    const file = new File(
+      ["date,revenue\n2026-07-01,100\n"],
+      "campaign-results.csv",
+      { type: "text/csv" },
+    );
+
+    fireEvent.change(
+      screen.getByLabelText("Choose CSV file"),
+      { target: { files: [file] } },
+    );
+
+    expect(
+      screen.getByRole("region", {
+        name: "Selected CSV file",
+      }),
+    ).toHaveTextContent(
+      `campaign-results.csv${file.size} bytes`,
+    );
+  });
+
 
   it("rejects an unsupported file type before upload", () => {
     render(

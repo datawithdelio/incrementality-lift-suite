@@ -7,6 +7,7 @@ from incrementality_api.application.data_products.explorer import (
     DatasetExplorer,
     DatasetExplorerQuery,
     DatasetExplorerResult,
+    ExplorerSemanticMapping,
 )
 from incrementality_api.application.data_products.quality import (
     DataQualityAssessor,
@@ -89,11 +90,15 @@ class ProductionDataProducts:
     async def preview(
         self, scope: DatasetProductQuery, query: DatasetExplorerQuery
     ) -> DatasetExplorerResult:
-        rows, _mapping_version = await self._load(scope)
-        return self._explorer.execute(rows, query)
+        rows, mapping = await self._load(scope)
+        return self._explorer.execute(
+            rows,
+            query,
+            self._explorer_mapping(mapping),
+        )
 
     async def export(self, scope: DatasetProductQuery, query: DatasetExplorerQuery) -> bytes:
-        rows, _mapping_version = await self._load(scope)
+        rows, _mapping = await self._load(scope)
         return self._explorer.export_csv(rows, query)
 
     async def assess_quality(
@@ -103,13 +108,13 @@ class ProductionDataProducts:
         estimator_type: str,
         leakage_columns: tuple[str, ...] = (),
     ) -> DataQualityResult:
-        rows, mapping_version = await self._load(scope)
+        rows, mapping = await self._load(scope)
         result = self._quality.assess(DataQualityInput(rows, estimator_type, leakage_columns))
         await self._writer.save(
             workspace_id=scope.workspace_id,
             project_id=scope.project_id,
             dataset_id=scope.dataset_id,
-            mapping_version=mapping_version,
+            mapping_version=None if mapping is None else mapping.version,
             estimator_type=estimator_type,
             result=result,
         )
@@ -117,7 +122,7 @@ class ProductionDataProducts:
 
     async def _load(
         self, scope: DatasetProductQuery
-    ) -> tuple[tuple[dict[str, str], ...], int | None]:
+    ) -> tuple[tuple[dict[str, str], ...], DatasetSemanticMapping | None]:
         async with self._unit_of_work as unit:
             dataset = await unit.datasets.get_by_scope_read(
                 workspace_id=scope.workspace_id,
@@ -141,4 +146,19 @@ class ProductionDataProducts:
                 )
             )
         loaded = await self._rows.load(self._storage.read(storage_key=dataset.storage_key))
-        return tuple(dict(row) for row in loaded), None if mapping is None else mapping.version
+        return tuple(dict(row) for row in loaded), mapping
+
+    @staticmethod
+    def _explorer_mapping(
+        mapping: DatasetSemanticMapping | None,
+    ) -> ExplorerSemanticMapping | None:
+        if mapping is None:
+            return None
+        return ExplorerSemanticMapping(
+            time_column=mapping.time_column,
+            unit_column=mapping.unit_column,
+            treatment_column=mapping.treatment_column,
+            outcome_column=mapping.outcome_column,
+            treatment_value=mapping.treatment_value,
+            control_value=mapping.control_value,
+        )

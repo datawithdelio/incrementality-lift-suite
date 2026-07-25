@@ -10,7 +10,10 @@ import {
 } from "../src/components/auth/auth-provider";
 import { ProtectedRoute } from "../src/components/auth/protected-route";
 import { AppToaster } from "../src/components/ui/app-toaster";
-import { validateSession } from "../src/lib/auth/api";
+import {
+  register,
+  validateSession,
+} from "../src/lib/auth/api";
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -136,6 +139,54 @@ describe("AuthForm", () => {
     expect(
       localStorage.getItem("incrementality_workspace_id"),
     ).toBeNull();
+  });
+
+  it("shows an actionable existing-email message during registration", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          detail: "An account with this information already exists.",
+        }),
+        { status: 409 },
+      ),
+    );
+
+    render(
+      <AuthProvider>
+        <AuthForm mode="register" />
+      </AuthProvider>,
+    );
+
+    fireEvent.change(
+      screen.getByLabelText("Your name"),
+      { target: { value: "Avery Stone" } },
+    );
+    fireEvent.change(
+      screen.getByLabelText("Work email"),
+      { target: { value: "owner@example.com" } },
+    );
+    fireEvent.change(
+      screen.getByLabelText("Password"),
+      { target: { value: "a-secure-password" } },
+    );
+    fireEvent.click(
+      screen.getByRole(
+        "button",
+        { name: "Create account" },
+      ),
+    );
+
+    const alert = await screen.findByRole("alert");
+
+    expect(alert).toHaveTextContent(
+      "Email already registeredAn account with this email already exists.",
+    );
+    expect(
+      screen.getByRole("link", { name: "Sign in instead" }),
+    ).toHaveAttribute("href", "/login");
+    expect(
+      screen.getByLabelText("Work email"),
+    ).toHaveAttribute("aria-invalid", "true");
   });
 
   it("shows a safe message when credentials are rejected", async () => {
@@ -280,6 +331,30 @@ describe("AuthForm", () => {
   });
 
 });
+
+describe("registration API", () => {
+  it("translates a registration conflict into a specific email message", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          detail: "An account with this information already exists.",
+        }),
+        { status: 409 },
+      ),
+    );
+
+    await expect(
+      register({
+        displayName: "Avery Stone",
+        email: "owner@example.com",
+        password: "a-secure-password",
+      }),
+    ).rejects.toThrow(
+      "An account with this email already exists.",
+    );
+  });
+});
+
 describe("session API", () => {
   it("validates a stored bearer session before restoring authentication", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(

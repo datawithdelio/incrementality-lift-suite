@@ -15,6 +15,7 @@ import {
 } from "vitest";
 
 import { WorkspaceBootstrap } from "../src/components/workspaces/workspace-bootstrap";
+import { WorkspaceApiError } from "../src/lib/workspaces/api";
 
 const push = vi.fn();
 const listWorkspaces = vi.fn();
@@ -38,6 +39,14 @@ vi.mock("../src/components/auth/auth-provider", () => ({
 }));
 
 vi.mock("../src/lib/workspaces/api", () => ({
+  WorkspaceApiError: class WorkspaceApiError extends Error {
+    constructor(
+      message: string,
+      readonly status?: number,
+    ) {
+      super(message);
+    }
+  },
   listWorkspaces: (...args: unknown[]) =>
     listWorkspaces(...args),
   createWorkspace: (...args: unknown[]) =>
@@ -158,6 +167,44 @@ describe("WorkspaceBootstrap", () => {
 
     expect(push).toHaveBeenCalledWith(
       "/workspaces/workspace-new",
+    );
+  });
+
+  it("shows an actionable message when the organization slug already exists", async () => {
+    listWorkspaces.mockResolvedValueOnce([]);
+    createWorkspace.mockRejectedValueOnce(
+      new WorkspaceApiError(
+        "This organization URL is already in use. Choose a different organization name.",
+        409,
+      ),
+    );
+
+    render(<WorkspaceBootstrap />);
+
+    await screen.findByRole(
+      "heading",
+      { name: "Create your first workspace" },
+    );
+
+    fireEvent.change(
+      screen.getByLabelText("Organization"),
+      { target: { value: "Northstar Labs" } },
+    );
+    fireEvent.change(
+      screen.getByLabelText("Workspace name"),
+      { target: { value: "Measurement Team" } },
+    );
+    fireEvent.click(
+      screen.getByRole(
+        "button",
+        { name: "Create workspace" },
+      ),
+    );
+
+    expect(
+      await screen.findByRole("alert"),
+    ).toHaveTextContent(
+      "Organization URL unavailableThis organization URL is already in use. Choose a different organization name.",
     );
   });
 

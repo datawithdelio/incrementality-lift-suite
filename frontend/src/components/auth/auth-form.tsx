@@ -2,6 +2,7 @@
 
 import { ArrowRightIcon } from "@phosphor-icons/react/ArrowRight";
 import { CircleNotchIcon } from "@phosphor-icons/react/CircleNotch";
+import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
@@ -11,16 +12,24 @@ import {
   AuthenticationError,
   login,
   register,
+  RegistrationConflictError,
 } from "../../lib/auth/api";
 import { useAuth } from "./auth-provider";
 
 type AuthMode = "login" | "register";
 
+type AuthFeedback = {
+  title: string;
+  message: string;
+  field?: "email";
+  signInAction?: boolean;
+};
+
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const auth = useAuth();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthFeedback | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -48,9 +57,25 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       });
       router.push("/");
     } catch (caught) {
-      const message = caught instanceof AuthenticationError ? caught.message : "Something went wrong. Please try again.";
-      setError(message);
-      toast.error(isLogin ? "Sign in failed" : "Account not created", { description: message });
+      const registrationConflict =
+        caught instanceof RegistrationConflictError;
+      const title = registrationConflict
+        ? "Email already registered"
+        : isLogin
+          ? "Sign in failed"
+          : "Account not created";
+      const message =
+        caught instanceof AuthenticationError
+          ? caught.message
+          : "Something went wrong. Please try again.";
+
+      setError({
+        title,
+        message,
+        field: registrationConflict ? "email" : undefined,
+        signInAction: registrationConflict,
+      });
+      toast.error(title, { description: message });
     } finally {
       setPending(false);
     }
@@ -58,7 +83,14 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
   const isLogin = mode === "login";
   const visibleError =
-    error ?? (isLogin ? auth.sessionNotice : null);
+    error ?? (
+      isLogin && auth.sessionNotice
+        ? {
+            title: "Sign in required",
+            message: auth.sessionNotice,
+          }
+        : null
+    );
 
   return (
     <form className="auth-form" onSubmit={submit}>
@@ -71,7 +103,24 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
       <label className="auth-field">
         <span>Work email</span>
-        <input name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
+        <input
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          aria-invalid={error?.field === "email"}
+          aria-describedby={
+            error?.field === "email"
+              ? "authentication-error"
+              : undefined
+          }
+          onChange={() => {
+            if (error?.field === "email") {
+              setError(null);
+            }
+          }}
+          required
+        />
       </label>
 
       <label className="auth-field">
@@ -92,12 +141,26 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       </label>
 
       {visibleError && (
-        <p
+        <div
+          id="authentication-error"
           className="auth-error"
           role="alert"
         >
-          {visibleError}
-        </p>
+          <WarningCircleIcon
+            size={20}
+            weight="fill"
+            aria-hidden="true"
+          />
+          <div>
+            <strong>{visibleError.title}</strong>
+            <span>{visibleError.message}</span>
+            {visibleError.signInAction && (
+              <Link href="/login">
+                Sign in instead
+              </Link>
+            )}
+          </div>
+        </div>
       )}
 
       <button className="auth-submit" type="submit" disabled={pending}>

@@ -21,6 +21,76 @@ class DateRangeResponse(BaseModel):
     maximum: str
 
 
+class TrendPointResponse(BaseModel):
+    period: str
+    treatment_value: float | None
+    control_value: float | None
+    treatment_observations: int
+    control_observations: int
+    phase: str
+
+
+class HistogramBinResponse(BaseModel):
+    minimum: float
+    maximum: float
+    treatment_count: int
+    control_count: int
+
+
+class OutcomeDistributionResponse(BaseModel):
+    minimum: float | None
+    maximum: float | None
+    mean: float | None
+    median: float | None
+    first_quartile: float | None
+    third_quartile: float | None
+    outlier_count: int
+    sample_size: int
+    bins: tuple[HistogramBinResponse, ...]
+
+
+class MissingnessPointResponse(BaseModel):
+    column: str
+    missing_count: int
+    missing_percentage: float
+
+
+class TreatmentBalanceResponse(BaseModel):
+    treatment_label: str
+    treatment_value: str
+    treatment_count: int
+    treatment_percentage: float
+    control_label: str
+    control_value: str
+    control_count: int
+    control_percentage: float
+    treatment_pre_count: int
+    treatment_post_count: int
+    control_pre_count: int
+    control_post_count: int
+    status: str
+
+
+class BreakdownPointResponse(BaseModel):
+    value: str
+    outcome_mean: float | None
+    observation_count: int
+    treatment_count: int
+    control_count: int
+
+
+class DatasetVisualizationsResponse(BaseModel):
+    time_column: str | None
+    treatment_column: str | None
+    outcome_column: str | None
+    treatment_start_date: str | None
+    trend: tuple[TrendPointResponse, ...]
+    distribution: OutcomeDistributionResponse
+    missingness: tuple[MissingnessPointResponse, ...]
+    balance: TreatmentBalanceResponse | None
+    breakdowns: dict[str, tuple[BreakdownPointResponse, ...]]
+
+
 class DatasetPreviewResponse(BaseModel):
     rows: tuple[dict[str, str], ...]
     columns: tuple[ColumnSummaryResponse, ...]
@@ -31,6 +101,7 @@ class DatasetPreviewResponse(BaseModel):
     date_range: DateRangeResponse | None
     treatment_distribution: dict[str, int]
     outcome_distribution: dict[str, float]
+    visualizations: DatasetVisualizationsResponse
 
 
 class DatasetVersionResponse(BaseModel):

@@ -1,5 +1,14 @@
 "use client";
 
+import { ArrowRightIcon } from "@phosphor-icons/react/ArrowRight";
+import { CheckCircleIcon } from "@phosphor-icons/react/CheckCircle";
+import { CloudArrowUpIcon } from "@phosphor-icons/react/CloudArrowUp";
+import { FileCsvIcon } from "@phosphor-icons/react/FileCsv";
+import { ShieldCheckIcon } from "@phosphor-icons/react/ShieldCheck";
+import { SpinnerGapIcon } from "@phosphor-icons/react/SpinnerGap";
+import { UploadSimpleIcon } from "@phosphor-icons/react/UploadSimple";
+import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
+import { XIcon } from "@phosphor-icons/react/X";
 import Link from "next/link";
 import {
   useEffect,
@@ -79,6 +88,7 @@ function DatasetUploadScope({
   initialDatasetId,
 }: DatasetUploadProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>({
     status: "idle",
@@ -439,47 +449,93 @@ function DatasetUploadScope({
 
   return (
     <section
+      className="dataset-upload-shell"
       aria-labelledby="dataset-upload-heading"
       data-workspace-id={workspaceId}
       data-project-id={projectId}
     >
-      <h1 id="dataset-upload-heading">Upload Dataset</h1>
+      <header className="dataset-upload-header">
+        <div>
+          <p className="dataset-upload-context">Dataset setup</p>
+          <h1 id="dataset-upload-heading">Upload Dataset</h1>
+          <p className="dataset-upload-intro">
+            Add the source data for this measurement project. We will verify
+            the file before it can be mapped or analyzed.
+          </p>
+        </div>
 
-      <div>
-        <p>Supported format: CSV</p>
-        <p>Maximum file size: 1 GB</p>
-      </div>
+        <div
+          className="dataset-upload-requirements"
+          role="group"
+          aria-label="Upload requirements"
+        >
+          <span>
+            <FileCsvIcon size={17} weight="duotone" aria-hidden="true" />
+            CSV only
+          </span>
+          <span>Up to 1 GB</span>
+        </div>
+      </header>
 
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label="Drop CSV file here"
-        onKeyDown={(event) => {
-          if (
-            event.key === "Enter"
-            || event.key === " "
-          ) {
+      <div className="dataset-upload-card">
+        <div
+          className="dataset-upload-dropzone"
+          role="button"
+          tabIndex={0}
+          aria-label="Drop CSV file here"
+          data-drag-active={dragActive}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter"
+              || event.key === " "
+            ) {
+              event.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          onDragEnter={(event) => {
             event.preventDefault();
-            fileInputRef.current?.click();
-          }
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          selectFile(event.dataTransfer.files?.[0] ?? null);
-        }}
-      >
-        <p>Drag and drop your CSV file here</p>
-      </div>
+            setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+            selectFile(event.dataTransfer.files?.[0] ?? null);
+          }}
+        >
+          <span className="dataset-upload-icon" aria-hidden="true">
+            <CloudArrowUpIcon size={32} weight="duotone" />
+          </span>
+          <h2>{dragActive ? "Release to add your CSV" : "Drop your CSV here"}</h2>
+          <p>One file at a time. You can replace it before uploading.</p>
+        </div>
 
-      <p>or</p>
+        <div className="dataset-upload-picker-row">
+          <span aria-hidden="true" />
+          <small>or</small>
+          <span aria-hidden="true" />
+        </div>
 
-      <label>
-        <span>Choose CSV file</span>
+        <button
+          className="dataset-upload-picker"
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <UploadSimpleIcon size={18} aria-hidden="true" />
+          Browse files
+        </button>
+
         <input
           ref={fileInputRef}
+          className="dataset-upload-native-input"
           type="file"
           accept=".csv,text/csv"
           aria-label="Choose CSV file"
@@ -487,37 +543,76 @@ function DatasetUploadScope({
             selectFile(event.target.files?.[0] ?? null);
           }}
         />
-      </label>
+
+        <p className="dataset-upload-assurance">
+          <ShieldCheckIcon size={16} weight="fill" aria-hidden="true" />
+          The file stays scoped to this project and workspace.
+        </p>
+      </div>
+
+      <div className="dataset-upload-legacy-requirements">
+        <p>Supported format: CSV</p>
+        <p>Maximum file size: 1 GB</p>
+      </div>
 
       {selectionError && (
-        <p role="alert">{selectionError}</p>
+        <div
+          className="dataset-upload-feedback dataset-upload-feedback-error"
+          role="alert"
+        >
+          <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
+          <div>
+            <strong>File not selected</strong>
+            <p>{selectionError}</p>
+          </div>
+        </div>
       )}
 
       {selectedFile && (
-        <div>
-          <p>{selectedFile.name}</p>
-          <p>{selectedFile.size} bytes</p>
+        <div
+          className="dataset-upload-selection"
+          role="region"
+          aria-label="Selected CSV file"
+        >
+          <span className="dataset-upload-file-icon" aria-hidden="true">
+            <FileCsvIcon size={24} weight="duotone" />
+          </span>
+          <div className="dataset-upload-file-copy">
+            <strong>{selectedFile.name}</strong>
+            <span>{selectedFile.size} bytes</span>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => selectFile(null)}
-            disabled={isUploadActive(uploadState)}
-          >
-            Remove selected file
-          </button>
+          <div className="dataset-upload-file-actions">
+            <button
+              className="dataset-upload-remove"
+              type="button"
+              onClick={() => selectFile(null)}
+              disabled={isUploadActive(uploadState)}
+            >
+              <XIcon size={16} aria-hidden="true" />
+              Remove selected file
+            </button>
 
-          <button
-            type="button"
-            onClick={() => void uploadSelectedFile()}
-            disabled={isUploadActive(uploadState)}
-          >
-            Upload Dataset
-          </button>
+            <button
+              className="dataset-upload-primary"
+              type="button"
+              onClick={() => void uploadSelectedFile()}
+              disabled={isUploadActive(uploadState)}
+            >
+              Upload Dataset
+              <ArrowRightIcon size={17} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       )}
 
       {isUploadActive(uploadState) && (
-        <div>
+        <div className="dataset-upload-activity">
+          <SpinnerGapIcon
+            className="dataset-upload-spinner"
+            size={20}
+            aria-hidden="true"
+          />
           <p role="status">
             {uploadState.status === "hashing"
               ? "Preparing dataset…"
@@ -528,6 +623,7 @@ function DatasetUploadScope({
 
           {uploadState.status === "uploading" && (
             <progress
+              className="dataset-upload-progress"
               aria-label="Dataset upload in progress"
             />
           )}
@@ -536,15 +632,23 @@ function DatasetUploadScope({
 
       {uploadState.status === "uploaded"
         && validationState.status !== "interrupted" && (
-        <p role="status">Upload complete</p>
+        <p className="dataset-upload-status" role="status">
+          <CheckCircleIcon size={18} weight="fill" aria-hidden="true" />
+          Upload complete
+        </p>
       )}
 
       {validationState.status === "loading" && (
-        <p role="status">Checking validation status…</p>
+        <p className="dataset-upload-status" role="status">
+          <SpinnerGapIcon className="dataset-upload-spinner" size={18} aria-hidden="true" />
+          Checking validation status…
+        </p>
       )}
 
       {validationState.status === "interrupted" && (
-        <div role="status">
+        <div className="dataset-upload-feedback dataset-upload-feedback-warning" role="status">
+          <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
+          <div>
           <strong>Upload interrupted</strong>
           <p>
             Reselect the CSV file to continue uploading.
@@ -561,26 +665,36 @@ function DatasetUploadScope({
               Resume Upload
             </button>
           )}
+          </div>
         </div>
       )}
 
       {validationState.status === "pending" && (
-        <p role="status">Validation pending…</p>
+        <p className="dataset-upload-status" role="status">
+          <SpinnerGapIcon className="dataset-upload-spinner" size={18} aria-hidden="true" />
+          Validation pending…
+        </p>
       )}
 
       {validationState.status === "validating" && (
-        <p role="status">Validating dataset…</p>
+        <p className="dataset-upload-status" role="status">
+          <SpinnerGapIcon className="dataset-upload-spinner" size={18} aria-hidden="true" />
+          Validating dataset…
+        </p>
       )}
 
       {validationState.status === "ready"
         && uploadState.status === "uploaded" && (
         <div
+          className="dataset-upload-result dataset-upload-result-success"
           ref={validationSuccessRef}
           role="region"
           aria-label="Dataset validation result"
           tabIndex={-1}
         >
-          <strong>Dataset ready</strong>
+          <CheckCircleIcon size={24} weight="fill" aria-hidden="true" />
+          <div>
+            <strong>Dataset ready</strong>
 
           {validationState.rowCount !== null && (
             <p>{validationState.rowCount} rows</p>
@@ -589,6 +703,7 @@ function DatasetUploadScope({
           {validationState.columnCount !== null && (
             <p>{validationState.columnCount} columns</p>
           )}
+          </div>
 
           <Link
             href={datasetExplorePath(
@@ -598,22 +713,28 @@ function DatasetUploadScope({
             )}
           >
             Explore Dataset
+            <ArrowRightIcon size={17} aria-hidden="true" />
           </Link>
         </div>
       )}
 
       {validationState.status === "failed" && (
-        <div>
+        <div className="dataset-upload-result-stack">
           <div
+            className="dataset-upload-feedback dataset-upload-feedback-error"
             ref={validationFailureRef}
             role="alert"
             tabIndex={-1}
           >
-            <strong>Dataset validation failed</strong>
-            <p>{validationState.message}</p>
+            <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
+            <div>
+              <strong>Dataset validation failed</strong>
+              <p>{validationState.message}</p>
+            </div>
           </div>
 
           <button
+            className="dataset-upload-secondary"
             type="button"
             onClick={resetForCorrectedFile}
           >
@@ -623,16 +744,29 @@ function DatasetUploadScope({
       )}
 
       {validationState.status === "error" && (
-        <p role="alert">{validationState.message}</p>
+        <div className="dataset-upload-feedback dataset-upload-feedback-error" role="alert">
+          <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
+          <div>
+            <strong>Validation status unavailable</strong>
+            <p>{validationState.message}</p>
+          </div>
+        </div>
       )}
 
       {(uploadState.status === "error"
         || uploadState.status === "upload_error") && (
-        <div>
-          <p role="alert">{uploadState.message}</p>
+        <div className="dataset-upload-result-stack">
+          <div className="dataset-upload-feedback dataset-upload-feedback-error" role="alert">
+            <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
+            <div>
+              <strong>Upload not completed</strong>
+              <p>{uploadState.message}</p>
+            </div>
+          </div>
 
           {uploadState.status === "upload_error" && (
             <button
+              className="dataset-upload-secondary"
               type="button"
               onClick={() => void retryUpload()}
             >

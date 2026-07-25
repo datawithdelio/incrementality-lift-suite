@@ -134,4 +134,27 @@ describe("workspace API", () => {
       },
     );
   });
+
+  it("explains when the organization slug is already in use", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          detail: "A workspace with this information already exists.",
+        }),
+        { status: 409 },
+      ),
+    );
+
+    await expect(
+      createWorkspace(
+        "session-token",
+        {
+          organizationName: "Northstar Labs",
+          workspaceName: "Measurement Team",
+        },
+      ),
+    ).rejects.toThrow(
+      "This organization URL is already in use. Choose a different organization name.",
+    );
+  });
 });

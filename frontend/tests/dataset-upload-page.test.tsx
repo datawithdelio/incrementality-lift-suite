@@ -29,5 +29,13 @@ describe("dataset upload page", () => {
     expect(
       screen.getByLabelText("Choose CSV file"),
     ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", { name: "Browse files" }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("group", { name: "Upload requirements" }),
+    ).toHaveTextContent("CSV onlyUp to 1 GB");
   });
 });

@@ -19,7 +19,18 @@ export type WorkspaceMember = {
   joined_at: string;
 };
 
-export class WorkspaceApiError extends Error {}
+export class WorkspaceApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "WorkspaceApiError";
+  }
+}
+
+const ORGANIZATION_SLUG_CONFLICT_MESSAGE =
+  "This organization URL is already in use. Choose a different organization name.";
 
 async function readErrorMessage(
   response: Response,
@@ -132,11 +143,19 @@ export async function createWorkspace(
   }
 
   if (!response.ok) {
+    if (response.status === 409) {
+      throw new WorkspaceApiError(
+        ORGANIZATION_SLUG_CONFLICT_MESSAGE,
+        response.status,
+      );
+    }
+
     throw new WorkspaceApiError(
       await readErrorMessage(
         response,
         "We couldn't create your workspace.",
       ),
+      response.status,
     );
   }
 

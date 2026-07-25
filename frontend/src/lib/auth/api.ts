@@ -18,7 +18,25 @@ type RegistrationResponse = {
   user_id: string;
 };
 
-export class AuthenticationError extends Error {}
+export class AuthenticationError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "AuthenticationError";
+  }
+}
+
+export class RegistrationConflictError extends AuthenticationError {
+  constructor() {
+    super(
+      "An account with this email already exists.",
+      409,
+    );
+    this.name = "RegistrationConflictError";
+  }
+}
 
 async function post<T>(path: string, body: object): Promise<T> {
   let response: Response;
@@ -39,6 +57,7 @@ async function post<T>(path: string, body: object): Promise<T> {
     const payload = await response.json().catch(() => null) as { detail?: string } | null;
     throw new AuthenticationError(
       payload?.detail ?? "We couldn't complete that request. Please try again.",
+      response.status,
     );
   }
 
@@ -78,14 +97,25 @@ export async function logout(token: string): Promise<void> {
   }
 }
 
-export function register(input: {
+export async function register(input: {
   displayName: string;
   email: string;
   password: string;
 }): Promise<RegistrationResponse> {
-  return post<RegistrationResponse>("/api/v1/auth/register", {
-    email: input.email,
-    display_name: input.displayName,
-    password: input.password,
-  });
+  try {
+    return await post<RegistrationResponse>("/api/v1/auth/register", {
+      email: input.email,
+      display_name: input.displayName,
+      password: input.password,
+    });
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError &&
+      error.status === 409
+    ) {
+      throw new RegistrationConflictError();
+    }
+
+    throw error;
+  }
 }

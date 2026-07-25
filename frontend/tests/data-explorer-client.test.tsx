@@ -1,4 +1,9 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -52,7 +57,10 @@ vi.mock(
 
 import { ExplorerClient } from "../src/components/data-products/data-product-clients";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 describe("ExplorerClient", () => {
   it("passes restored backend dataset metadata into the Explorer", () => {
@@ -113,5 +121,40 @@ describe("ExplorerClient pagination", () => {
         name: "Next",
       }),
     ).toBeDisabled();
+  });
+});
+
+describe("ExplorerClient saved views", () => {
+  it("saves the current exploration settings under a user-defined name", () => {
+    render(
+      <ExplorerClient
+        workspaceId="workspace-1"
+        projectId="project-1"
+        datasetId="dataset-1"
+      />,
+    );
+
+    fireEvent.change(
+      screen.getByRole("textbox", {
+        name: "Saved view name",
+      }),
+      {
+        target: {
+          value: "Missing revenue review",
+        },
+      },
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Save current view",
+      }),
+    );
+
+    expect(
+      screen.getByRole("option", {
+        name: "Missing revenue review",
+      }),
+    ).toBeInTheDocument();
   });
 });

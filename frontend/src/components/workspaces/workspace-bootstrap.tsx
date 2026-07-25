@@ -21,6 +21,7 @@ import {
   type AccessibleWorkspace,
   createWorkspace,
   listWorkspaces,
+  WorkspaceApiError,
 } from "../../lib/workspaces/api";
 
 type BootstrapState =
@@ -48,7 +49,10 @@ export function WorkspaceBootstrap() {
     useState(false);
 
   const [creationError, setCreationError] =
-    useState<string | null>(null);
+    useState<{
+      title: string;
+      message: string;
+    } | null>(null);
 
   const enterWorkspace = useCallback(
     (workspaceId: string) => {
@@ -142,7 +146,11 @@ export function WorkspaceBootstrap() {
 
     if (!token) {
       setCreationError(
-        "Your session is no longer available. Please sign in again.",
+        {
+          title: "Session expired",
+          message:
+            "Your session is no longer available. Please sign in again.",
+        },
       );
       return;
     }
@@ -177,10 +185,20 @@ export function WorkspaceBootstrap() {
       enterWorkspace(
         workspace.workspace_id,
       );
-    } catch {
-      const message = "We couldn't create your workspace. Please try again.";
-      setCreationError(message);
-      toast.error("Workspace not created", { description: message });
+    } catch (error) {
+      const isConflict =
+        error instanceof WorkspaceApiError &&
+        error.status === 409;
+      const title = isConflict
+        ? "Organization URL unavailable"
+        : "Workspace not created";
+      const message =
+        error instanceof WorkspaceApiError
+          ? error.message
+          : "We couldn't create your workspace. Please try again.";
+
+      setCreationError({ title, message });
+      toast.error(title, { description: message });
     } finally {
       setCreating(false);
     }
@@ -303,7 +321,15 @@ export function WorkspaceBootstrap() {
 
         {creationError && (
           <div className="bootstrap-error" role="alert">
-            {creationError}
+            <WarningCircleIcon
+              size={20}
+              weight="fill"
+              aria-hidden="true"
+            />
+            <div>
+              <strong>{creationError.title}</strong>
+              <span>{creationError.message}</span>
+            </div>
           </div>
         )}
 

@@ -9,6 +9,7 @@ from incrementality_api.application.data_products.explorer import (
     DatasetExplorer,
     DatasetExplorerQuery,
     DatasetFilter,
+    ExplorerSemanticMapping,
     MalformedDatasetError,
 )
 from incrementality_api.application.data_products.quality import (
@@ -74,6 +75,105 @@ def test_explorer_rejects_malformed_rows_and_caps_page_size() -> None:
 
     with pytest.raises(ValueError, match="page size"):
         DatasetExplorerQuery(page_size=1001)
+
+
+def test_explorer_builds_mapped_visual_evidence_from_the_complete_filtered_dataset() -> None:
+    rows = (
+        {
+            "date": "2026-01-01",
+            "market": "Boston",
+            "region": "East",
+            "treated": "no",
+            "post_period": "0",
+            "revenue": "100",
+        },
+        {
+            "date": "2026-01-01",
+            "market": "New York",
+            "region": "East",
+            "treated": "yes",
+            "post_period": "0",
+            "revenue": "110",
+        },
+        {
+            "date": "2026-02-01",
+            "market": "Boston",
+            "region": "",
+            "treated": "no",
+            "post_period": "1",
+            "revenue": "105",
+        },
+        {
+            "date": "2026-02-01",
+            "market": "New York",
+            "region": "East",
+            "treated": "yes",
+            "post_period": "1",
+            "revenue": "145",
+        },
+        {
+            "date": "2026-02-01",
+            "market": "Chicago",
+            "region": "West",
+            "treated": "yes",
+            "post_period": "1",
+            "revenue": "150",
+        },
+    )
+
+    result = DatasetExplorer().execute(
+        rows,
+        DatasetExplorerQuery(page=1, page_size=2),
+        ExplorerSemanticMapping(
+            time_column="date",
+            unit_column="market",
+            treatment_column="treated",
+            outcome_column="revenue",
+            treatment_value="yes",
+            control_value="no",
+        ),
+    )
+
+    assert len(result.rows) == 2
+    assert result.visualizations.outcome_column == "revenue"
+    assert result.visualizations.treatment_start_date == "2026-02-01"
+    assert result.visualizations.trend[-1].treatment_value == pytest.approx(147.5)
+    assert result.visualizations.trend[-1].control_value == pytest.approx(105)
+    assert result.visualizations.trend[-1].treatment_observations == 2
+    assert result.visualizations.distribution.median == 110
+    assert result.visualizations.distribution.sample_size == 5
+    region_missingness = next(
+        item
+        for item in result.visualizations.missingness
+        if item.column == "region"
+    )
+    assert region_missingness.missing_count == 1
+    assert result.visualizations.balance.treatment_label == "Treatment"
+    assert result.visualizations.balance.control_label == "Control"
+    assert result.visualizations.balance.status == "Needs review"
+    assert "market" in result.visualizations.breakdowns
+    assert "region" in result.visualizations.breakdowns
+
+
+def test_explorer_missing_filter_returns_only_rows_missing_the_selected_column() -> None:
+    result = DatasetExplorer().execute(
+        (
+            {"market": "Boston", "revenue": "100"},
+            {"market": "", "revenue": "120"},
+        ),
+        DatasetExplorerQuery(
+            filters=(
+                DatasetFilter(
+                    "market",
+                    "is_missing",
+                    "",
+                ),
+            ),
+        ),
+    )
+
+    assert result.total_rows == 1
+    assert result.rows == ({"market": "", "revenue": "120"},)
 
 
 def test_quality_assessment_keeps_structured_findings_for_clean_weak_and_invalid_data() -> None:

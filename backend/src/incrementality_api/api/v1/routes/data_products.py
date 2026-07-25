@@ -56,13 +56,22 @@ def _explorer_query(
     filter_operator: str,
     filter_value: str | None,
     column_search: str | None,
+    outcome_column: str | None = None,
 ) -> DatasetExplorerQuery:
     filters = (
         (DatasetFilter(filter_column, filter_operator, filter_value or ""),)
         if filter_column
         else ()
     )
-    return DatasetExplorerQuery(page, page_size, sort_column, descending, filters, column_search)
+    return DatasetExplorerQuery(
+        page,
+        page_size,
+        sort_column,
+        descending,
+        filters,
+        column_search,
+        outcome_column,
+    )
 
 
 @router.get("/datasets/{dataset_id}/preview", response_model=DatasetPreviewResponse)
@@ -80,6 +89,7 @@ async def preview_dataset(
     filter_operator: str = "equals",
     filter_value: str | None = None,
     column_search: str | None = None,
+    outcome_column: str | None = None,
     mapping_version: int | None = None,
 ) -> DatasetPreviewResponse:
     del principal
@@ -95,6 +105,7 @@ async def preview_dataset(
                 filter_operator,
                 filter_value,
                 column_search,
+                outcome_column,
             ),
         )
     except DatasetUnavailableError as error:

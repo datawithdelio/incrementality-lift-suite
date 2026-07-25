@@ -2,8 +2,51 @@ import type { DataQuality, DatasetPreview, DatasetVersion, ReportJob } from "./t
 
 export class DataProductApiError extends Error { constructor(public status: number) { super("Data product is unavailable."); } }
 async function request<T>(path: string, token: string, init: RequestInit = {}): Promise<T> { const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? ""}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...init.headers }, cache: "no-store" }); if (!response.ok) throw new DataProductApiError(response.status); return await response.json() as T; }
-export type ExplorerOptions = { page: number; search: string; sortColumn: string; descending: boolean; filterColumn: string; filterValue: string };
-export function fetchPreview(workspace: string, project: string, dataset: string, options: ExplorerOptions, token: string, signal: AbortSignal) { const query = new URLSearchParams({ page: String(options.page), column_search: options.search, descending: String(options.descending) }); if (options.sortColumn) query.set("sort_column", options.sortColumn); if (options.filterColumn) { query.set("filter_column", options.filterColumn); query.set("filter_operator", "contains"); query.set("filter_value", options.filterValue); } return request<DatasetPreview>(`/api/v1/workspaces/${workspace}/projects/${project}/datasets/${dataset}/preview?${query}`, token, { signal }); }
+export type ExplorerOptions = {
+  page: number;
+  search: string;
+  sortColumn: string;
+  descending: boolean;
+  filterColumn: string;
+  filterOperator?: "contains" | "is_missing";
+  filterValue: string;
+  outcomeColumn?: string;
+};
+
+export function fetchPreview(
+  workspace: string,
+  project: string,
+  dataset: string,
+  options: ExplorerOptions,
+  token: string,
+  signal: AbortSignal,
+) {
+  const query = new URLSearchParams({
+    page: String(options.page),
+    column_search: options.search,
+    descending: String(options.descending),
+  });
+  if (options.sortColumn) {
+    query.set("sort_column", options.sortColumn);
+  }
+  if (options.filterColumn) {
+    query.set("filter_column", options.filterColumn);
+    const operator = options.filterOperator ?? "contains";
+    query.set("filter_operator", operator);
+    if (operator === "contains") {
+      query.set("filter_value", options.filterValue);
+    }
+  }
+  if (options.outcomeColumn) {
+    query.set("outcome_column", options.outcomeColumn);
+  }
+  return request<DatasetPreview>(
+    `/api/v1/workspaces/${workspace}/projects/${project}`
+      + `/datasets/${dataset}/preview?${query}`,
+    token,
+    { signal },
+  );
+}
 export function fetchDatasetVersions(workspace: string, project: string, token: string, signal: AbortSignal) { return request<DatasetVersion[]>(`/api/v1/workspaces/${workspace}/projects/${project}/dataset-versions`, token, { signal }); }
 export function assessQuality(workspace: string, project: string, dataset: string, estimator: string, token: string, signal: AbortSignal) { return request<DataQuality>(`/api/v1/workspaces/${workspace}/projects/${project}/datasets/${dataset}/quality?estimator=${estimator}`, token, { method: "POST", signal }); }
 export function fetchReports(workspace: string, project: string, run: string, token: string, signal: AbortSignal) { return request<ReportJob[]>(`/api/v1/workspaces/${workspace}/projects/${project}/analysis-runs/${run}/reports`, token, { signal }); }
