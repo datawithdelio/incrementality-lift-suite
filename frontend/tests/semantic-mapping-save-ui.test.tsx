@@ -21,11 +21,19 @@ const {
   fetchPreviewMock,
   getDatasetMock,
   getLatestSemanticMappingMock,
+  routerPushMock,
 } = vi.hoisted(() => ({
   createSemanticMappingMock: vi.fn(),
   fetchPreviewMock: vi.fn(),
   getDatasetMock: vi.fn(),
   getLatestSemanticMappingMock: vi.fn(),
+  routerPushMock: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: routerPushMock,
+  }),
 }));
 
 vi.mock("@/lib/datasets/api", () => ({
@@ -242,6 +250,22 @@ describe("semantic mapping save experience", () => {
       screen.getByText("Step 6 of 6"),
     ).toBeInTheDocument();
 
+    expect(
+      screen.getByRole("list", {
+        name: "Mapping assignments",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("event_date"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        "View raw request JSON",
+      ),
+    ).toBeInTheDocument();
+
     const saveButton =
       screen.getByRole("button", {
         name: "Save Mapping",
@@ -299,6 +323,10 @@ describe("semantic mapping save experience", () => {
         "Semantic mapping version 2 saved successfully.",
       ),
     ).toBeInTheDocument();
+
+    expect(routerPushMock).toHaveBeenCalledWith(
+      "/workspaces/workspace-1/projects/project-1/analyses/new",
+    );
 
     expect(saveButton).not.toBeDisabled();
   });

@@ -9,6 +9,10 @@ from incrementality_api.application.data_products.explorer import (
     DatasetExplorerResult,
     ExplorerSemanticMapping,
 )
+from incrementality_api.application.data_products.geography_summary import (
+    GeographySummaryBuilder,
+    GeographySummaryResult,
+)
 from incrementality_api.application.data_products.quality import (
     DataQualityAssessor,
     DataQualityInput,
@@ -85,6 +89,7 @@ class ProductionDataProducts:
         self._writer = quality_writer
         self._rows = row_loader or CsvAnalysisRowLoader()
         self._explorer = DatasetExplorer()
+        self._geography_summary = GeographySummaryBuilder()
         self._quality = DataQualityAssessor()
 
     async def preview(
@@ -101,6 +106,22 @@ class ProductionDataProducts:
         rows, _mapping = await self._load(scope)
         return self._explorer.export_csv(rows, query)
 
+    async def geography_summary(
+        self,
+        scope: DatasetProductQuery,
+    ) -> GeographySummaryResult:
+        rows, mapping = await self._load(scope)
+
+        if mapping is None:
+            raise DatasetUnavailableError(
+                "A semantic mapping is required for geography summaries."
+            )
+
+        return self._geography_summary.build(
+            rows,
+            mapping,
+        )
+
     async def assess_quality(
         self,
         scope: DatasetProductQuery,
@@ -109,7 +130,18 @@ class ProductionDataProducts:
         leakage_columns: tuple[str, ...] = (),
     ) -> DataQualityResult:
         rows, mapping = await self._load(scope)
-        result = self._quality.assess(DataQualityInput(rows, estimator_type, leakage_columns))
+        result = self._quality.assess(
+            DataQualityInput(
+                rows=rows,
+                estimator_type=estimator_type,
+                leakage_columns=leakage_columns,
+                unit_column=(
+                    None
+                    if mapping is None
+                    else mapping.unit_column
+                ),
+            )
+        )
         await self._writer.save(
             workspace_id=scope.workspace_id,
             project_id=scope.project_id,

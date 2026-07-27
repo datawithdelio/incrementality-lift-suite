@@ -22,6 +22,7 @@ class DataQualityInput:
     rows: tuple[dict[str, str], ...]
     estimator_type: str
     leakage_columns: tuple[str, ...] = ()
+    unit_column: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,9 +195,17 @@ class PropensityOverlapPolicy:
 
 class GeoCoveragePolicy:
     def evaluate(self, data: DataQualityInput) -> QualityFinding:
-        geos = {row.get("market") or row.get("geo") for row in data.rows}
+        geos = {
+            (
+                row.get(data.unit_column)
+                if data.unit_column is not None
+                else row.get("market") or row.get("geo")
+            )
+            for row in data.rows
+        }
         covered = len(geos - {None, ""}) >= 4 and all(
-            row.get("latitude") and row.get("longitude") for row in data.rows
+            row.get("latitude") and row.get("longitude")
+            for row in data.rows
         )
         return QualityFinding(
             "geo_coverage",

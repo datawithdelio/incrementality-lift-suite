@@ -27,12 +27,20 @@ class DatasetExplorerQuery:
     filters: tuple[DatasetFilter, ...] = ()
     column_search: str | None = None
     outcome_column: str | None = None
+    intervention_date: str | None = None
 
     def __post_init__(self) -> None:
         if self.page < 1:
             raise ValueError("Page must be positive.")
         if not 1 <= self.page_size <= 500:
             raise ValueError("Dataset page size must be between 1 and 500.")
+        if self.intervention_date is not None:
+            try:
+                date.fromisoformat(self.intervention_date)
+            except ValueError as error:
+                raise ValueError(
+                    "Intervention date must use YYYY-MM-DD format."
+                ) from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -348,6 +356,7 @@ class DatasetExplorer:
             rows,
             time_column,
             post_column,
+            query.intervention_date,
         )
         distribution = cls._distribution_summary(
             rows,
@@ -361,7 +370,8 @@ class DatasetExplorer:
             treatment_column,
             treatment_value,
             control_value,
-            post_column,
+            time_column,
+            treatment_start,
         )
         return DatasetVisualizations(
             time_column=time_column,
@@ -483,9 +493,31 @@ class DatasetExplorer:
         rows: list[dict[str, str]],
         time_column: str | None,
         post_column: str | None,
+        explicit: str | None,
     ) -> str | None:
-        if time_column is None or post_column is None:
+        if time_column is None:
             return None
+
+        available_periods = sorted(
+            row[time_column]
+            for row in rows
+            if row[time_column]
+        )
+
+        if explicit is not None:
+            if (
+                not available_periods
+                or explicit < available_periods[0]
+                or explicit > available_periods[-1]
+            ):
+                raise ValueError(
+                    "Intervention date must fall inside the dataset date range."
+                )
+            return explicit
+
+        if post_column is None:
+            return None
+
         periods = [
             row[time_column]
             for row in rows
@@ -680,7 +712,8 @@ class DatasetExplorer:
         treatment_column: str | None,
         treatment_value: str | None,
         control_value: str | None,
-        post_column: str | None,
+        time_column: str | None,
+        treatment_start: str | None,
     ) -> TreatmentBalance | None:
         if (
             treatment_column is None
@@ -707,11 +740,12 @@ class DatasetExplorer:
             *,
             post: bool,
         ) -> int:
-            if post_column is None:
+            if time_column is None or treatment_start is None:
                 return 0
             return sum(
-                cls._is_truthy(row[post_column]) is post
+                (row[time_column] >= treatment_start) is post
                 for row in group
+                if row[time_column]
             )
 
         return TreatmentBalance(

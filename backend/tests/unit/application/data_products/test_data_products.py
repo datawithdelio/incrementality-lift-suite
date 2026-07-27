@@ -198,6 +198,37 @@ def test_quality_assessment_keeps_structured_findings_for_clean_weak_and_invalid
     assert blocker.recommendation
 
 
+def test_geo_quality_uses_the_mapped_unit_column() -> None:
+    rows = tuple(
+        {
+            **{
+                key: value
+                for key, value in row.items()
+                if key != "market"
+            },
+            "geography": row["market"],
+        }
+        for row in clean_rows(8)
+    )
+
+    result = DataQualityAssessor().assess(
+        DataQualityInput(
+            rows=rows,
+            estimator_type="geo_holdout",
+            unit_column="geography",
+        )
+    )
+
+    finding = next(
+        item
+        for item in result.findings
+        if item.rule_id == "geo_coverage"
+    )
+
+    assert finding.passed is True
+    assert finding.evidence["geographies"] == 8
+
+
 @pytest.mark.parametrize(
     ("estimator", "expected_rule"),
     [

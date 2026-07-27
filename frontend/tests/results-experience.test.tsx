@@ -154,9 +154,22 @@ describe("ResultsExperience", () => {
     expect(screen.getByText("Pre-treatment trends differ.")).toBeInTheDocument();
   });
 
-  it("shows a recoverable failure", () => {
-    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: { ...base, lifecycle_status: "failed", run_status: "failed", result: null, failure_information: "Analysis could not be completed." } }} />);
+  it("shows the exact failure reason and a path to fix the analysis", () => {
+    render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: { ...base, lifecycle_status: "failed", run_status: "failed", result: null, failure_information: "Difference-in-differences requires treated and control groups." } }} />);
     expect(screen.getByText("This analysis needs attention")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Difference-in-differences requires treated and control groups.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: "Fix configuration",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/analyses/new",
+    );
   });
 
   it("shows permission errors without leaking backend text", () => {
@@ -674,5 +687,36 @@ describe("ResultsExperience", () => {
     ).toBeInTheDocument();
   });
 
+
+
+  it("uses the confidence level returned by the backend", () => {
+    const data = {
+      ...base,
+      result:
+        base.result === null
+          ? null
+          : {
+              ...base.result,
+              confidence_interval: {
+                ...base.result.confidence_interval,
+                confidence_level: 0.9,
+              },
+            },
+    };
+
+    render(
+      <ResultsExperience
+        state={{
+          kind: "ready",
+          refreshError: false,
+          data,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(/90% confidence interval/i),
+    ).toBeInTheDocument();
+  });
 
 });

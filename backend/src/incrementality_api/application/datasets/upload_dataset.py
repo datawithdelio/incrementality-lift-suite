@@ -24,6 +24,7 @@ class UploadDatasetCommand:
     project_id: UUID
     dataset_id: UUID
     chunks: AsyncIterator[bytes]
+    restore_missing: bool = False
 
 
 class UploadDataset:
@@ -61,9 +62,24 @@ class UploadDataset:
 
             current_time = self._clock.now()
 
-            uploaded_dataset = dataset.mark_uploaded(
-                uploaded_at=current_time,
+            restoring_missing_object = (
+                command.restore_missing
+                and dataset.status.value == "ready"
             )
+
+            if restoring_missing_object:
+                if await self._object_storage.exists(
+                    storage_key=dataset.storage_key,
+                ):
+                    raise DatasetUploadVerificationError(
+                        "Dataset content already exists.",
+                    )
+
+                uploaded_dataset = dataset
+            else:
+                uploaded_dataset = dataset.mark_uploaded(
+                    uploaded_at=current_time,
+                )
 
             object_written = False
 
@@ -84,22 +100,25 @@ class UploadDataset:
                     write_result=write_result,
                 )
 
-                validation_job = DatasetValidationJob.enqueue(
-                    workspace_id=dataset.workspace_id,
-                    project_id=dataset.project_id,
-                    dataset_id=dataset.id,
-                    created_at=current_time,
-                    available_at=current_time,
-                    max_attempts=(self._validation_job_max_attempts),
-                )
+                if not restoring_missing_object:
+                    validation_job = DatasetValidationJob.enqueue(
+                        workspace_id=dataset.workspace_id,
+                        project_id=dataset.project_id,
+                        dataset_id=dataset.id,
+                        created_at=current_time,
+                        available_at=current_time,
+                        max_attempts=(
+                            self._validation_job_max_attempts
+                        ),
+                    )
 
-                await self._unit_of_work.datasets.update(
-                    uploaded_dataset,
-                )
-                await self._unit_of_work.validation_jobs.add(
-                    validation_job,
-                )
-                await self._unit_of_work.commit()
+                    await self._unit_of_work.datasets.update(
+                        uploaded_dataset,
+                    )
+                    await self._unit_of_work.validation_jobs.add(
+                        validation_job,
+                    )
+                    await self._unit_of_work.commit()
             except Exception:
                 if object_written:
                     await self._object_storage.delete(

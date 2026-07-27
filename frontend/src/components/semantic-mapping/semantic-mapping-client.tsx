@@ -1,6 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  ArrowRight,
+} from "@phosphor-icons/react";
 import {
   useEffect,
   useState,
@@ -25,6 +29,8 @@ import {
   type CreateSemanticMappingInput,
   type SemanticMapping,
 } from "@/lib/semantic-mapping/api";
+import { analysisConfigurationPath } from "@/lib/projects/routes";
+import { SemanticMappingReview } from "./semantic-mapping-review";
 
 type SemanticMappingClientProps = {
   workspaceId: string;
@@ -425,6 +431,7 @@ export function SemanticMappingClient({
   projectId,
   datasetId,
 }: SemanticMappingClientProps) {
+  const router = useRouter();
   const [state, setState] =
     useState<SemanticMappingState>({
       kind: "loading",
@@ -1061,6 +1068,13 @@ export function SemanticMappingClient({
         kind: "success",
         version: savedMapping.version,
       });
+
+      router.push(
+        analysisConfigurationPath(
+          workspaceId,
+          projectId,
+        ),
+      );
     } catch (error) {
       setSaveState({
         kind: "error",
@@ -1624,21 +1638,9 @@ export function SemanticMappingClient({
             className="semantic-mapping-card semantic-mapping-review"
             aria-labelledby="review-save-heading"
           >
-            <h2 id="review-save-heading">
-              Review and Save
-            </h2>
-
-            <p>
-              Review the exact semantic mapping request before saving.
-            </p>
-
-            <pre aria-label="Semantic mapping request">
-              {JSON.stringify(
-                state.draft,
-                null,
-                2,
-              )}
-            </pre>
+            <SemanticMappingReview
+              draft={state.draft}
+            />
 
             {saveState.kind === "success" ? (
               <p role="status">
@@ -1652,26 +1654,38 @@ export function SemanticMappingClient({
               </p>
             ) : null}
 
-            <button
-              type="button"
-              onClick={() => {
-                setStepError(null);
-                setStep(5);
-              }}
-              disabled={saveState.kind === "saving"}
-            >
-              Back
-            </button>
+            <div className="mapping-review-actions">
+              <button
+                type="button"
+                className="mapping-review-actions__back"
+                onClick={() => {
+                  setStepError(null);
+                  setStep(5);
+                }}
+                disabled={saveState.kind === "saving"}
+              >
+                Back
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                void saveMapping();
-              }}
-              disabled={saveState.kind === "saving"}
-            >
-              Save Mapping
-            </button>
+              <button
+                type="button"
+                className="mapping-review-actions__save"
+                onClick={() => {
+                  void saveMapping();
+                }}
+                disabled={saveState.kind === "saving"}
+              >
+                <span>
+                  {saveState.kind === "saving"
+                    ? "Saving mapping"
+                    : "Save Mapping"}
+                </span>
+                <ArrowRight
+                  size={20}
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
           </section>
         )}
       </section>

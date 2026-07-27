@@ -1,9 +1,4 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -12,48 +7,45 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-vi.mock(
-  "../src/lib/data-products/use-data-products",
-  () => ({
-    useDatasetExplorer: vi.fn(() => ({
-      state: {
-        kind: "ready",
-        data: {
-          rows: [{ market: "Boston" }],
-          columns: [],
-          total_rows: 1537,
-          page: 31,
-          page_size: 50,
-          total_pages: 31,
-          date_range: null,
-          treatment_distribution: {},
-          outcome_distribution: {},
-        },
+vi.mock("../src/lib/data-products/use-data-products", () => ({
+  useDatasetExplorer: vi.fn(() => ({
+    state: {
+      kind: "ready",
+      data: {
+        rows: [{ market: "Boston" }],
+        columns: [],
+        total_rows: 1537,
+        page: 31,
+        page_size: 50,
+        total_pages: 31,
+        date_range: null,
+        treatment_distribution: {},
+        outcome_distribution: {},
       },
-      quality: undefined,
-      versions: [],
-      dataset: {
-        id: "dataset-1",
-        workspace_id: "workspace-1",
-        project_id: "project-1",
-        created_by_user_id: "user-1",
-        source_filename: "campaign-results.csv",
-        storage_key: "private/storage/path.csv",
-        media_type: "text/csv",
-        byte_size: 2048,
-        checksum_sha256: "a".repeat(64),
-        status: "ready",
-        created_at: "2026-07-18T12:00:00Z",
-        uploaded_at: "2026-07-18T12:05:00Z",
-        validation_started_at: "2026-07-18T12:06:00Z",
-        validation_completed_at: "2026-07-18T12:07:00Z",
-        row_count: 1537,
-        column_count: 13,
-        failure_reason: null,
-      },
-    })),
-  }),
-);
+    },
+    quality: undefined,
+    versions: [],
+    dataset: {
+      id: "dataset-1",
+      workspace_id: "workspace-1",
+      project_id: "project-1",
+      created_by_user_id: "user-1",
+      source_filename: "campaign-results.csv",
+      storage_key: "private/storage/path.csv",
+      media_type: "text/csv",
+      byte_size: 2048,
+      checksum_sha256: "a".repeat(64),
+      status: "ready",
+      created_at: "2026-07-18T12:00:00Z",
+      uploaded_at: "2026-07-18T12:05:00Z",
+      validation_started_at: "2026-07-18T12:06:00Z",
+      validation_completed_at: "2026-07-18T12:07:00Z",
+      row_count: 1537,
+      column_count: 13,
+      failure_reason: null,
+    },
+  })),
+}));
 
 import { ExplorerClient } from "../src/components/data-products/data-product-clients";
 
@@ -72,9 +64,7 @@ describe("ExplorerClient", () => {
       />,
     );
 
-    expect(
-      screen.getByText("campaign-results.csv"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("campaign-results.csv")).toBeInTheDocument();
 
     expect(screen.getByText("1,537")).toBeInTheDocument();
     expect(screen.getByText("13")).toBeInTheDocument();
@@ -121,6 +111,51 @@ describe("ExplorerClient pagination", () => {
         name: "Next",
       }),
     ).toBeDisabled();
+  });
+});
+
+describe("ExplorerClient premium structure", () => {
+  it("groups the explorer identity and controls for fast scanning", () => {
+    render(
+      <ExplorerClient
+        workspaceId="workspace-1"
+        projectId="project-1"
+        datasetId="dataset-1"
+      />,
+    );
+
+    expect(screen.getByText("Measurement evidence")).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("region", {
+        name: "Explore dataset controls",
+      }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("ExplorerClient premium information order", () => {
+  it("places the dataset overview before the exploration toolbar", () => {
+    render(
+      <ExplorerClient
+        workspaceId="workspace-1"
+        projectId="project-1"
+        datasetId="dataset-1"
+      />,
+    );
+
+    const summary = screen.getByRole("region", {
+      name: "Dataset summary",
+    });
+
+    const controls = screen.getByRole("region", {
+      name: "Explore dataset controls",
+    });
+
+    expect(
+      summary.compareDocumentPosition(controls) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 

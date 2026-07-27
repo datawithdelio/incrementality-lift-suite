@@ -6,8 +6,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
-from reportlab.lib.pagesizes import letter  # type: ignore[import-untyped]
-from reportlab.pdfgen import canvas  # type: ignore[import-untyped]
+from incrementality_api.application.data_products.pdf_report_renderer import (
+    PdfReportRenderer as PdfReportRenderer,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,124 +104,3 @@ class CsvReportRenderer:
         for limitation in model.limitations:
             writer.writerow(("limitations", "item", limitation))
         return output.getvalue().encode()
-
-
-class PdfReportRenderer:
-    media_type = "application/pdf"
-    extension = "pdf"
-
-    def render(self, model: ReportModel) -> bytes:
-        output = io.BytesIO()
-        document = canvas.Canvas(output, pagesize=letter, invariant=1)
-        text = document.beginText(54, 738)
-        text.setFont("Helvetica-Bold", 18)
-        text.textLine(model.title)
-        text.setFont("Helvetica", 10)
-        sections = (
-            ("Analysis overview", model.conclusion),
-            (
-                "Method and configuration",
-                f"{model.estimator} {model.estimator_version} · {dict(model.configuration)}",
-            ),
-            (
-                "Estimate and uncertainty",
-                (
-                    f"{model.estimate:.2f} (95% CI {model.confidence_low:.2f} "
-                    f"to {model.confidence_high:.2f})"
-                ),
-            ),
-            ("Diagnostics and warnings", "; ".join(model.warnings) or "No warnings"),
-            ("Business impact", str(dict(model.business_impact))),
-            ("Data quality", str(dict(model.quality_summary))),
-            ("Limitations", "; ".join(model.limitations)),
-            (
-                "Technical appendix",
-                (
-                    f"dataset {model.dataset_id}@{model.dataset_checksum}; "
-                    f"mapping v{model.mapping_version}; run {model.analysis_run_id}"
-                ),
-            ),
-        )
-        for heading, content in sections:
-            text.moveCursor(0, -18)
-            text.setFont("Helvetica-Bold", 11)
-            text.textLine(heading)
-            text.setFont("Helvetica", 9)
-            text.textLines(content[:600])
-        document.drawText(text)
-        document.setFont("Helvetica-Bold", 10)
-        document.drawString(54, 138, "Estimate and 95% confidence interval")
-        document.setStrokeColorRGB(0.12, 0.48, 0.33)
-        document.setLineWidth(3)
-        document.line(90, 112, 500, 112)
-        span = max(model.confidence_high - model.confidence_low, 1e-9)
-        estimate_x = 90 + 410 * (model.estimate - model.confidence_low) / span
-        document.circle(estimate_x, 112, 5, fill=1)
-
-        if model.lineage:
-            document.showPage()
-            lineage_text = document.beginText(
-                54,
-                738,
-            )
-            lineage_text.setFont(
-                "Helvetica-Bold",
-                16,
-            )
-            lineage_text.textLine(
-                "Reproducibility lineage"
-            )
-            lineage_text.setFont(
-                "Helvetica",
-                8,
-            )
-
-            for key, value in _lineage_rows(model):
-                lineage_text.moveCursor(
-                    0,
-                    -12,
-                )
-                lineage_text.setFont(
-                    "Helvetica-Bold",
-                    9,
-                )
-                lineage_text.textLine(key)
-                lineage_text.setFont(
-                    "Helvetica",
-                    7,
-                )
-
-                chunks = tuple(
-                    value[index : index + 90]
-                    for index in range(
-                        0,
-                        len(value),
-                        90,
-                    )
-                ) or ("",)
-
-                for chunk in chunks:
-                    if lineage_text.getY() < 60:
-                        document.drawText(
-                            lineage_text
-                        )
-                        document.showPage()
-                        lineage_text = document.beginText(
-                            54,
-                            738,
-                        )
-                        lineage_text.setFont(
-                            "Helvetica",
-                            7,
-                        )
-
-                    lineage_text.textLine(
-                        chunk
-                    )
-
-            document.drawText(
-                lineage_text
-            )
-
-        document.save()
-        return output.getvalue()

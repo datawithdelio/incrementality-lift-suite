@@ -227,6 +227,7 @@ async def upload_project_dataset_content(
         UploadDataset,
         Depends(get_upload_dataset_service),
     ],
+    restore_missing: bool = False,
 ) -> DatasetResponse:
     del principal
 
@@ -237,6 +238,7 @@ async def upload_project_dataset_content(
                 project_id=project_id,
                 dataset_id=dataset_id,
                 chunks=request.stream(),
+                restore_missing=restore_missing,
             )
         )
     except DatasetUnavailableError as error:

@@ -1,0 +1,613 @@
+"use client";
+
+import { ArrowRightIcon } from "@phosphor-icons/react/ArrowRight";
+import { ChartLineUpIcon } from "@phosphor-icons/react/ChartLineUp";
+import { CheckCircleIcon } from "@phosphor-icons/react/CheckCircle";
+import { FileTextIcon } from "@phosphor-icons/react/FileText";
+import { GitBranchIcon } from "@phosphor-icons/react/GitBranch";
+import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
+import type { ResultsState } from "@/lib/results/types";
+import { analysisConfigurationPath } from "@/lib/projects/routes";
+import Link from "next/link";
+
+import { ComparisonChart, EventStudyChart } from "./result-charts";
+import { GeoHoldoutPanels, MarketingMixPanels, OffPolicyEvaluationPanels, SyntheticControlPanels } from "./estimator-result-panels";
+import { StatusState } from "./status-state";
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+function arrayValue(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
+}
+function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
+function number(value: number, digits = 1): string { return new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(value); }
+function percent(value: number): string { return `${value >= 0 ? "+" : ""}${number(value * 100, 1)}%`; }
+function currency(value: number): string {
+  return new Intl.NumberFormat(
+    "en-US",
+    {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    },
+  ).format(value);
+}
+
+function humanize(value: unknown, fallback: string): string {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  const words = value.replaceAll("_", " ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
+function dateLabel(value: string): string {
+  const date =
+    /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? new Date(`${value}T00:00:00`)
+      : new Date(value);
+
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    },
+  ).format(date);
+}
+
+function methodAssumption(
+  estimatorType: string,
+): string | null {
+  const assumptions: Record<string, string> = {
+    difference_in_differences:
+      "Parallel trends should hold: without the intervention, the treated and comparison groups would have followed similar outcome trends.",
+
+    synthetic_control:
+      "The donor pool can approximate the treated unit's pre-treatment behavior well enough to provide a useful counterfactual.",
+
+    geo_holdout:
+      "Treated and holdout geographies remain comparable apart from the intervention, with limited spillover between groups.",
+
+    marketing_mix_model:
+      "Media effects can be separated from seasonality and other modeled factors given sufficient variation and historical data.",
+
+    off_policy_evaluation:
+      "Adequate support and overlap between the behavior and target policies are required for a reliable policy-value comparison.",
+  };
+
+  return assumptions[
+    estimatorType
+  ] ?? null;
+}
+
+export function ResultsExperience({
+  state,
+  onRetry,
+}: {
+  state: ResultsState;
+  onRetry?: () => void;
+}) {
+  if (state.kind === "loading") return <LoadingAnalysisStatus />;
+  if (state.kind === "permission") return <Message title="You don’t have access to this result" body="Ask a workspace administrator for access, or switch to the correct workspace." />;
+  if (state.kind === "missing") return <Message title="We couldn’t find this analysis" body="It may have been removed or belong to another project." />;
+  if (state.kind === "error") return <Message title="Results are temporarily unavailable" body="Refresh in a moment. Your completed analysis remains safely stored." />;
+  const data = state.data;
+
+
+  if (
+    data.lifecycle_status === "succeeded"
+    && data.result === null
+  ) {
+    const statusHref =
+      `/workspaces/${data.workspace_id}`
+      + `/projects/${data.project_id}`
+      + `/analysis-runs/${data.analysis_run_id}`;
+
+    return (
+      <main className="results-shell">
+        <section className="state-card measurement-state">
+          <p className="eyebrow">
+            Analysis complete
+          </p>
+
+          <h1>
+            Result is being finalized
+          </h1>
+
+          <p>
+            Your analysis completed, but the result is still being finalized.
+          </p>
+
+          <div className="result-state-actions">
+            <a
+              className="button secondary"
+              href={statusHref}
+            >
+              Return to Status
+            </a>
+
+            {onRetry ? (
+              <button
+                className="button secondary"
+                type="button"
+                onClick={onRetry}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+
+  if (
+    data.lifecycle_status !== "succeeded"
+    || !data.result
+  ) {
+    if (data.lifecycle_status === "failed") {
+      return (
+        <FailedResult
+          attempt={
+            data.attempt_count
+              ? `Attempt ${data.attempt_count} of ${data.max_attempts}`
+              : undefined
+          }
+          configurationHref={analysisConfigurationPath(
+            data.workspace_id,
+            data.project_id,
+          )}
+          failureInformation={data.failure_information}
+          reproducibilityHref={
+            `/workspaces/${data.workspace_id}`
+            + `/projects/${data.project_id}`
+            + `/analysis-runs/${data.analysis_run_id}/lineage`
+          }
+        />
+      );
+    }
+
+    return (
+      <>
+        {state.refreshError ? (
+          <div
+            role="alert"
+            className="status-refresh-alert"
+          >
+            Unable to refresh analysis status.
+            Showing the last known status.
+          </div>
+        ) : null}
+
+        <StatusState
+          status={data.lifecycle_status}
+          attempt={
+            data.attempt_count
+              ? `Attempt ${data.attempt_count} of ${data.max_attempts}`
+              : undefined
+          }
+        />
+      </>
+    );
+  }
+
+  const result = data.result;
+  const diagnostics = result.technical_diagnostics;
+  const warnings = stringArray(diagnostics.warnings);
+  const decisionReady = diagnostics.causal_claim_allowed === true || diagnostics.recommendations_allowed === true;
+  const conclusion = typeof diagnostics.plain_language_conclusion === "string"
+    ? diagnostics.plain_language_conclusion
+    : decisionReady
+      ? "The analysis is ready for decision support."
+      : "The estimate needs additional validation.";
+  const samples = objectValue(diagnostics.sample_counts);
+
+  const analysisStart =
+    typeof data.analysis_configuration.analysis_start_date === "string"
+      ? data.analysis_configuration.analysis_start_date
+      : null;
+
+  const analysisEnd =
+    typeof data.analysis_configuration.analysis_end_date === "string"
+      ? data.analysis_configuration.analysis_end_date
+      : null;
+
+  const analysisPeriod =
+    analysisStart && analysisEnd
+      ? `${dateLabel(analysisStart)} to ${dateLabel(analysisEnd)}`
+      : null;
+
+  const completedDate =
+    data.completed_at
+      ? dateLabel(data.completed_at)
+      : null;
+
+  const targetOutcome =
+    data.target_outcome?.trim()
+      || null;
+
+  const assumption = methodAssumption(
+    data.estimator_type,
+  );
+  const relativeLift = result.business_impact.relative_lift;
+  const isMarketingMix =
+    data.estimator_type === "marketing_mix_model";
+
+  const headline =
+    isMarketingMix
+      ? number(result.effect_estimate)
+      : relativeLift === null
+        ? number(result.effect_estimate)
+        : percent(relativeLift);
+
+  const headlineLabel =
+    isMarketingMix
+      ? "Average media contribution"
+      : data.estimator_type === "off_policy_evaluation"
+        ? "Estimated policy value"
+        : relativeLift === null
+          ? "treatment effect"
+          : "estimated lift";
+  const estimatorLabel: Record<string, string> = {
+    difference_in_differences: "Difference-in-differences",
+    synthetic_control: "Synthetic control",
+    geo_holdout: "Geo holdout",
+    marketing_mix_model: "Bayesian marketing mix model",
+    off_policy_evaluation: "Off-policy evaluation",
+  };
+  const confidenceLevel = number(
+    result.confidence_interval.confidence_level * 100,
+    1,
+  );
+
+  const uncertaintyCopy =
+    data.estimator_type === "marketing_mix_model"
+      ? `${confidenceLevel}% posterior interval ${number(result.confidence_interval.low)} to ${number(result.confidence_interval.high)}`
+      : `${confidenceLevel}% confidence interval ${number(result.confidence_interval.low)} to ${number(result.confidence_interval.high)}. p = ${number(result.p_value, 3)}`;
+  const groupMetric = data.estimator_type === "marketing_mix_model"
+    ? { label: "Channels / periods", value: `${String(samples.channels ?? "—")} / ${String(samples.periods ?? "—")}` }
+    : data.estimator_type === "synthetic_control"
+      ? { label: "Contributing donors", value: String(Object.keys(objectValue(diagnostics.donor_weights)).length) }
+      : { label: "Treated / control units", value: `${String(samples.treated_units ?? "—")} / ${String(samples.control_units ?? "—")}` };
+  const designAssessment = humanize(
+    diagnostics.design_assessment,
+    decisionReady ? "Decision ready" : "Needs review",
+  );
+  const evidenceStrength = diagnostics.causal_claim_allowed === true
+    ? "Causal evidence"
+    : diagnostics.recommendations_allowed === true
+      ? "Planning-ready evidence"
+      : "Directional evidence";
+  const incrementalImpact = result.business_impact.incremental_revenue === null
+    ? result.business_impact.incremental_outcome === null
+      ? "Not available"
+      : number(result.business_impact.incremental_outcome, 0)
+    : currency(result.business_impact.incremental_revenue);
+  const impactLabel = result.business_impact.incremental_revenue === null
+    ? "Incremental outcome"
+    : "Incremental revenue";
+  const recommendation = decisionReady
+    ? "Use this result with the documented assumptions and diagnostic evidence."
+    : "Do not use this as final causal proof.";
+  const recommendationDetail = decisionReady
+    ? "The diagnostic policy allows this estimate to support a decision."
+    : warnings.length
+      ? "Review the diagnostic findings below before deciding how to strengthen the design."
+      : "Treat this as directional evidence and strengthen the design before making a final decision.";
+  const lineageHref =
+    `/workspaces/${data.workspace_id}`
+    + `/projects/${data.project_id}`
+    + `/analysis-runs/${data.analysis_run_id}/lineage`;
+  const reportsHref =
+    `/workspaces/${data.workspace_id}`
+    + `/projects/${data.project_id}`
+    + `/analysis-runs/${data.analysis_run_id}/reports`;
+
+  return (
+    <main className="results-shell result-page">
+      <header className="result-page-header">
+        <div>
+          <p className="result-method-label">
+            {estimatorLabel[data.estimator_type] ?? data.estimator_type}
+          </p>
+          <h1>Analysis result</h1>
+          <p>Decision support grounded in the saved estimate and diagnostic evidence.</p>
+        </div>
+        <nav aria-label="Result resources" className="result-page-actions">
+          <Link
+            className="result-action"
+            href={lineageHref}
+          >
+            <GitBranchIcon aria-hidden="true" size={18} weight="bold" />
+            Reproducibility
+          </Link>
+          <Link
+            className="result-action result-action-primary"
+            href={reportsHref}
+          >
+            <FileTextIcon aria-hidden="true" size={18} weight="bold" />
+            Reports
+          </Link>
+        </nav>
+      </header>
+
+      <section
+        className={`result-summary ${decisionReady ? "result-summary-ready" : "result-summary-caution"}`}
+        aria-labelledby="result-conclusion"
+      >
+        <div className="result-summary-copy">
+          <p className="result-status">
+            {decisionReady ? (
+              <CheckCircleIcon aria-hidden="true" size={18} weight="fill" />
+            ) : (
+              <WarningCircleIcon aria-hidden="true" size={18} weight="fill" />
+            )}
+            {evidenceStrength}
+          </p>
+          <h2 id="result-conclusion">{conclusion}</h2>
+          <dl className="result-metadata">
+            {targetOutcome ? (
+              <div>
+                <dt>{`Outcome ${targetOutcome}`}</dt>
+              </div>
+            ) : null}
+            {analysisPeriod ? (
+              <div>
+                <dt>{`Analysis period ${analysisPeriod}`}</dt>
+              </div>
+            ) : null}
+            {completedDate ? (
+              <div>
+                <dt>{`Completed ${completedDate}`}</dt>
+              </div>
+            ) : null}
+          </dl>
+          <p className="result-uncertainty">{uncertaintyCopy}</p>
+        </div>
+        <div className="result-summary-metrics" aria-label="Primary result metrics">
+          <div className="hero-metric">
+            <span>{headlineLabel}</span>
+            <strong>{headline}</strong>
+            <small>{relativeLift === null ? "Estimated result" : "Relative to expected outcome"}</small>
+          </div>
+          <div className="hero-metric">
+            <span>{impactLabel}</span>
+            <strong>{incrementalImpact}</strong>
+            <small>Across treated observations</small>
+          </div>
+          <div className="hero-metric">
+            <span>Evidence strength</span>
+            <strong className="hero-metric-text">{evidenceStrength}</strong>
+            <small>{decisionReady ? "Meets the current diagnostic policy" : "Interpret with caution"}</small>
+          </div>
+          <div className="hero-metric">
+            <span>Design quality</span>
+            <strong className={`hero-metric-text design-${String(diagnostics.design_assessment ?? "review")}`}>
+              {designAssessment}
+            </strong>
+            <small>{warnings.length ? "Review the diagnostic findings below" : "Review assumptions before acting"}</small>
+          </div>
+        </div>
+      </section>
+
+      <section className={`result-recommendation ${decisionReady ? "is-ready" : "is-caution"}`}>
+        <span className="result-recommendation-icon" aria-hidden="true">
+          {decisionReady ? (
+            <CheckCircleIcon size={22} weight="fill" />
+          ) : (
+            <WarningCircleIcon size={22} weight="fill" />
+          )}
+        </span>
+        <div>
+          <p>Business recommendation</p>
+          <h2>{recommendation}</h2>
+          <span>{recommendationDetail}</span>
+        </div>
+        <a href="#diagnostics" className="result-inline-link">
+          Review diagnostics
+          <ArrowRightIcon aria-hidden="true" size={17} weight="bold" />
+        </a>
+      </section>
+
+      <section className="result-evidence-strip" aria-label="Supporting result metrics">
+        <EvidenceMetric
+          icon={<ChartLineUpIcon aria-hidden="true" size={22} weight="bold" />}
+          label={data.estimator_type === "marketing_mix_model" ? "Average media contribution" : "Effect per treated observation"}
+          value={number(result.effect_estimate)}
+          detail="Average estimated change"
+        />
+        <EvidenceMetric
+          icon={<CheckCircleIcon aria-hidden="true" size={22} weight="bold" />}
+          label={groupMetric.label}
+          value={groupMetric.value}
+          detail="Units represented in the design"
+        />
+        <EvidenceMetric
+          icon={<FileTextIcon aria-hidden="true" size={22} weight="bold" />}
+          label="Observations"
+          value={number(result.sample_size, 0)}
+          detail="Data points used in estimation"
+        />
+      </section>
+
+      {data.estimator_type === "synthetic_control" ? <SyntheticControlPanels diagnostics={diagnostics} /> : null}
+      {data.estimator_type === "geo_holdout" ? <GeoHoldoutPanels diagnostics={diagnostics} /> : null}
+      {data.estimator_type === "marketing_mix_model" ? <MarketingMixPanels diagnostics={diagnostics} /> : null}
+      {data.estimator_type === "off_policy_evaluation" ? <OffPolicyEvaluationPanels diagnostics={diagnostics} /> : null}
+
+      {data.estimator_type === "difference_in_differences" ? (
+        <section className="result-chart-grid" aria-label="Analysis charts">
+          <article className="result-chart-panel">
+            <div className="result-panel-heading">
+              <div>
+                <h2>Observed versus expected outcome</h2>
+                <p>The post-intervention gap is the estimated incremental impact.</p>
+              </div>
+              <span className="result-legend">
+                <i className="observed" /> Observed
+                <i className="counterfactual" /> Expected
+              </span>
+            </div>
+            {arrayValue(diagnostics.observed_vs_counterfactual).length > 0 ? (
+          <ComparisonChart
+            points={arrayValue(
+              diagnostics.observed_vs_counterfactual,
+            )}
+          />
+        ) : (
+          <p className="result-empty-state">
+            Trend-series data is not available for this historical result.
+          </p>
+            )}
+            <p className="result-chart-note">Compare the observed outcome with the counterfactual the model expected without treatment.</p>
+          </article>
+          <article className="result-chart-panel">
+            <div className="result-panel-heading">
+              <div>
+                <h2>Effect over time</h2>
+                <p>Incremental effect relative to the pre-treatment baseline.</p>
+              </div>
+            </div>
+            <EventStudyChart points={arrayValue(diagnostics.event_study)} />
+            <p className="result-chart-note">Pre-treatment estimates should remain close to zero before interpreting the post-treatment effect.</p>
+          </article>
+        </section>
+      ) : null}
+
+      <section id="diagnostics" className="result-detail-grid">
+        <article className={`result-diagnostics ${decisionReady ? "is-ready" : "is-caution"}`}>
+          <div className="result-detail-title">
+            <span aria-hidden="true">
+              {decisionReady ? (
+                <CheckCircleIcon size={22} weight="fill" />
+              ) : (
+                <WarningCircleIcon size={22} weight="fill" />
+              )}
+            </span>
+            <div>
+              <p>Diagnostics summary</p>
+              <h2>{decisionReady ? "Evidence meets the current policy" : "Use this result with caution"}</h2>
+            </div>
+          </div>
+          {warnings.length ? (
+            <ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+          ) : (
+            <p className="result-diagnostic-clear">No blocking diagnostic warnings were recorded.</p>
+          )}
+          {assumption ? (
+            <div className="result-assumption">
+              <h3>Method assumption</h3>
+              <p>{assumption}</p>
+            </div>
+          ) : null}
+        </article>
+
+        <details className="technical result-technical">
+          <summary>Technical details</summary>
+          <div className="technical-grid">
+            <Metric label="Standard error" value={number(result.standard_error, 3)} />
+            <Metric label="Estimator" value={`${result.estimator_version}. ${result.library_name} ${result.library_version}`} />
+            <Metric label="Model" value={String(objectValue(diagnostics.model_specification).formula ?? "Difference-in-differences")} />
+            <Metric label="Design assessment" value={designAssessment} />
+          </div>
+          <Link className="result-technical-link" href={lineageHref}>
+            View full reproducibility details
+            <ArrowRightIcon aria-hidden="true" size={17} weight="bold" />
+          </Link>
+        </details>
+      </section>
+    </main>
+  );
+}
+
+function LoadingAnalysisStatus() {
+  return (
+    <main className="state-shell">
+      <section
+        className="state-card"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <p className="eyebrow">
+          Analysis status
+        </p>
+        <h1>
+          Loading analysis status
+        </h1>
+        <p>
+          Checking the latest status from the server.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) { return <div className="metric"><span>{label}</span><strong>{value}</strong></div>; }
+function Message({ title, body }: { title: string; body: string }) { return <main className="state-shell"><section className="state-card"><p className="eyebrow">Result unavailable</p><h1>{title}</h1><p>{body}</p></section></main>; }
+
+function EvidenceMetric({
+  detail,
+  icon,
+  label,
+  value,
+}: {
+  detail: string;
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <article className="result-evidence-metric">
+      <span className="result-evidence-icon">{icon}</span>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{detail}</small>
+      </div>
+    </article>
+  );
+}
+
+function FailedResult({
+  attempt,
+  configurationHref,
+  failureInformation,
+  reproducibilityHref,
+}: {
+  attempt?: string;
+  configurationHref: string;
+  failureInformation: string | null;
+  reproducibilityHref: string;
+}) {
+  return (
+    <main className="results-shell result-state-page">
+      <section className="result-failure-card" aria-labelledby="failed-result-title">
+        <span className="result-failure-icon" aria-hidden="true">
+          <WarningCircleIcon size={28} weight="fill" />
+        </span>
+        <p className="result-method-label">Analysis needs attention</p>
+        <h1 id="failed-result-title">This analysis needs attention</h1>
+        <p className="result-failure-reason">
+          {failureInformation?.trim()
+            || "The analysis could not be completed with the current data and configuration."}
+        </p>
+        <p className="result-failure-guidance">
+          Review the analysis setup, correct the highlighted requirement, and create a new run. Your source data has not been changed.
+        </p>
+        {attempt ? <p className="result-failure-attempt">{attempt}</p> : null}
+        <div className="result-state-actions">
+          <Link className="result-action result-action-primary" href={configurationHref}>
+            Fix configuration
+            <ArrowRightIcon aria-hidden="true" size={17} weight="bold" />
+          </Link>
+          <Link className="result-action" href={reproducibilityHref}>
+            <GitBranchIcon aria-hidden="true" size={17} weight="bold" />
+            View reproducibility
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}

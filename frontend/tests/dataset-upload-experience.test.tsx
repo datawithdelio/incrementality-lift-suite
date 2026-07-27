@@ -1315,4 +1315,77 @@ describe("dataset upload experience", () => {
     ).toBeInTheDocument();
   });
 
+  it("resumes an interrupted upload after a duplicate registration attempt fails", async () => {
+    sessionStorage.setItem(
+      "incrementality_dataset_upload:workspace-1:project-1",
+      "dataset-1",
+    );
+
+    getDataset
+      .mockResolvedValueOnce({
+        id: "dataset-1",
+        status: "pending_upload",
+        row_count: null,
+        column_count: null,
+        failure_reason: null,
+      })
+      .mockResolvedValueOnce({
+        id: "dataset-1",
+        status: "ready",
+        row_count: 100,
+        column_count: 4,
+        failure_reason: null,
+      });
+    registerDataset.mockRejectedValueOnce(
+      new Error("Dataset already exists."),
+    );
+
+    render(
+      <DatasetUpload
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Upload interrupted"),
+    ).toBeInTheDocument();
+
+    const file = new File(
+      ["date,revenue\n2026-07-01,100\n"],
+      "campaign-results.csv",
+      { type: "text/csv" },
+    );
+
+    fireEvent.change(
+      screen.getByLabelText("Choose CSV file"),
+      {
+        target: { files: [file] },
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Upload Dataset" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "We couldn't upload the dataset. Please try again.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Resume Upload" }),
+    );
+
+    await waitFor(() => {
+      expect(uploadDatasetContent).toHaveBeenCalledWith(
+        "session-token",
+        "workspace-1",
+        "project-1",
+        "dataset-1",
+        file,
+      );
+    });
+  });
+
 });

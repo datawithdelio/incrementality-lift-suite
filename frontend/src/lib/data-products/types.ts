@@ -102,6 +102,28 @@ export type DatasetPreview = {
   visualizations?: DatasetVisualizations;
 };
 
+export type GeographyMetrics = {
+  outcome_sum: number | null;
+  spend_sum: number | null;
+  covariate_sums: Record<string, number>;
+};
+
+export type GeographySummaryItem = {
+  value: string;
+  observation_count: number;
+  latitude: number | null;
+  longitude: number | null;
+  coordinate_status: "verified" | "missing";
+  metrics: GeographyMetrics;
+};
+
+export type GeographySummary = {
+  mapping_version: number;
+  unit_column: string;
+  total_geographies: number;
+  geographies: GeographySummaryItem[];
+};
+
 export type QualityFinding = {
   rule_id: string;
   severity: string;

@@ -128,8 +128,10 @@ describe("ReproducibilityExperience", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText("difference_in_differences"),
-    ).toBeInTheDocument();
+      screen.getAllByText(
+        "difference_in_differences",
+      ).length,
+    ).toBeGreaterThan(0);
 
     expect(
       screen.getByText("did-v2"),
@@ -144,8 +146,10 @@ describe("ReproducibilityExperience", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText("average_differential_change"),
-    ).toBeInTheDocument();
+      screen.getAllByText(
+        "average_differential_change",
+      ).length,
+    ).toBeGreaterThan(0);
 
     expect(
       screen.getByText("statsmodels 0.14.5"),

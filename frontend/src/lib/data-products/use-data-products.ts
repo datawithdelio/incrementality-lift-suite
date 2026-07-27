@@ -1,18 +1,190 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getDataset } from "../datasets/api";
-import { assessQuality, DataProductApiError, ExplorerOptions, fetchDatasetVersions, fetchPreview, fetchReports } from "./api";
-import type { DataQuality, DatasetPreview, DatasetVersion, LoadState, ReportJob } from "./types";
-const failure = (error: unknown): "permission" | "error" => error instanceof DataProductApiError && [401, 403].includes(error.status) ? "permission" : "error";
-export function useDatasetExplorer(workspace: string, project: string, dataset: string, options: ExplorerOptions, estimator: string) { const [state, setState] = useState<LoadState<DatasetPreview>>({ kind: "loading" }); const [quality, setQuality] = useState<DataQuality>(); const [versions, setVersions] = useState<DatasetVersion[]>([]); const [datasetMetadata, setDatasetMetadata] = useState<Awaited<ReturnType<typeof getDataset>>>(); useEffect(() => { const controller = new AbortController(); const token = localStorage.getItem("incrementality_session_token"); if (!token) { queueMicrotask(() => setState({ kind: "permission" })); return; } queueMicrotask(() => { if (!controller.signal.aborted) setState({ kind: "loading" }); }); Promise.all([fetchPreview(workspace, project, dataset, options, token, controller.signal), assessQuality(workspace, project, dataset, estimator, token, controller.signal), fetchDatasetVersions(workspace, project, token, controller.signal), getDataset(token, workspace, project, dataset)]).then(([data, assessment, datasetVersions, datasetRecord]) => { setState({ kind: "ready", data }); setQuality(assessment); setVersions(datasetVersions); setDatasetMetadata(datasetRecord); }).catch((error) => { if (!controller.signal.aborted) setState({ kind: failure(error) }); }); return () => controller.abort(); }, [workspace, project, dataset, options, estimator]); return { state, quality, versions, dataset: datasetMetadata }; }
+import { datasetUploadPath } from "../projects/routes";
+import {
+  assessQuality,
+  DataProductApiError,
+  ExplorerOptions,
+  fetchDatasetVersions,
+  fetchPreview,
+  fetchReports,
+} from "./api";
+import type {
+  DataQuality,
+  DatasetPreview,
+  DatasetVersion,
+  LoadState,
+  ReportJob,
+} from "./types";
+type DataProductFailure = "permission" | "error";
+
+type DatasetExplorerFailure = DataProductFailure | "unavailable";
+
+const failure = (error: unknown): DataProductFailure => {
+  if (
+    error instanceof DataProductApiError &&
+    [401, 403].includes(error.status)
+  ) {
+    return "permission";
+  }
+
+  return "error";
+};
+
+const explorerFailure = (error: unknown): DatasetExplorerFailure => {
+  if (error instanceof DataProductApiError && error.status === 404) {
+    return "unavailable";
+  }
+
+  return failure(error);
+};
+export function useDatasetExplorer(
+  workspace: string,
+  project: string,
+  dataset: string,
+  options: ExplorerOptions,
+  estimator: string,
+) {
+  const [state, setState] = useState<
+    | LoadState<DatasetPreview>
+    | {
+        kind: "unavailable";
+        uploadHref: string;
+      }
+  >({
+    kind: "loading",
+  });
+
+  const [quality, setQuality] = useState<DataQuality>();
+
+  const [versions, setVersions] = useState<DatasetVersion[]>([]);
+
+  const [datasetMetadata, setDatasetMetadata] =
+    useState<Awaited<ReturnType<typeof getDataset>>>();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const token = localStorage.getItem("incrementality_session_token");
+
+    if (!token) {
+      queueMicrotask(() =>
+        setState({
+          kind: "permission",
+        }),
+      );
+
+      return;
+    }
+
+    const sessionToken = token;
+
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) {
+        setState({
+          kind: "loading",
+        });
+      }
+    });
+
+    async function loadExplorer(): Promise<void> {
+      try {
+        /*
+         * Preview is the authoritative availability check.
+         * Load it first so a missing CSV produces the recovery
+         * experience instead of being masked by a secondary
+         * quality-request failure.
+         */
+        const preview = await fetchPreview(
+          workspace,
+          project,
+          dataset,
+          options,
+          sessionToken,
+          controller.signal,
+        );
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setState({
+          kind: "ready",
+          data: preview,
+        });
+
+        const [assessment, datasetVersions, datasetRecord] = await Promise.all([
+          assessQuality(
+            workspace,
+            project,
+            dataset,
+            estimator,
+            sessionToken,
+            controller.signal,
+          ),
+          fetchDatasetVersions(
+            workspace,
+            project,
+            sessionToken,
+            controller.signal,
+          ),
+          getDataset(sessionToken, workspace, project, dataset),
+        ]);
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setQuality(assessment);
+        setVersions(datasetVersions);
+        setDatasetMetadata(datasetRecord);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const kind = explorerFailure(error);
+
+        if (kind === "unavailable") {
+          setState({
+            kind: "unavailable",
+            uploadHref: `${datasetUploadPath(
+              workspace,
+              project,
+            )}?replace=1&dataset=${encodeURIComponent(dataset)}`,
+          });
+
+          return;
+        }
+
+        setState({
+          kind,
+        });
+      }
+    }
+
+    void loadExplorer();
+
+    return () => {
+      controller.abort();
+    };
+  }, [workspace, project, dataset, options, estimator]);
+
+  return {
+    state,
+    quality,
+    versions,
+    dataset: datasetMetadata,
+  };
+}
+
 export function useReports(
   workspace: string,
   project: string,
   run: string,
   refreshGeneration = 0,
 ): LoadState<ReportJob[]> {
-  const scopeKey =
-    `${workspace}:${project}:${run}`;
+  const scopeKey = `${workspace}:${project}:${run}`;
 
   const [scopedState, setScopedState] = useState<{
     scopeKey: string;
@@ -88,8 +260,7 @@ export function useReports(
 
         const hasActiveReport = reports.some(
           (report) =>
-            report.status === "pending" ||
-            report.status === "running",
+            report.status === "pending" || report.status === "running",
         );
 
         if (hasActiveReport) {
@@ -105,8 +276,7 @@ export function useReports(
         const hasActiveReport =
           lastReports?.some(
             (report) =>
-              report.status === "pending"
-              || report.status === "running",
+              report.status === "pending" || report.status === "running",
           ) ?? false;
 
         if (hasActiveReport) {
@@ -135,13 +305,7 @@ export function useReports(
         clearTimeout(pollTimer);
       }
     };
-  }, [
-    workspace,
-    project,
-    run,
-    scopeKey,
-    refreshGeneration,
-  ]);
+  }, [workspace, project, run, scopeKey, refreshGeneration]);
 
   if (scopedState.scopeKey !== scopeKey) {
     return {
@@ -166,15 +330,11 @@ export function useDataQuality(
 
   useEffect(() => {
     const controller = new AbortController();
-    const token = localStorage.getItem(
-      "incrementality_session_token",
-    );
+    const token = localStorage.getItem("incrementality_session_token");
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
     if (!token) {
-      queueMicrotask(() =>
-        setState({ kind: "permission" }),
-      );
+      queueMicrotask(() => setState({ kind: "permission" }));
       return;
     }
 
@@ -253,12 +413,7 @@ export function useDataQuality(
         clearTimeout(pollTimer);
       }
     };
-  }, [
-    workspace,
-    project,
-    dataset,
-    estimator,
-  ]);
+  }, [workspace, project, dataset, estimator]);
 
   return {
     state,

@@ -104,6 +104,28 @@ class DatasetPreviewResponse(BaseModel):
     visualizations: DatasetVisualizationsResponse
 
 
+class GeographyMetricsResponse(BaseModel):
+    outcome_sum: float | None
+    spend_sum: float | None
+    covariate_sums: dict[str, float]
+
+
+class GeographySummaryItemResponse(BaseModel):
+    value: str
+    observation_count: int
+    latitude: float | None
+    longitude: float | None
+    coordinate_status: str
+    metrics: GeographyMetricsResponse
+
+
+class GeographySummaryResponse(BaseModel):
+    mapping_version: int
+    unit_column: str
+    total_geographies: int
+    geographies: tuple[GeographySummaryItemResponse, ...]
+
+
 class DatasetVersionResponse(BaseModel):
     id: UUID
     source_filename: str

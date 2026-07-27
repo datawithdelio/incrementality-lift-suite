@@ -1,41 +1,111 @@
 "use client";
 
+import { ArrowRightIcon } from "@phosphor-icons/react/ArrowRight";
+import { ChartLineUpIcon } from "@phosphor-icons/react/ChartLineUp";
+import { CheckCircleIcon } from "@phosphor-icons/react/CheckCircle";
+import { FileTextIcon } from "@phosphor-icons/react/FileText";
+import { GitBranchIcon } from "@phosphor-icons/react/GitBranch";
+import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
 import type { ResultsState } from "@/lib/results/types";
+import { analysisConfigurationPath } from "@/lib/projects/routes";
 import Link from "next/link";
 
 import { ComparisonChart, EventStudyChart } from "./result-charts";
-import { GeoHoldoutPanels, MarketingMixPanels, OffPolicyEvaluationPanels, SyntheticControlPanels } from "./estimator-result-panels";
+import {
+  GeoHoldoutPanels,
+  MarketingMixPanels,
+  OffPolicyEvaluationPanels,
+  SyntheticControlPanels,
+} from "./estimator-result-panels";
 import { StatusState } from "./status-state";
 
 function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 function arrayValue(value: unknown): Record<string, unknown>[] {
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> =>
+        Boolean(item && typeof item === "object"),
+      )
+    : [];
 }
-function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
-function number(value: number, digits = 1): string { return new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(value); }
-function percent(value: number): string { return `${value >= 0 ? "+" : ""}${number(value * 100, 1)}%`; }
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+function number(value: number, digits = 1): string {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+function percent(value: number): string {
+  return `${value >= 0 ? "+" : ""}${number(value * 100, 1)}%`;
+}
+function currency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function humanize(value: unknown, fallback: string): string {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  const words = value.replaceAll("_", " ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
 
 function dateLabel(value: string): string {
-  const date =
-    /^\d{4}-\d{2}-\d{2}$/.test(value)
-      ? new Date(`${value}T00:00:00`)
-      : new Date(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
 
-  return new Intl.DateTimeFormat(
-    "en-US",
-    {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    },
-  ).format(date);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 }
 
-function methodAssumption(
-  estimatorType: string,
-): string | null {
+function humanizeOutcomeLabel(input: string): string {
+  const knownLabels: Record<string, string> = {
+    fednow_transactions_per_1000_business_accounts:
+      "FedNow transactions per 1,000 business accounts",
+  };
+
+  const known = knownLabels[input];
+
+  if (known) {
+    return known;
+  }
+
+  const readable = input.replaceAll("_", " ").replace(/\s+/g, " ").trim();
+
+  return readable
+    ? readable.charAt(0).toUpperCase() + readable.slice(1)
+    : input;
+}
+
+function resultPValueText(input: unknown): string {
+  const numeric = Number(input);
+
+  if (!Number.isFinite(numeric)) {
+    return "p unavailable";
+  }
+
+  if (numeric < 0.001) {
+    return "p < 0.001";
+  }
+
+  return `p = ${new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 3,
+  }).format(numeric)}`;
+}
+
+function methodAssumption(estimatorType: string): string | null {
   const assumptions: Record<string, string> = {
     difference_in_differences:
       "Parallel trends should hold: without the intervention, the treated and comparison groups would have followed similar outcome trends.",
@@ -53,9 +123,7 @@ function methodAssumption(
       "Adequate support and overlap between the behavior and target policies are required for a reliable policy-value comparison.",
   };
 
-  return assumptions[
-    estimatorType
-  ] ?? null;
+  return assumptions[estimatorType] ?? null;
 }
 
 export function ResultsExperience({
@@ -66,41 +134,48 @@ export function ResultsExperience({
   onRetry?: () => void;
 }) {
   if (state.kind === "loading") return <LoadingAnalysisStatus />;
-  if (state.kind === "permission") return <Message title="You don’t have access to this result" body="Ask a workspace administrator for access, or switch to the correct workspace." />;
-  if (state.kind === "missing") return <Message title="We couldn’t find this analysis" body="It may have been removed or belong to another project." />;
-  if (state.kind === "error") return <Message title="Results are temporarily unavailable" body="Refresh in a moment. Your completed analysis remains safely stored." />;
+  if (state.kind === "permission")
+    return (
+      <Message
+        title="You don’t have access to this result"
+        body="Ask a workspace administrator for access, or switch to the correct workspace."
+      />
+    );
+  if (state.kind === "missing")
+    return (
+      <Message
+        title="We couldn’t find this analysis"
+        body="It may have been removed or belong to another project."
+      />
+    );
+  if (state.kind === "error")
+    return (
+      <Message
+        title="Results are temporarily unavailable"
+        body="Refresh in a moment. Your completed analysis remains safely stored."
+      />
+    );
   const data = state.data;
 
-
-  if (
-    data.lifecycle_status === "succeeded"
-    && data.result === null
-  ) {
+  if (data.lifecycle_status === "succeeded" && data.result === null) {
     const statusHref =
-      `/workspaces/${data.workspace_id}`
-      + `/projects/${data.project_id}`
-      + `/analysis-runs/${data.analysis_run_id}`;
+      `/workspaces/${data.workspace_id}` +
+      `/projects/${data.project_id}` +
+      `/analysis-runs/${data.analysis_run_id}`;
 
     return (
       <main className="results-shell">
         <section className="state-card measurement-state">
-          <p className="eyebrow">
-            Analysis complete
-          </p>
+          <p className="eyebrow">Analysis complete</p>
 
-          <h1>
-            Result is being finalized
-          </h1>
+          <h1>Result is being finalized</h1>
 
           <p>
             Your analysis completed, but the result is still being finalized.
           </p>
 
           <div className="result-state-actions">
-            <a
-              className="button secondary"
-              href={statusHref}
-            >
+            <a className="button secondary" href={statusHref}>
               Return to Status
             </a>
 
@@ -119,20 +194,34 @@ export function ResultsExperience({
     );
   }
 
+  if (data.lifecycle_status !== "succeeded" || !data.result) {
+    if (data.lifecycle_status === "failed") {
+      return (
+        <FailedResult
+          attempt={
+            data.attempt_count
+              ? `Attempt ${data.attempt_count} of ${data.max_attempts}`
+              : undefined
+          }
+          configurationHref={analysisConfigurationPath(
+            data.workspace_id,
+            data.project_id,
+          )}
+          failureInformation={data.failure_information}
+          reproducibilityHref={
+            `/workspaces/${data.workspace_id}` +
+            `/projects/${data.project_id}` +
+            `/analysis-runs/${data.analysis_run_id}/lineage`
+          }
+        />
+      );
+    }
 
-  if (
-    data.lifecycle_status !== "succeeded"
-    || !data.result
-  ) {
     return (
       <>
         {state.refreshError ? (
-          <div
-            role="alert"
-            className="status-refresh-alert"
-          >
-            Unable to refresh analysis status.
-            Showing the last known status.
+          <div role="alert" className="status-refresh-alert">
+            Unable to refresh analysis status. Showing the last known status.
           </div>
         ) : null}
 
@@ -151,12 +240,15 @@ export function ResultsExperience({
   const result = data.result;
   const diagnostics = result.technical_diagnostics;
   const warnings = stringArray(diagnostics.warnings);
-  const decisionReady = diagnostics.causal_claim_allowed === true || diagnostics.recommendations_allowed === true;
-  const conclusion = typeof diagnostics.plain_language_conclusion === "string"
-    ? diagnostics.plain_language_conclusion
-    : decisionReady
-      ? "The analysis is ready for decision support."
-      : "The estimate needs additional validation.";
+  const decisionReady =
+    diagnostics.causal_claim_allowed === true ||
+    diagnostics.recommendations_allowed === true;
+  const conclusion =
+    typeof diagnostics.plain_language_conclusion === "string"
+      ? diagnostics.plain_language_conclusion
+      : decisionReady
+        ? "The analysis is ready for decision support."
+        : "The estimate needs additional validation.";
   const samples = objectValue(diagnostics.sample_counts);
 
   const analysisStart =
@@ -171,40 +263,34 @@ export function ResultsExperience({
 
   const analysisPeriod =
     analysisStart && analysisEnd
-      ? `${dateLabel(analysisStart)} – ${dateLabel(analysisEnd)}`
+      ? `${dateLabel(analysisStart)} to ${dateLabel(analysisEnd)}`
       : null;
 
-  const completedDate =
-    data.completed_at
-      ? dateLabel(data.completed_at)
-      : null;
+  const completedDate = data.completed_at ? dateLabel(data.completed_at) : null;
 
-  const targetOutcome =
-    data.target_outcome?.trim()
-      || null;
+  const targetOutcome = data.target_outcome?.trim() || null;
 
-  const assumption = methodAssumption(
-    data.estimator_type,
-  );
+  const targetOutcomeLabel = targetOutcome
+    ? humanizeOutcomeLabel(targetOutcome)
+    : null;
+
+  const assumption = methodAssumption(data.estimator_type);
   const relativeLift = result.business_impact.relative_lift;
-  const isMarketingMix =
-    data.estimator_type === "marketing_mix_model";
+  const isMarketingMix = data.estimator_type === "marketing_mix_model";
 
-  const headline =
-    isMarketingMix
+  const headline = isMarketingMix
+    ? number(result.effect_estimate)
+    : relativeLift === null
       ? number(result.effect_estimate)
-      : relativeLift === null
-        ? number(result.effect_estimate)
-        : percent(relativeLift);
+      : percent(relativeLift);
 
-  const headlineLabel =
-    isMarketingMix
-      ? "Average media contribution"
-      : data.estimator_type === "off_policy_evaluation"
-        ? "Estimated policy value"
-        : relativeLift === null
-          ? "treatment effect"
-          : "estimated lift";
+  const headlineLabel = isMarketingMix
+    ? "Average media contribution"
+    : data.estimator_type === "off_policy_evaluation"
+      ? "Estimated policy value"
+      : relativeLift === null
+        ? "treatment effect"
+        : "estimated lift";
   const estimatorLabel: Record<string, string> = {
     difference_in_differences: "Difference-in-differences",
     synthetic_control: "Synthetic control",
@@ -212,125 +298,392 @@ export function ResultsExperience({
     marketing_mix_model: "Bayesian marketing mix model",
     off_policy_evaluation: "Off-policy evaluation",
   };
-  const uncertaintyCopy = data.estimator_type === "marketing_mix_model"
-    ? `95% posterior interval ${number(result.confidence_interval.low)} to ${number(result.confidence_interval.high)}`
-    : `95% confidence interval ${number(result.confidence_interval.low)} to ${number(result.confidence_interval.high)} · p = ${number(result.p_value, 3)}`;
-  const groupMetric = data.estimator_type === "marketing_mix_model"
-    ? { label: "Channels / periods", value: `${String(samples.channels ?? "—")} / ${String(samples.periods ?? "—")}` }
-    : data.estimator_type === "synthetic_control"
-      ? { label: "Contributing donors", value: String(Object.keys(objectValue(diagnostics.donor_weights)).length) }
-      : { label: "Treated / control units", value: `${String(samples.treated_units ?? "—")} / ${String(samples.control_units ?? "—")}` };
+  const confidenceLevel = number(
+    result.confidence_interval.confidence_level * 100,
+    1,
+  );
+
+  const uncertaintyCopy =
+    data.estimator_type === "marketing_mix_model"
+      ? `${confidenceLevel}% posterior interval ${number(
+          result.confidence_interval.low,
+        )} to ${number(result.confidence_interval.high)}`
+      : `${confidenceLevel}% confidence interval ${number(
+          result.confidence_interval.low,
+        )} to ${number(result.confidence_interval.high)}. ${resultPValueText(
+          result.p_value,
+        )}`;
+
+  const groupMetric =
+    data.estimator_type === "marketing_mix_model"
+      ? {
+          label: "Channels / periods",
+          value: `${String(samples.channels ?? "—")} / ${String(samples.periods ?? "—")}`,
+        }
+      : data.estimator_type === "synthetic_control"
+        ? {
+            label: "Contributing donors",
+            value: String(
+              Object.keys(objectValue(diagnostics.donor_weights)).length,
+            ),
+          }
+        : {
+            label: "Treated / control units",
+            value: `${String(samples.treated_units ?? "—")} / ${String(samples.control_units ?? "—")}`,
+          };
+  const designAssessment = humanize(
+    diagnostics.design_assessment,
+    decisionReady ? "Decision ready" : "Needs review",
+  );
+  const evidenceStrength =
+    diagnostics.causal_claim_allowed === true
+      ? "Causal evidence"
+      : diagnostics.recommendations_allowed === true
+        ? "Planning-ready evidence"
+        : "Directional evidence";
+  const incrementalImpact =
+    result.business_impact.incremental_revenue === null
+      ? result.business_impact.incremental_outcome === null
+        ? "Not available"
+        : number(result.business_impact.incremental_outcome, 0)
+      : currency(result.business_impact.incremental_revenue);
+  const impactLabel =
+    result.business_impact.incremental_revenue === null
+      ? "Incremental outcome"
+      : "Incremental revenue";
+  const recommendation = decisionReady
+    ? "Use this result with the documented assumptions and diagnostic evidence."
+    : "Do not use this as final causal proof.";
+  const recommendationDetail = decisionReady
+    ? "The diagnostic policy allows this estimate to support a decision."
+    : warnings.length
+      ? "Review the diagnostic findings below before deciding how to strengthen the design."
+      : "Treat this as directional evidence and strengthen the design before making a final decision.";
+  const lineageHref =
+    `/workspaces/${data.workspace_id}` +
+    `/projects/${data.project_id}` +
+    `/analysis-runs/${data.analysis_run_id}/lineage`;
+  const reportsHref =
+    `/workspaces/${data.workspace_id}` +
+    `/projects/${data.project_id}` +
+    `/analysis-runs/${data.analysis_run_id}/reports`;
 
   return (
-    <main className="results-shell">
-      <header className="topbar">
-        <Link href="/" className="brand"><span>∆</span> Incrementality</Link>
+    <main className="results-shell result-page">
+      <header className="result-page-header">
         <div>
-          <Link
-            className="button secondary"
-            href={`/workspaces/${data.workspace_id}/projects/${data.project_id}/analysis-runs/${data.analysis_run_id}/lineage`}
-          >
+          <p className="result-method-label">
+            {estimatorLabel[data.estimator_type] ?? data.estimator_type}
+          </p>
+          <h1>Analysis result</h1>
+          <p>
+            Decision support grounded in the saved estimate and diagnostic
+            evidence.
+          </p>
+        </div>
+        <nav aria-label="Result resources" className="result-page-actions">
+          <Link className="result-action" href={lineageHref}>
+            <GitBranchIcon aria-hidden="true" size={18} weight="bold" />
             Reproducibility
           </Link>
           <Link
-            className="button secondary"
-            href={`/workspaces/${data.workspace_id}/projects/${data.project_id}/analysis-runs/${data.analysis_run_id}/reports`}
+            className="result-action result-action-primary"
+            href={reportsHref}
           >
+            <FileTextIcon aria-hidden="true" size={18} weight="bold" />
             Reports
           </Link>
-        </div>
+        </nav>
       </header>
-      <section className={`conclusion ${decisionReady ? "trusted" : "caution"}`}>
-        <div>
-          <p className="eyebrow">{estimatorLabel[data.estimator_type] ?? data.estimator_type} · complete</p>
-          <h1>{conclusion}</h1>
 
-          {targetOutcome || analysisPeriod || completedDate ? (
-            <p className="result-header-metadata">
-              {targetOutcome ? (
-                <>
-                  Outcome {targetOutcome}
-                </>
-              ) : null}
-
-              {targetOutcome && analysisPeriod ? (
-                " · "
-              ) : null}
-
-              {analysisPeriod ? (
-                <>
-                  Analysis period {analysisPeriod}
-                </>
-              ) : null}
-
-              {(targetOutcome || analysisPeriod) && completedDate ? (
-                " · "
-              ) : null}
-
-              {completedDate ? (
-                <>
-                  Completed {completedDate}
-                </>
-              ) : null}
-            </p>
-          ) : null}
-
-          <p className="confidence-copy">{uncertaintyCopy}</p>
-        </div>
-        <div className="hero-metric"><strong>{headline}</strong><span>{headlineLabel}</span></div>
-      </section>
-
-      {!decisionReady || warnings.length ? (
-        <section className="warning-panel">
-          <p className="eyebrow">Diagnostic review</p><h2>Use this result with caution</h2>
-          <ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-        </section>
-      ) : null}
-
-      {assumption ? (
-        <section className="panel result-assumption">
-          <p className="eyebrow">
-            Methodology
-          </p>
-          <h2>
-            Method assumption
-          </h2>
-          <p>
-            {assumption}
-          </p>
-        </section>
-      ) : null}
-
-      <section className="metric-grid" aria-label="Key result metrics">
-        <Metric label={data.estimator_type === "marketing_mix_model" ? "Average media contribution" : "Effect per treated observation"} value={number(result.effect_estimate)} />
-        <Metric label="Incremental outcome" value={result.business_impact.incremental_outcome === null ? "—" : number(result.business_impact.incremental_outcome, 0)} />
-        <Metric label={groupMetric.label} value={groupMetric.value} />
-        <Metric label="Observations" value={number(result.sample_size, 0)} />
-      </section>
-
-      {data.estimator_type === "synthetic_control" ? <SyntheticControlPanels diagnostics={diagnostics} /> : null}
-      {data.estimator_type === "geo_holdout" ? <GeoHoldoutPanels diagnostics={diagnostics} /> : null}
-      {data.estimator_type === "marketing_mix_model" ? <MarketingMixPanels diagnostics={diagnostics} /> : null}
-      {data.estimator_type === "off_policy_evaluation" ? <OffPolicyEvaluationPanels diagnostics={diagnostics} /> : null}
-
-      {data.estimator_type === "difference_in_differences" ? <><section className="story-grid">
-        <article className="panel wide"><div className="panel-heading"><div><p className="eyebrow">What changed</p><h2>Observed versus expected outcome</h2></div><p>The gap after treatment is the estimated incremental impact.</p></div>{arrayValue(diagnostics.observed_vs_counterfactual).length > 0 ? (
-          <ComparisonChart
-            points={arrayValue(
-              diagnostics.observed_vs_counterfactual,
+      <section
+        className={`result-summary ${decisionReady ? "result-summary-ready" : "result-summary-caution"}`}
+        aria-labelledby="result-conclusion"
+      >
+        <div className="result-summary-copy">
+          <p className="result-status">
+            {decisionReady ? (
+              <CheckCircleIcon aria-hidden="true" size={18} weight="fill" />
+            ) : (
+              <WarningCircleIcon aria-hidden="true" size={18} weight="fill" />
             )}
-          />
-        ) : (
-          <p className="result-empty-state">
-            Trend-series data is not available for this historical result.
+            {evidenceStrength}
           </p>
-        )}</article>
-        <article className="panel"><p className="eyebrow">Business impact</p><h2>{result.business_impact.incremental_revenue === null ? "Incremental outcome" : "Estimated revenue impact"}</h2><strong className="impact-number">{result.business_impact.incremental_revenue === null ? number(result.business_impact.incremental_outcome ?? 0, 0) : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(result.business_impact.incremental_revenue)}</strong><p>Estimated across treated observations after the intervention.</p></article>
+          <h2 id="result-conclusion">{conclusion}</h2>
+          <dl className="result-metadata">
+            {targetOutcomeLabel ? (
+              <div>
+                <dt>{`Outcome ${targetOutcomeLabel}`}</dt>
+              </div>
+            ) : null}
+            {analysisPeriod ? (
+              <div>
+                <dt>{`Analysis period ${analysisPeriod}`}</dt>
+              </div>
+            ) : null}
+            {completedDate ? (
+              <div>
+                <dt>{`Completed ${completedDate}`}</dt>
+              </div>
+            ) : null}
+          </dl>
+          <p className="result-uncertainty">{uncertaintyCopy}</p>
+        </div>
+        <div
+          className="result-summary-metrics"
+          aria-label="Primary result metrics"
+        >
+          <div className="hero-metric">
+            <span className="hero-metric-icon" aria-hidden="true">
+              <ChartLineUpIcon size={22} weight="bold" />
+            </span>
+            <span>{headlineLabel}</span>
+            <strong>{headline}</strong>
+            <small>
+              {relativeLift === null
+                ? "Estimated result"
+                : "Relative to expected outcome"}
+            </small>
+          </div>
+          <div className="hero-metric">
+            <span className="hero-metric-icon" aria-hidden="true">
+              <FileTextIcon size={22} weight="bold" />
+            </span>
+            <span>{impactLabel}</span>
+            <strong>{incrementalImpact}</strong>
+            <small>Across treated observations</small>
+          </div>
+          <div className="hero-metric">
+            <span
+              className={`hero-metric-icon ${
+                decisionReady ? "is-positive" : "is-caution"
+              }`}
+              aria-hidden="true"
+            >
+              {decisionReady ? (
+                <CheckCircleIcon size={22} weight="fill" />
+              ) : (
+                <WarningCircleIcon size={22} weight="fill" />
+              )}
+            </span>
+            <span>Evidence strength</span>
+            <strong className="hero-metric-text">{evidenceStrength}</strong>
+            <small>
+              {decisionReady
+                ? "Meets the current diagnostic policy"
+                : "Interpret with caution"}
+            </small>
+          </div>
+          <div className="hero-metric">
+            <span
+              className={`hero-metric-icon ${
+                decisionReady ? "is-positive" : "is-caution"
+              }`}
+              aria-hidden="true"
+            >
+              {decisionReady ? (
+                <CheckCircleIcon size={22} weight="fill" />
+              ) : (
+                <WarningCircleIcon size={22} weight="fill" />
+              )}
+            </span>
+            <span>Design quality</span>
+            <strong
+              className={`hero-metric-text design-${String(
+                diagnostics.design_assessment ?? "review",
+              )}`}
+            >
+              {designAssessment}
+            </strong>
+            <small>
+              {warnings.length
+                ? "Review the diagnostic findings below"
+                : "Review assumptions before acting"}
+            </small>
+          </div>
+        </div>
       </section>
 
-      <section className="panel"><div className="panel-heading"><div><p className="eyebrow">Assumption check</p><h2>Effect over time</h2></div><p>Pre-treatment estimates should remain close to zero.</p></div><EventStudyChart points={arrayValue(diagnostics.event_study)} /></section></> : null}
+      <section
+        className={`result-recommendation ${decisionReady ? "is-ready" : "is-caution"}`}
+      >
+        <span className="result-recommendation-icon" aria-hidden="true">
+          {decisionReady ? (
+            <CheckCircleIcon size={22} weight="fill" />
+          ) : (
+            <WarningCircleIcon size={22} weight="fill" />
+          )}
+        </span>
+        <div>
+          <p>Business recommendation</p>
+          <h2>{recommendation}</h2>
+          <span>{recommendationDetail}</span>
+        </div>
+        <a href="#diagnostics" className="result-inline-link">
+          Review diagnostics
+          <ArrowRightIcon aria-hidden="true" size={17} weight="bold" />
+        </a>
+      </section>
 
-      <details className="technical"><summary>Technical details</summary><div className="technical-grid"><Metric label="Standard error" value={number(result.standard_error, 3)} /><Metric label="Estimator" value={`${result.estimator_version} · ${result.library_name} ${result.library_version}`} /><Metric label="Model" value={String(objectValue(diagnostics.model_specification).formula ?? "Difference-in-differences")} /><Metric label="Design assessment" value={String(diagnostics.design_assessment ?? "Not available")} /></div></details>
+      <section
+        className="result-evidence-strip"
+        aria-label="Supporting result metrics"
+      >
+        <EvidenceMetric
+          icon={<ChartLineUpIcon aria-hidden="true" size={22} weight="bold" />}
+          label={
+            data.estimator_type === "marketing_mix_model"
+              ? "Average media contribution"
+              : "Effect per treated observation"
+          }
+          value={number(result.effect_estimate)}
+          detail="Average estimated change"
+        />
+        <EvidenceMetric
+          icon={<CheckCircleIcon aria-hidden="true" size={22} weight="bold" />}
+          label={groupMetric.label}
+          value={groupMetric.value}
+          detail="Units represented in the design"
+        />
+        <EvidenceMetric
+          icon={<FileTextIcon aria-hidden="true" size={22} weight="bold" />}
+          label="Observations"
+          value={number(result.sample_size, 0)}
+          detail="Data points used in estimation"
+        />
+      </section>
+
+      {data.estimator_type === "synthetic_control" ? (
+        <SyntheticControlPanels diagnostics={diagnostics} />
+      ) : null}
+      {data.estimator_type === "geo_holdout" ? (
+        <GeoHoldoutPanels
+          diagnostics={diagnostics}
+          effectEstimate={result.effect_estimate}
+          relativeLift={relativeLift}
+          sampleSize={result.sample_size}
+        />
+      ) : null}
+      {data.estimator_type === "marketing_mix_model" ? (
+        <MarketingMixPanels diagnostics={diagnostics} />
+      ) : null}
+      {data.estimator_type === "off_policy_evaluation" ? (
+        <OffPolicyEvaluationPanels diagnostics={diagnostics} />
+      ) : null}
+
+      {data.estimator_type === "difference_in_differences" ? (
+        <section className="result-chart-grid" aria-label="Analysis charts">
+          <article className="result-chart-panel">
+            <div className="result-panel-heading">
+              <div>
+                <h2>Observed versus expected outcome</h2>
+                <p>
+                  The post-intervention gap is the estimated incremental impact.
+                </p>
+              </div>
+              <span className="result-legend">
+                <i className="observed" /> Observed
+                <i className="counterfactual" /> Expected
+              </span>
+            </div>
+            {arrayValue(diagnostics.observed_vs_counterfactual).length > 0 ? (
+              <ComparisonChart
+                points={arrayValue(diagnostics.observed_vs_counterfactual)}
+              />
+            ) : (
+              <p className="result-empty-state">
+                Trend-series data is not available for this historical result.
+              </p>
+            )}
+            <p className="result-chart-note">
+              Compare the observed outcome with the counterfactual the model
+              expected without treatment.
+            </p>
+          </article>
+          <article className="result-chart-panel">
+            <div className="result-panel-heading">
+              <div>
+                <h2>Effect over time</h2>
+                <p>
+                  Incremental effect relative to the pre-treatment baseline.
+                </p>
+              </div>
+            </div>
+            <EventStudyChart points={arrayValue(diagnostics.event_study)} />
+            <p className="result-chart-note">
+              Pre-treatment estimates should remain close to zero before
+              interpreting the post-treatment effect.
+            </p>
+          </article>
+        </section>
+      ) : null}
+
+      <section id="diagnostics" className="result-detail-grid">
+        <article
+          className={`result-diagnostics ${decisionReady ? "is-ready" : "is-caution"}`}
+        >
+          <div className="result-detail-title">
+            <span aria-hidden="true">
+              {decisionReady ? (
+                <CheckCircleIcon size={22} weight="fill" />
+              ) : (
+                <WarningCircleIcon size={22} weight="fill" />
+              )}
+            </span>
+            <div>
+              <p>Diagnostics summary</p>
+              <h2>
+                {decisionReady
+                  ? "Evidence meets the current policy"
+                  : "Use this result with caution"}
+              </h2>
+            </div>
+          </div>
+          {warnings.length ? (
+            <ul>
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="result-diagnostic-clear">
+              No blocking diagnostic warnings were recorded.
+            </p>
+          )}
+          {assumption ? (
+            <div className="result-assumption">
+              <h3>Method assumption</h3>
+              <p>{assumption}</p>
+            </div>
+          ) : null}
+        </article>
+
+        <details className="technical result-technical" open>
+          <summary>Technical details</summary>
+          <div className="technical-grid">
+            <Metric
+              label="Standard error"
+              value={number(result.standard_error, 3)}
+            />
+            <Metric
+              label="Estimator"
+              value={`${result.estimator_version}. ${result.library_name} ${result.library_version}`}
+            />
+            <Metric
+              label="Model"
+              value={String(
+                objectValue(diagnostics.model_specification).formula ??
+                  "Difference-in-differences",
+              )}
+            />
+            <Metric label="Design assessment" value={designAssessment} />
+          </div>
+          <Link className="result-technical-link" href={lineageHref}>
+            View full reproducibility details
+            <ArrowRightIcon aria-hidden="true" size={17} weight="bold" />
+          </Link>
+        </details>
+      </section>
     </main>
   );
 }
@@ -338,24 +691,103 @@ export function ResultsExperience({
 function LoadingAnalysisStatus() {
   return (
     <main className="state-shell">
-      <section
-        className="state-card"
-        aria-live="polite"
-        aria-busy="true"
-      >
-        <p className="eyebrow">
-          Analysis status
-        </p>
-        <h1>
-          Loading analysis status
-        </h1>
-        <p>
-          Checking the latest status from the server.
-        </p>
+      <section className="state-card" aria-live="polite" aria-busy="true">
+        <p className="eyebrow">Analysis status</p>
+        <h1>Loading analysis status</h1>
+        <p>Checking the latest status from the server.</p>
       </section>
     </main>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) { return <div className="metric"><span>{label}</span><strong>{value}</strong></div>; }
-function Message({ title, body }: { title: string; body: string }) { return <main className="state-shell"><section className="state-card"><p className="eyebrow">Result unavailable</p><h1>{title}</h1><p>{body}</p></section></main>; }
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+function Message({ title, body }: { title: string; body: string }) {
+  return (
+    <main className="state-shell">
+      <section className="state-card">
+        <p className="eyebrow">Result unavailable</p>
+        <h1>{title}</h1>
+        <p>{body}</p>
+      </section>
+    </main>
+  );
+}
+
+function EvidenceMetric({
+  detail,
+  icon,
+  label,
+  value,
+}: {
+  detail: string;
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <article className="result-evidence-metric">
+      <span className="result-evidence-icon">{icon}</span>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{detail}</small>
+      </div>
+    </article>
+  );
+}
+
+function FailedResult({
+  attempt,
+  configurationHref,
+  failureInformation,
+  reproducibilityHref,
+}: {
+  attempt?: string;
+  configurationHref: string;
+  failureInformation: string | null;
+  reproducibilityHref: string;
+}) {
+  return (
+    <main className="results-shell result-state-page">
+      <section
+        className="result-failure-card"
+        aria-labelledby="failed-result-title"
+      >
+        <span className="result-failure-icon" aria-hidden="true">
+          <WarningCircleIcon size={28} weight="fill" />
+        </span>
+        <p className="result-method-label">Analysis needs attention</p>
+        <h1 id="failed-result-title">This analysis needs attention</h1>
+        <p className="result-failure-reason">
+          {failureInformation?.trim() ||
+            "The analysis could not be completed with the current data and configuration."}
+        </p>
+        <p className="result-failure-guidance">
+          Review the analysis setup, correct the highlighted requirement, and
+          create a new run. Your source data has not been changed.
+        </p>
+        {attempt ? <p className="result-failure-attempt">{attempt}</p> : null}
+        <div className="result-state-actions">
+          <Link
+            className="result-action result-action-primary"
+            href={configurationHref}
+          >
+            Fix configuration
+            <ArrowRightIcon aria-hidden="true" size={17} weight="bold" />
+          </Link>
+          <Link className="result-action" href={reproducibilityHref}>
+            <GitBranchIcon aria-hidden="true" size={17} weight="bold" />
+            View reproducibility
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}

@@ -16,6 +16,7 @@ from incrementality_api.api.v1.schemas.data_products import (
     DataQualityResponse,
     DatasetPreviewResponse,
     DatasetVersionResponse,
+    GeographySummaryResponse,
     QueueReportRequest,
     ReportJobResponse,
 )
@@ -57,6 +58,7 @@ def _explorer_query(
     filter_value: str | None,
     column_search: str | None,
     outcome_column: str | None = None,
+    intervention_date: str | None = None,
 ) -> DatasetExplorerQuery:
     filters = (
         (DatasetFilter(filter_column, filter_operator, filter_value or ""),)
@@ -71,6 +73,7 @@ def _explorer_query(
         filters,
         column_search,
         outcome_column,
+        intervention_date,
     )
 
 
@@ -90,6 +93,7 @@ async def preview_dataset(
     filter_value: str | None = None,
     column_search: str | None = None,
     outcome_column: str | None = None,
+    intervention_date: str | None = None,
     mapping_version: int | None = None,
 ) -> DatasetPreviewResponse:
     del principal
@@ -106,11 +110,53 @@ async def preview_dataset(
                 filter_value,
                 column_search,
                 outcome_column,
+                intervention_date,
             ),
         )
     except DatasetUnavailableError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
     return DatasetPreviewResponse.model_validate(result, from_attributes=True)
+
+
+@router.get(
+    "/datasets/{dataset_id}/geography-summary",
+    response_model=GeographySummaryResponse,
+)
+async def summarize_dataset_geographies(
+    workspace_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_view),
+    ],
+    service: Annotated[
+        ProductionDataProducts,
+        Depends(get_data_products_service),
+    ],
+    mapping_version: int | None = None,
+) -> GeographySummaryResponse:
+    del principal
+
+    try:
+        result = await service.geography_summary(
+            DatasetProductQuery(
+                workspace_id,
+                project_id,
+                dataset_id,
+                mapping_version,
+            )
+        )
+    except DatasetUnavailableError as error:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            str(error),
+        ) from error
+
+    return GeographySummaryResponse.model_validate(
+        result,
+        from_attributes=True,
+    )
 
 
 @router.get("/dataset-versions", response_model=tuple[DatasetVersionResponse, ...])

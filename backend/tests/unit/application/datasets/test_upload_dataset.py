@@ -146,6 +146,7 @@ class FakeObjectStorage:
         self.written_media_type: str | None = None
         self.received_content = b""
         self.deleted_keys: list[str] = []
+        self.object_exists = False
 
     async def write(
         self,
@@ -177,6 +178,14 @@ class FakeObjectStorage:
                 else sha256(self.received_content).hexdigest()
             ),
         )
+
+    async def exists(
+        self,
+        *,
+        storage_key: str,
+    ) -> bool:
+        del storage_key
+        return self.object_exists
 
     async def delete(
         self,
@@ -492,3 +501,45 @@ async def test_stops_stream_when_content_exceeds_registered_size() -> None:
     assert unit_of_work.datasets.updated_datasets == []
     assert unit_of_work.commit_count == 0
     assert unit_of_work.rollback_count == 1
+
+
+@pytest.mark.asyncio
+async def test_restores_missing_object_for_ready_dataset() -> None:
+    dataset = (
+        build_pending_dataset()
+        .mark_uploaded(
+            uploaded_at=UPLOADED_AT,
+        )
+        .begin_validation(
+            validation_started_at=UPLOADED_AT,
+        )
+        .mark_ready(
+            validation_completed_at=UPLOADED_AT,
+            row_count=2,
+            column_count=2,
+        )
+    )
+
+    unit_of_work = FakeUploadUnitOfWork(dataset)
+    object_storage = FakeObjectStorage()
+
+    result = await UploadDataset(
+        unit_of_work=unit_of_work,
+        object_storage=object_storage,
+        clock=FixedClock(),
+    ).execute(
+        UploadDatasetCommand(
+            workspace_id=dataset.workspace_id,
+            project_id=dataset.project_id,
+            dataset_id=dataset.id,
+            chunks=content_chunks(),
+            restore_missing=True,
+        ),
+    )
+
+    assert result == dataset
+    assert object_storage.write_count == 1
+    assert object_storage.received_content == CONTENT
+    assert unit_of_work.datasets.updated_datasets == []
+    assert unit_of_work.validation_jobs.added_jobs == []
+    assert unit_of_work.commit_count == 0

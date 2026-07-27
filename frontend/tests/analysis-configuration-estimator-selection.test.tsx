@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import {
   afterEach,
@@ -201,6 +202,53 @@ describe(
           {
             name: /Off-policy Evaluation/i,
           },
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("explains the ready inputs and method requirements before selection", async () => {
+      render(
+        <AnalysisConfigurationClient
+          workspaceId="workspace-1"
+          projectId="project-1"
+        />,
+      );
+
+      const analysisInputs =
+        await screen.findByRole(
+          "region",
+          {
+            name: "Analysis inputs",
+          },
+        );
+
+      expect(
+        within(analysisInputs).getByText(
+          "lift.csv",
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        within(analysisInputs).getByText(
+          "Mapping v3",
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        within(analysisInputs).getByText(
+          "Validated and ready",
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByRole("group", {
+          name: "Supported analysis methods",
+        }),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByText(
+          "Treatment and control groups",
         ),
       ).toBeInTheDocument();
     });

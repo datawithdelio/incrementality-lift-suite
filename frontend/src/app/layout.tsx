@@ -4,12 +4,16 @@ import { AuthProvider } from "@/components/auth/auth-provider";
 import { AppToaster } from "@/components/ui/app-toaster";
 
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import "./app-shell.css";
 import "./design-system.css";
 import "./project-lifecycle.css";
 import "./premium-polish.css";
 import "./dataset-upload.css";
 import "./data-explorer.css";
+import "./analysis-workflow.css";
+import "./results-experience.css";
+import "./reproducibility-experience.css";
 
 export const metadata: Metadata = {
   title: {

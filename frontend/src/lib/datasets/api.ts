@@ -1,9 +1,5 @@
 export type DatasetStatus =
-  | "pending_upload"
-  | "uploaded"
-  | "validating"
-  | "ready"
-  | "failed";
+  "pending_upload" | "uploaded" | "validating" | "ready" | "failed";
 
 export type Dataset = {
   id: string;
@@ -68,9 +64,9 @@ async function errorMessage(
   response: Response,
   fallback: string,
 ): Promise<string> {
-  const payload = await response
-    .json()
-    .catch(() => null) as { detail?: string } | null;
+  const payload = (await response.json().catch(() => null)) as {
+    detail?: string;
+  } | null;
 
   return payload?.detail ?? fallback;
 }
@@ -104,7 +100,7 @@ async function request<T>(
     );
   }
 
-  return await response.json() as T;
+  return (await response.json()) as T;
 }
 
 export function registerDataset(
@@ -133,13 +129,16 @@ export function uploadDatasetContent(
   projectId: string,
   datasetId: string,
   file: File,
+  options: {
+    restoreMissing?: boolean;
+  } = {},
 ): Promise<Dataset> {
+  const contentPath = datasetContentPath(workspaceId, projectId, datasetId);
+
   return request<Dataset>(
-    datasetContentPath(
-      workspaceId,
-      projectId,
-      datasetId,
-    ),
+    options.restoreMissing
+      ? `${contentPath}?restore_missing=true`
+      : contentPath,
     token,
     {
       method: "PUT",
@@ -159,11 +158,7 @@ export function getDataset(
   datasetId: string,
 ): Promise<Dataset> {
   return request<Dataset>(
-    datasetResourcePath(
-      workspaceId,
-      projectId,
-      datasetId,
-    ),
+    datasetResourcePath(workspaceId, projectId, datasetId),
     token,
     {
       method: "GET",

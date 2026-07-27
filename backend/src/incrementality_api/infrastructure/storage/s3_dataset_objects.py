@@ -6,6 +6,7 @@ from typing import BinaryIO, Protocol, cast
 
 from botocore.exceptions import ClientError
 
+from incrementality_api.application.datasets.errors import DatasetUnavailableError
 from incrementality_api.application.datasets.ports import (
     DatasetObjectWriteResult,
 )
@@ -217,11 +218,46 @@ class S3DatasetObjectStorage:
         if chunk_size <= 0:
             raise ValueError("Read chunk size must be positive.")
 
-        response = await asyncio.to_thread(
-            self._client.get_object,
-            Bucket=self._bucket_name,
-            Key=storage_key,
-        )
+        try:
+            response = await asyncio.to_thread(
+                self._client.get_object,
+                Bucket=self._bucket_name,
+                Key=storage_key,
+            )
+        except ClientError as error:
+            error_details = error.response.get(
+                "Error",
+                {},
+            )
+            response_metadata = error.response.get(
+                "ResponseMetadata",
+                {},
+            )
+
+            error_code = str(
+                error_details.get(
+                    "Code",
+                    "",
+                ),
+            )
+            http_status = response_metadata.get(
+                "HTTPStatusCode",
+            )
+
+            if (
+                http_status == 404
+                or error_code
+                in {
+                    "404",
+                    "NoSuchKey",
+                    "NotFound",
+                }
+            ):
+                raise DatasetUnavailableError(
+                    "The uploaded dataset file is unavailable.",
+                ) from error
+
+            raise
 
         body = cast(
             S3StreamingBody,

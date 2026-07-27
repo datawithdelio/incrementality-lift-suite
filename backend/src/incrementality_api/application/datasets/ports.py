@@ -228,6 +228,13 @@ class DatasetObjectStorage(Protocol):
     ) -> AsyncIterator[bytes]:
         """Read an object through bounded asynchronous chunks."""
 
+    async def exists(
+        self,
+        *,
+        storage_key: str,
+    ) -> bool:
+        """Return whether an object exists."""
+
     async def delete(
         self,
         *,

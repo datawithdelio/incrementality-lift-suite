@@ -10,11 +10,7 @@ import { UploadSimpleIcon } from "@phosphor-icons/react/UploadSimple";
 import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
 import { XIcon } from "@phosphor-icons/react/X";
 import Link from "next/link";
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { SESSION_TOKEN_KEY } from "@/lib/auth/api";
 import {
@@ -65,15 +61,13 @@ type ValidationState =
 
 function isUploadActive(state: UploadState): boolean {
   return (
-    state.status === "hashing"
-    || state.status === "registering"
-    || state.status === "uploading"
+    state.status === "hashing" ||
+    state.status === "registering" ||
+    state.status === "uploading"
   );
 }
 
-export function DatasetUpload(
-  props: DatasetUploadProps,
-) {
+export function DatasetUpload(props: DatasetUploadProps) {
   return (
     <DatasetUploadScope
       key={`${props.workspaceId}:${props.projectId}`}
@@ -106,14 +100,18 @@ function DatasetUploadScope({
   useEffect(() => {
     let cancelled = false;
 
-    const datasetId =
-      initialDatasetId
-      ?? window.sessionStorage.getItem(
-        datasetUploadSessionKey(
-          workspaceId,
-          projectId,
-        ),
-      );
+    const uploadSessionKey = datasetUploadSessionKey(workspaceId, projectId);
+
+    const replacementUpload =
+      new URLSearchParams(window.location.search).get("replace") === "1";
+
+    if (replacementUpload) {
+      window.sessionStorage.removeItem(uploadSessionKey);
+    }
+
+    const datasetId = replacementUpload
+      ? null
+      : (initialDatasetId ?? window.sessionStorage.getItem(uploadSessionKey));
 
     if (datasetId) {
       const token = window.localStorage.getItem(SESSION_TOKEN_KEY);
@@ -129,17 +127,13 @@ function DatasetUploadScope({
             datasetId,
           });
 
-          void refreshValidationState(
-            token,
-            datasetId,
-          );
+          void refreshValidationState(token, datasetId);
           return;
         }
 
         setValidationState({
           status: "error",
-          message:
-            "Your session is no longer available. Please sign in again.",
+          message: "Your session is no longer available. Please sign in again.",
         });
       });
     }
@@ -155,16 +149,9 @@ function DatasetUploadScope({
     // Scope changes remount DatasetUploadScope via its key.
     // refreshValidationState intentionally uses the mounted scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    initialDatasetId,
-    projectId,
-    workspaceId,
-  ]);
+  }, [initialDatasetId, projectId, workspaceId]);
 
-  function scheduleValidationRefresh(
-    token: string,
-    datasetId: string,
-  ) {
+  function scheduleValidationRefresh(token: string, datasetId: string) {
     if (validationPollTimer.current !== null) {
       clearTimeout(validationPollTimer.current);
     }
@@ -174,10 +161,7 @@ function DatasetUploadScope({
     }, VALIDATION_POLL_INTERVAL_MS);
   }
 
-  async function refreshValidationState(
-    token: string,
-    datasetId: string,
-  ) {
+  async function refreshValidationState(token: string, datasetId: string) {
     setValidationState({ status: "loading" });
 
     try {
@@ -228,8 +212,7 @@ function DatasetUploadScope({
       setValidationState({
         status: "failed",
         message:
-          dataset.failure_reason
-          ?? "The dataset did not pass validation.",
+          dataset.failure_reason ?? "The dataset did not pass validation.",
       });
     } catch {
       if (validationPollTimer.current !== null) {
@@ -249,27 +232,36 @@ function DatasetUploadScope({
     token: string,
     datasetId: string,
     file: File,
+    restoreMissing = false,
   ) {
     setUploadState({ status: "uploading" });
 
     try {
-      const uploadedDataset = await uploadDatasetContent(
-        token,
-        workspaceId,
-        projectId,
-        datasetId,
-        file,
-      );
+      const uploadedDataset = restoreMissing
+        ? await uploadDatasetContent(
+            token,
+            workspaceId,
+            projectId,
+            datasetId,
+            file,
+            {
+              restoreMissing: true,
+            },
+          )
+        : await uploadDatasetContent(
+            token,
+            workspaceId,
+            projectId,
+            datasetId,
+            file,
+          );
 
       setUploadState({
         status: "uploaded",
         datasetId: uploadedDataset.id,
       });
 
-      await refreshValidationState(
-        token,
-        uploadedDataset.id,
-      );
+      await refreshValidationState(token, uploadedDataset.id);
     } catch {
       setUploadState({
         status: "upload_error",
@@ -280,31 +272,28 @@ function DatasetUploadScope({
   }
 
   async function resumeInterruptedUpload() {
-    if (
-      !selectedFile
-      || uploadState.status !== "interrupted"
-    ) {
+    const datasetId =
+      uploadState.status === "interrupted"
+        ? uploadState.datasetId
+        : window.sessionStorage.getItem(
+            datasetUploadSessionKey(workspaceId, projectId),
+          );
+
+    if (!selectedFile || !datasetId) {
       return;
     }
 
-    const token = window.localStorage.getItem(
-      SESSION_TOKEN_KEY,
-    );
+    const token = window.localStorage.getItem(SESSION_TOKEN_KEY);
 
     if (!token) {
       setUploadState({
         status: "error",
-        message:
-          "Your session is no longer available. Please sign in again.",
+        message: "Your session is no longer available. Please sign in again.",
       });
       return;
     }
 
-    await uploadRegisteredDataset(
-      token,
-      uploadState.datasetId,
-      selectedFile,
-    );
+    await uploadRegisteredDataset(token, datasetId, selectedFile);
   }
 
   async function uploadSelectedFile() {
@@ -323,37 +312,39 @@ function DatasetUploadScope({
     }
 
     try {
+      const replacementDatasetId = new URLSearchParams(
+        window.location.search,
+      ).get("dataset");
+
+      if (replacementDatasetId) {
+        await uploadRegisteredDataset(
+          token,
+          replacementDatasetId,
+          selectedFile,
+          true,
+        );
+        return;
+      }
+
       setUploadState({ status: "hashing" });
 
       const checksum = await sha256File(selectedFile);
 
       setUploadState({ status: "registering" });
 
-      const dataset = await registerDataset(
-        token,
-        workspaceId,
-        projectId,
-        {
-          source_filename: selectedFile.name,
-          media_type: "text/csv",
-          byte_size: selectedFile.size,
-          checksum_sha256: checksum,
-        },
-      );
+      const dataset = await registerDataset(token, workspaceId, projectId, {
+        source_filename: selectedFile.name,
+        media_type: "text/csv",
+        byte_size: selectedFile.size,
+        checksum_sha256: checksum,
+      });
 
       window.sessionStorage.setItem(
-        datasetUploadSessionKey(
-          workspaceId,
-          projectId,
-        ),
+        datasetUploadSessionKey(workspaceId, projectId),
         dataset.id,
       );
 
-      await uploadRegisteredDataset(
-        token,
-        dataset.id,
-        selectedFile,
-      );
+      await uploadRegisteredDataset(token, dataset.id, selectedFile);
     } catch {
       setUploadState({
         status: "error",
@@ -363,10 +354,7 @@ function DatasetUploadScope({
   }
 
   async function retryUpload() {
-    if (
-      !selectedFile
-      || uploadState.status !== "upload_error"
-    ) {
+    if (!selectedFile || uploadState.status !== "upload_error") {
       return;
     }
 
@@ -380,11 +368,7 @@ function DatasetUploadScope({
       return;
     }
 
-    await uploadRegisteredDataset(
-      token,
-      uploadState.datasetId,
-      selectedFile,
-    );
+    await uploadRegisteredDataset(token, uploadState.datasetId, selectedFile);
   }
 
   useEffect(() => {
@@ -400,10 +384,7 @@ function DatasetUploadScope({
 
   function resetForCorrectedFile() {
     window.sessionStorage.removeItem(
-      datasetUploadSessionKey(
-        workspaceId,
-        projectId,
-      ),
+      datasetUploadSessionKey(workspaceId, projectId),
     );
 
     if (fileInputRef.current) {
@@ -437,9 +418,7 @@ function DatasetUploadScope({
 
     if (file.size > DATASET_MAX_UPLOAD_BYTES) {
       setSelectedFile(null);
-      setSelectionError(
-        "File exceeds the 1 GB upload limit.",
-      );
+      setSelectionError("File exceeds the 1 GB upload limit.");
       return;
     }
 
@@ -459,8 +438,8 @@ function DatasetUploadScope({
           <p className="dataset-upload-context">Dataset setup</p>
           <h1 id="dataset-upload-heading">Upload Dataset</h1>
           <p className="dataset-upload-intro">
-            Add the source data for this measurement project. We will verify
-            the file before it can be mapped or analyzed.
+            Add the source data for this measurement project. We will verify the
+            file before it can be mapped or analyzed.
           </p>
         </div>
 
@@ -485,10 +464,7 @@ function DatasetUploadScope({
           aria-label="Drop CSV file here"
           data-drag-active={dragActive}
           onKeyDown={(event) => {
-            if (
-              event.key === "Enter"
-              || event.key === " "
-            ) {
+            if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               fileInputRef.current?.click();
             }
@@ -514,7 +490,9 @@ function DatasetUploadScope({
           <span className="dataset-upload-icon" aria-hidden="true">
             <CloudArrowUpIcon size={32} weight="duotone" />
           </span>
-          <h2>{dragActive ? "Release to add your CSV" : "Drop your CSV here"}</h2>
+          <h2>
+            {dragActive ? "Release to add your CSV" : "Drop your CSV here"}
+          </h2>
           <p>One file at a time. You can replace it before uploading.</p>
         </div>
 
@@ -630,93 +608,106 @@ function DatasetUploadScope({
         </div>
       )}
 
-      {uploadState.status === "uploaded"
-        && validationState.status !== "interrupted" && (
-        <p className="dataset-upload-status" role="status">
-          <CheckCircleIcon size={18} weight="fill" aria-hidden="true" />
-          Upload complete
-        </p>
-      )}
+      {uploadState.status === "uploaded" &&
+        validationState.status !== "interrupted" && (
+          <p className="dataset-upload-status" role="status">
+            <CheckCircleIcon size={18} weight="fill" aria-hidden="true" />
+            Upload complete
+          </p>
+        )}
 
       {validationState.status === "loading" && (
         <p className="dataset-upload-status" role="status">
-          <SpinnerGapIcon className="dataset-upload-spinner" size={18} aria-hidden="true" />
+          <SpinnerGapIcon
+            className="dataset-upload-spinner"
+            size={18}
+            aria-hidden="true"
+          />
           Checking validation status…
         </p>
       )}
 
       {validationState.status === "interrupted" && (
-        <div className="dataset-upload-feedback dataset-upload-feedback-warning" role="status">
+        <div
+          className="dataset-upload-feedback dataset-upload-feedback-warning"
+          role="status"
+        >
           <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
           <div>
-          <strong>Upload interrupted</strong>
-          <p>
-            Reselect the CSV file to continue uploading.
-          </p>
+            <strong>Upload interrupted</strong>
+            <p>Reselect the CSV file to continue uploading.</p>
 
-          {selectedFile && (
-            <button
-              type="button"
-              onClick={() => {
-                void resumeInterruptedUpload();
-              }}
-              disabled={isUploadActive(uploadState)}
-            >
-              Resume Upload
-            </button>
-          )}
+            {selectedFile && (
+              <button
+                type="button"
+                onClick={() => {
+                  void resumeInterruptedUpload();
+                }}
+                disabled={isUploadActive(uploadState)}
+              >
+                Resume Upload
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {validationState.status === "pending" && (
         <p className="dataset-upload-status" role="status">
-          <SpinnerGapIcon className="dataset-upload-spinner" size={18} aria-hidden="true" />
+          <SpinnerGapIcon
+            className="dataset-upload-spinner"
+            size={18}
+            aria-hidden="true"
+          />
           Validation pending…
         </p>
       )}
 
       {validationState.status === "validating" && (
         <p className="dataset-upload-status" role="status">
-          <SpinnerGapIcon className="dataset-upload-spinner" size={18} aria-hidden="true" />
+          <SpinnerGapIcon
+            className="dataset-upload-spinner"
+            size={18}
+            aria-hidden="true"
+          />
           Validating dataset…
         </p>
       )}
 
-      {validationState.status === "ready"
-        && uploadState.status === "uploaded" && (
-        <div
-          className="dataset-upload-result dataset-upload-result-success"
-          ref={validationSuccessRef}
-          role="region"
-          aria-label="Dataset validation result"
-          tabIndex={-1}
-        >
-          <CheckCircleIcon size={24} weight="fill" aria-hidden="true" />
-          <div>
-            <strong>Dataset ready</strong>
-
-          {validationState.rowCount !== null && (
-            <p>{validationState.rowCount} rows</p>
-          )}
-
-          {validationState.columnCount !== null && (
-            <p>{validationState.columnCount} columns</p>
-          )}
-          </div>
-
-          <Link
-            href={datasetExplorePath(
-              workspaceId,
-              projectId,
-              uploadState.datasetId,
-            )}
+      {validationState.status === "ready" &&
+        uploadState.status === "uploaded" && (
+          <div
+            className="dataset-upload-result dataset-upload-result-success"
+            ref={validationSuccessRef}
+            role="region"
+            aria-label="Dataset validation result"
+            tabIndex={-1}
           >
-            Explore Dataset
-            <ArrowRightIcon size={17} aria-hidden="true" />
-          </Link>
-        </div>
-      )}
+            <CheckCircleIcon size={24} weight="fill" aria-hidden="true" />
+            <div>
+              <strong>Dataset ready</strong>
+
+              {validationState.rowCount !== null && (
+                <p>{validationState.rowCount} rows</p>
+              )}
+
+              {validationState.columnCount !== null && (
+                <p>{validationState.columnCount} columns</p>
+              )}
+            </div>
+
+            <Link
+              href={datasetExplorePath(
+                workspaceId,
+                projectId,
+                uploadState.datasetId,
+              )}
+            >
+              Explore Dataset
+              <ArrowRightIcon size={17} aria-hidden="true" />
+            </Link>
+          </div>
+        )}
 
       {validationState.status === "failed" && (
         <div className="dataset-upload-result-stack">
@@ -744,7 +735,10 @@ function DatasetUploadScope({
       )}
 
       {validationState.status === "error" && (
-        <div className="dataset-upload-feedback dataset-upload-feedback-error" role="alert">
+        <div
+          className="dataset-upload-feedback dataset-upload-feedback-error"
+          role="alert"
+        >
           <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
           <div>
             <strong>Validation status unavailable</strong>
@@ -753,10 +747,13 @@ function DatasetUploadScope({
         </div>
       )}
 
-      {(uploadState.status === "error"
-        || uploadState.status === "upload_error") && (
+      {(uploadState.status === "error" ||
+        uploadState.status === "upload_error") && (
         <div className="dataset-upload-result-stack">
-          <div className="dataset-upload-feedback dataset-upload-feedback-error" role="alert">
+          <div
+            className="dataset-upload-feedback dataset-upload-feedback-error"
+            role="alert"
+          >
             <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
             <div>
               <strong>Upload not completed</strong>

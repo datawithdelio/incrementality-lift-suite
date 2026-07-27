@@ -6,17 +6,9 @@ import {
   MagnifyingGlassIcon,
 } from "@phosphor-icons/react";
 import { useAnalysisResult } from "@/lib/results/use-analysis-result";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  type ExplorerOptions,
-  queueReport,
-} from "@/lib/data-products/api";
+import { type ExplorerOptions, queueReport } from "@/lib/data-products/api";
 import {
   useDatasetExplorer,
   useReports,
@@ -28,9 +20,7 @@ import {
 import { DataExplorer } from "./data-explorer";
 import { ReportHistory } from "./report-history";
 
-type FilterOperator = NonNullable<
-  ExplorerOptions["filterOperator"]
->;
+type FilterOperator = NonNullable<ExplorerOptions["filterOperator"]>;
 
 type SavedExplorerView = {
   name: string;
@@ -50,21 +40,16 @@ function explorerParameter(name: string): string {
   return new URLSearchParams(window.location.search).get(name) ?? "";
 }
 
-function savedExplorerViews(
-  datasetId: string,
-): SavedExplorerView[] {
+function savedExplorerViews(datasetId: string): SavedExplorerView[] {
   if (typeof window === "undefined") {
     return [];
   }
   try {
     const stored = JSON.parse(
-      localStorage.getItem(
-        `incrementality_explorer_views_${datasetId}`,
-      ) ?? "[]",
+      localStorage.getItem(`incrementality_explorer_views_${datasetId}`) ??
+        "[]",
     );
-    return Array.isArray(stored)
-      ? (stored as SavedExplorerView[])
-      : [];
+    return Array.isArray(stored) ? (stored as SavedExplorerView[]) : [];
   } catch {
     return [];
   }
@@ -80,38 +65,32 @@ export function ExplorerClient({
   datasetId: string;
 }) {
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState(() =>
-    explorerParameter("columns"),
-  );
-  const [sortColumn, setSortColumn] = useState(() =>
-    explorerParameter("sort"),
-  );
+  const [search, setSearch] = useState(() => explorerParameter("columns"));
+  const [sortColumn, setSortColumn] = useState(() => explorerParameter("sort"));
   const [descending, setDescending] = useState(
     () => explorerParameter("direction") === "desc",
   );
   const [filterColumn, setFilterColumn] = useState(() =>
     explorerParameter("filter"),
   );
-  const [filterOperator, setFilterOperator] =
-    useState<FilterOperator>(() =>
-      explorerParameter("operator") === "is_missing"
-        ? "is_missing"
-        : "contains",
-    );
+  const [filterOperator, setFilterOperator] = useState<FilterOperator>(() =>
+    explorerParameter("operator") === "is_missing" ? "is_missing" : "contains",
+  );
   const [filterValue, setFilterValue] = useState(() =>
     explorerParameter("value"),
   );
   const [outcomeColumn, setOutcomeColumn] = useState(() =>
     explorerParameter("outcome"),
   );
-  const [estimator, setEstimator] = useState(
-    "difference_in_differences",
+  const [interventionDate, setInterventionDate] = useState(() =>
+    explorerParameter("intervention"),
   );
+  const [estimator, setEstimator] = useState("difference_in_differences");
   const [viewName, setViewName] = useState("");
   const [selectedView, setSelectedView] = useState("");
-  const [savedViews, setSavedViews] = useState<
-    SavedExplorerView[]
-  >(() => savedExplorerViews(datasetId));
+  const [savedViews, setSavedViews] = useState<SavedExplorerView[]>(() =>
+    savedExplorerViews(datasetId),
+  );
 
   const options = useMemo<ExplorerOptions>(
     () => ({
@@ -123,6 +102,7 @@ export function ExplorerClient({
       filterOperator,
       filterValue,
       outcomeColumn,
+      interventionDate,
     }),
     [
       page,
@@ -133,26 +113,23 @@ export function ExplorerClient({
       filterOperator,
       filterValue,
       outcomeColumn,
+      interventionDate,
     ],
   );
 
-  const { state, quality, versions, dataset } =
-    useDatasetExplorer(
-      workspaceId,
-      projectId,
-      datasetId,
-      options,
-      estimator,
-    );
+  const { state, quality, versions, dataset } = useDatasetExplorer(
+    workspaceId,
+    projectId,
+    datasetId,
+    options,
+    estimator,
+  );
   const base =
-    `/api/v1/workspaces/${workspaceId}/projects/${projectId}`
-    + `/datasets/${datasetId}`;
-  const currentPage =
-    state.kind === "ready" ? state.data.page : page;
-  const totalPages =
-    state.kind === "ready" ? state.data.total_pages : 1;
-  const columns =
-    state.kind === "ready" ? state.data.columns : [];
+    `/api/v1/workspaces/${workspaceId}/projects/${projectId}` +
+    `/datasets/${datasetId}`;
+  const currentPage = state.kind === "ready" ? state.data.page : page;
+  const totalPages = state.kind === "ready" ? state.data.total_pages : 1;
+  const columns = state.kind === "ready" ? state.data.columns : [];
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -167,6 +144,10 @@ export function ExplorerClient({
       params.set("value", filterValue);
     }
     if (outcomeColumn) params.set("outcome", outcomeColumn);
+
+    if (interventionDate) {
+      params.set("intervention", interventionDate);
+    }
     const query = params.toString();
     window.history.replaceState(
       null,
@@ -181,13 +162,14 @@ export function ExplorerClient({
     filterOperator,
     filterValue,
     outcomeColumn,
+    interventionDate,
   ]);
 
   const changeVersion = (id: string) => {
     if (id !== datasetId) {
       window.location.assign(
-        `/workspaces/${workspaceId}/projects/${projectId}`
-          + `/datasets/${id}/explore`,
+        `/workspaces/${workspaceId}/projects/${projectId}` +
+          `/datasets/${id}/explore`,
       );
     }
   };
@@ -266,276 +248,225 @@ export function ExplorerClient({
   return (
     <main className="results-shell data-explorer-shell">
       <div className="data-explorer-hero">
-        <Header
-          title="Data Explorer"
-          subtitle="Understand your evidence before you estimate lift. Inspect trends, distributions, missingness, and design readiness in one place."
-        />
-        <nav
-          className="data-explorer-links"
-          aria-label="Dataset navigation"
-        >
-          <a
-            href={datasetQualityPath(
-              workspaceId,
-              projectId,
-              datasetId,
-            )}
-          >
+        <div className="data-explorer-title-block">
+          <Header
+            title="Data Explorer"
+            subtitle="Understand your evidence before you estimate lift. Inspect trends, distributions, missingness, and design readiness in one place."
+          />
+        </div>
+
+        <nav className="data-explorer-links" aria-label="Dataset navigation">
+          <a href={datasetQualityPath(workspaceId, projectId, datasetId)}>
             View Data Quality
           </a>
-          <a
-            href={datasetMappingPath(
-              workspaceId,
-              projectId,
-              datasetId,
-            )}
-          >
+          <a href={datasetMappingPath(workspaceId, projectId, datasetId)}>
             Semantic Mapping
+          </a>
+
+          <a
+            className="explorer-export-primary"
+            href={`${base}/preview.csv?${exportQuery}`}
+          >
+            <DownloadSimpleIcon size={17} aria-hidden="true" />
+            Export view
           </a>
         </nav>
       </div>
-
-      <section
-        className="explorer-controls"
-        aria-label="Dataset view controls"
-      >
-        <div className="explorer-control-row">
-          <label className="explorer-field explorer-version-field">
-            <span>Dataset version</span>
-            <select
-              aria-label="Dataset version"
-              value={datasetId}
-              onChange={(event) =>
-                changeVersion(event.target.value)
-              }
-            >
-              {versions.length === 0 ? (
-                <option value={datasetId}>
-                  Current version
-                </option>
-              ) : null}
-              {versions.map((version) => (
-                <option
-                  key={version.id}
-                  value={version.id}
-                >
-                  {version.source_filename} ·{" "}
-                  {new Date(
-                    version.created_at,
-                  ).toLocaleDateString()}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="explorer-search-field">
-            <span className="sr-only">Search columns</span>
-            <MagnifyingGlassIcon
-              size={18}
-              aria-hidden="true"
-            />
-            <input
-              aria-label="Search columns"
-              placeholder="Search columns"
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-            />
-          </label>
-
-          <label className="explorer-field">
-            <span>Readiness for</span>
-            <select
-              aria-label="Causal method"
-              value={estimator}
-              onChange={(event) =>
-                setEstimator(event.target.value)
-              }
-            >
-              <option value="difference_in_differences">
-                Difference in Differences
-              </option>
-              <option value="synthetic_control">
-                Synthetic Control
-              </option>
-              <option value="geo_holdout">Geo Holdout</option>
-              <option value="marketing_mix_model">
-                Marketing Mix Modeling
-              </option>
-              <option value="off_policy_evaluation">
-                Off-Policy Evaluation
-              </option>
-            </select>
-          </label>
-
-          <a
-            className="button secondary explorer-export"
-            href={`${base}/preview.csv?${exportQuery}`}
-          >
-            <DownloadSimpleIcon
-              size={17}
-              aria-hidden="true"
-            />
-            Export view
-          </a>
-        </div>
-
-        <div className="explorer-control-row explorer-filter-row">
-          <div className="explorer-filter-label">
-            <FunnelSimpleIcon
-              size={17}
-              aria-hidden="true"
-            />
-            Filter rows
-          </div>
-          <label className="explorer-field">
-            <span className="sr-only">Filter column</span>
-            <select
-              aria-label="Filter column"
-              value={filterColumn}
-              onChange={(event) => {
-                setFilterColumn(event.target.value);
-                setFilterOperator("contains");
-                setPage(1);
-              }}
-            >
-              <option value="">Choose column</option>
-              {columns.map((column) => (
-                <option
-                  key={column.name}
-                  value={column.name}
-                >
-                  {column.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {filterOperator === "contains" ? (
-            <input
-              aria-label="Filter value"
-              placeholder="Contains value"
-              value={filterValue}
-              disabled={!filterColumn}
-              onChange={(event) => {
-                setFilterValue(event.target.value);
-                setPage(1);
-              }}
-            />
-          ) : (
-            <span className="explorer-active-filter">
-              Showing rows where {filterColumn} is missing
-              <button type="button" onClick={clearFilter}>
-                Clear
-              </button>
-            </span>
-          )}
-          <label className="explorer-field explorer-sort-field">
-            <span className="sr-only">Sort column</span>
-            <select
-              aria-label="Sort column"
-              value={sortColumn}
-              onChange={(event) => {
-                setSortColumn(event.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">No sorting</option>
-              {columns.map((column) => (
-                <option
-                  key={column.name}
-                  value={column.name}
-                >
-                  Sort by {column.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="explorer-checkbox">
-            <input
-              type="checkbox"
-              checked={descending}
-              onChange={(event) =>
-                setDescending(event.target.checked)
-              }
-            />
-            Descending
-          </label>
-        </div>
-
-        <div className="explorer-control-row explorer-saved-row">
-          <div>
-            <strong>Saved views</strong>
-            <span>
-              Keep a useful filter and reopen it later.
-            </span>
-          </div>
-          <select
-            aria-label="Saved views"
-            value={selectedView}
-            onChange={(event) =>
-              openSavedView(event.target.value)
-            }
-          >
-            <option value="">Choose saved view</option>
-            {savedViews.map((view) => (
-              <option key={view.name} value={view.name}>
-                {view.name}
-              </option>
-            ))}
-          </select>
-          <input
-            aria-label="Saved view name"
-            placeholder="Name this view"
-            value={viewName}
-            onChange={(event) =>
-              setViewName(event.target.value)
-            }
-          />
-          <button
-            className="explorer-save-view"
-            type="button"
-            disabled={!viewName.trim()}
-            onClick={saveView}
-          >
-            Save current view
-          </button>
-        </div>
-      </section>
 
       <DataExplorer
         state={state}
         quality={quality}
         dataset={dataset}
+        versionControl={
+          <select
+            aria-label="Dataset version"
+            value={datasetId}
+            onChange={(event) => changeVersion(event.target.value)}
+          >
+            {versions.length === 0 ? (
+              <option value={datasetId}>Current version</option>
+            ) : null}
+
+            {versions.map((version) => (
+              <option key={version.id} value={version.id}>
+                {version.source_filename} ·{" "}
+                {new Date(version.created_at).toLocaleDateString()}
+              </option>
+            ))}
+          </select>
+        }
+        toolbar={
+          <section
+            className="explorer-controls"
+            role="region"
+            aria-label="Explore dataset controls"
+          >
+            <div className="explorer-toolbar-main">
+              <label className="explorer-search-field">
+                <span className="sr-only">Search columns</span>
+
+                <MagnifyingGlassIcon size={18} aria-hidden="true" />
+
+                <input
+                  aria-label="Search columns"
+                  placeholder="Search columns..."
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </label>
+
+              <div className="explorer-filter-group">
+                <FunnelSimpleIcon size={17} aria-hidden="true" />
+
+                <label className="explorer-field">
+                  <span className="sr-only">Filter column</span>
+
+                  <select
+                    aria-label="Filter column"
+                    value={filterColumn}
+                    onChange={(event) => {
+                      setFilterColumn(event.target.value);
+                      setFilterOperator("contains");
+                      setPage(1);
+                    }}
+                  >
+                    <option value="">Filter rows</option>
+
+                    {columns.map((column) => (
+                      <option key={column.name} value={column.name}>
+                        {column.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {filterOperator === "contains" ? (
+                  <input
+                    aria-label="Filter value"
+                    placeholder="Contains value"
+                    value={filterValue}
+                    disabled={!filterColumn}
+                    onChange={(event) => {
+                      setFilterValue(event.target.value);
+                      setPage(1);
+                    }}
+                  />
+                ) : (
+                  <span className="explorer-active-filter">
+                    {filterColumn} is missing
+                    <button type="button" onClick={clearFilter}>
+                      Clear
+                    </button>
+                  </span>
+                )}
+              </div>
+
+              <label className="explorer-field explorer-sort-field">
+                <span className="sr-only">Sort column</span>
+
+                <select
+                  aria-label="Sort column"
+                  value={sortColumn}
+                  onChange={(event) => {
+                    setSortColumn(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">No sorting</option>
+
+                  {columns.map((column) => (
+                    <option key={column.name} value={column.name}>
+                      Sort by {column.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="explorer-field explorer-method-field">
+                <span className="sr-only">Causal method</span>
+
+                <select
+                  aria-label="Causal method"
+                  value={estimator}
+                  onChange={(event) => setEstimator(event.target.value)}
+                >
+                  <option value="difference_in_differences">
+                    Difference in Differences
+                  </option>
+                  <option value="synthetic_control">Synthetic Control</option>
+                  <option value="geo_holdout">Geo Holdout</option>
+                  <option value="marketing_mix_model">
+                    Marketing Mix Modeling
+                  </option>
+                  <option value="off_policy_evaluation">
+                    Off-Policy Evaluation
+                  </option>
+                </select>
+              </label>
+
+              <label className="explorer-checkbox">
+                <input
+                  type="checkbox"
+                  checked={descending}
+                  onChange={(event) => setDescending(event.target.checked)}
+                />
+                Descending
+              </label>
+
+              <div className="explorer-saved-cluster">
+                <select
+                  aria-label="Saved views"
+                  value={selectedView}
+                  onChange={(event) => openSavedView(event.target.value)}
+                >
+                  <option value="">Saved views</option>
+
+                  {savedViews.map((view) => (
+                    <option key={view.name} value={view.name}>
+                      {view.name}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  aria-label="Saved view name"
+                  placeholder="Name this view"
+                  value={viewName}
+                  onChange={(event) => setViewName(event.target.value)}
+                />
+
+                <button
+                  className="explorer-save-view"
+                  type="button"
+                  disabled={!viewName.trim()}
+                  onClick={saveView}
+                  aria-label="Save current view"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </section>
+        }
         selectedOutcome={outcomeColumn}
+        selectedInterventionDate={interventionDate}
+        onInterventionDateChange={(value) => {
+          setInterventionDate(value);
+
+          setPage(1);
+        }}
         onOutcomeChange={(column) => {
           setOutcomeColumn(column);
           setPage(1);
         }}
         onFilterMissing={filterMissing}
+        exportHref={`${base}/preview.csv?${exportQuery}`}
+        onPreviousPage={() => setPage(Math.max(1, currentPage - 1))}
+        onNextPage={() => setPage(Math.min(totalPages, currentPage + 1))}
       />
-      <div className="pager">
-        <button
-          disabled={currentPage <= 1}
-          onClick={() =>
-            setPage(Math.max(1, currentPage - 1))
-          }
-        >
-          Previous
-        </button>
-        <span>
-          Page {currentPage} of {totalPages}
-        </span>
-        <button
-          disabled={currentPage >= totalPages}
-          onClick={() =>
-            setPage(Math.min(totalPages, currentPage + 1))
-          }
-        >
-          Next
-        </button>
-      </div>
     </main>
   );
 }
@@ -548,60 +479,31 @@ export function ReportsClient({
   projectId: string;
   runId: string;
 }) {
-  const [
-    refreshGeneration,
-    setRefreshGeneration,
-  ] = useState(0);
+  const [refreshGeneration, setRefreshGeneration] = useState(0);
 
-  const reports = useReports(
-    workspaceId,
-    projectId,
-    runId,
-    refreshGeneration,
-  );
+  const reports = useReports(workspaceId, projectId, runId, refreshGeneration);
 
-  const analysis = useAnalysisResult(
-    workspaceId,
-    projectId,
-    runId,
-  );
+  const analysis = useAnalysisResult(workspaceId, projectId, runId);
 
   const canGenerate =
-    analysis.kind === "ready"
-    && analysis.data.lifecycle_status
-      === "succeeded";
+    analysis.kind === "ready" && analysis.data.lifecycle_status === "succeeded";
 
   const analysisIsActive =
-    analysis.kind === "ready"
-    && (
-      analysis.data.lifecycle_status
-        === "queued"
-      || analysis.data.lifecycle_status
-        === "running"
-      || analysis.data.lifecycle_status
-        === "retrying"
-    );
+    analysis.kind === "ready" &&
+    (analysis.data.lifecycle_status === "queued" ||
+      analysis.data.lifecycle_status === "running" ||
+      analysis.data.lifecycle_status === "retrying");
 
   const generationInFlight = useRef(false);
 
-  const [
-    generatingFormat,
-    setGeneratingFormat,
-  ] = useState<string | null>(null);
+  const [generatingFormat, setGeneratingFormat] = useState<string | null>(null);
 
-  const generate = async (
-    format: string,
-  ): Promise<void> => {
-    if (
-      !canGenerate
-      || generationInFlight.current
-    ) {
+  const generate = async (format: string): Promise<void> => {
+    if (!canGenerate || generationInFlight.current) {
       return;
     }
 
-    const token = localStorage.getItem(
-      "incrementality_session_token",
-    );
+    const token = localStorage.getItem("incrementality_session_token");
 
     if (!token) {
       return;
@@ -611,25 +513,16 @@ export function ReportsClient({
     setGeneratingFormat(format);
 
     try {
-      await queueReport(
-        workspaceId,
-        projectId,
-        runId,
-        format,
-        token,
-      );
+      await queueReport(workspaceId, projectId, runId, format, token);
 
-      setRefreshGeneration(
-        (current) => current + 1,
-      );
+      setRefreshGeneration((current) => current + 1);
     } finally {
       generationInFlight.current = false;
       setGeneratingFormat(null);
     }
   };
 
-  const isGenerating =
-    generatingFormat !== null;
+  const isGenerating = generatingFormat !== null;
 
   return (
     <main className="results-shell">
@@ -638,17 +531,14 @@ export function ReportsClient({
         subtitle="Versioned analysis records with diagnostics, quality, limitations, and business impact."
       />
 
-      <nav
-        className="state-actions"
-        aria-label="Analysis report navigation"
-      >
+      <nav className="state-actions" aria-label="Analysis report navigation">
         <a
           className="button secondary"
           href={
-            `/workspaces/${workspaceId}`
-            + `/projects/${projectId}`
-            + `/analysis-runs/${runId}`
-            + "/result"
+            `/workspaces/${workspaceId}` +
+            `/projects/${projectId}` +
+            `/analysis-runs/${runId}` +
+            "/result"
           }
         >
           View Results
@@ -657,10 +547,10 @@ export function ReportsClient({
         <a
           className="button secondary"
           href={
-            `/workspaces/${workspaceId}`
-            + `/projects/${projectId}`
-            + `/analysis-runs/${runId}`
-            + "/lineage"
+            `/workspaces/${workspaceId}` +
+            `/projects/${projectId}` +
+            `/analysis-runs/${runId}` +
+            "/lineage"
           }
         >
           View Reproducibility
@@ -668,18 +558,13 @@ export function ReportsClient({
       </nav>
 
       {canGenerate ? (
-        <div
-          className="filters"
-          aria-busy={isGenerating}
-        >
+        <div className="filters" aria-busy={isGenerating}>
           <button
             className="button secondary"
             disabled={isGenerating}
             onClick={() => void generate("pdf")}
           >
-            {generatingFormat === "pdf"
-              ? "Generating PDF…"
-              : "Generate PDF"}
+            {generatingFormat === "pdf" ? "Generating PDF…" : "Generate PDF"}
           </button>
 
           <button
@@ -687,41 +572,25 @@ export function ReportsClient({
             disabled={isGenerating}
             onClick={() => void generate("csv")}
           >
-            {generatingFormat === "csv"
-              ? "Generating CSV…"
-              : "Generate CSV"}
+            {generatingFormat === "csv" ? "Generating CSV…" : "Generate CSV"}
           </button>
         </div>
       ) : analysisIsActive ? (
-        <section
-          className="state-card measurement-state"
-          aria-live="polite"
-        >
-          <p>
-            Reports will be available after this analysis completes.
-          </p>
+        <section className="state-card measurement-state" aria-live="polite">
+          <p>Reports will be available after this analysis completes.</p>
         </section>
       ) : null}
 
       {reports.kind === "loading" ? (
-        <section
-          className="state-card measurement-state"
-          aria-live="polite"
-        >
+        <section className="state-card measurement-state" aria-live="polite">
           <h1>Loading reports…</h1>
         </section>
       ) : reports.kind === "permission" ? (
-        <section
-          className="state-card measurement-state"
-          role="alert"
-        >
+        <section className="state-card measurement-state" role="alert">
           <h1>You don’t have access to these reports</h1>
         </section>
       ) : reports.kind === "error" ? (
-        <section
-          className="state-card measurement-state"
-          role="alert"
-        >
+        <section className="state-card measurement-state" role="alert">
           <h1>Reports are temporarily unavailable</h1>
         </section>
       ) : (
@@ -730,18 +599,20 @@ export function ReportsClient({
           workspaceId={workspaceId}
           projectId={projectId}
           runId={runId}
-          onRegenerate={
-            canGenerate
-              ? generate
-              : undefined
-          }
-          regenerateDisabled={
-            isGenerating
-          }
+          onRegenerate={canGenerate ? generate : undefined}
+          regenerateDisabled={isGenerating}
         />
       )}
     </main>
   );
 }
 
-function Header({ title, subtitle }: { title: string; subtitle: string }) { return <header className="measurement-hero"><p className="eyebrow">Measurement evidence</p><h1>{title}</h1><p>{subtitle}</p></header>; }
+function Header({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <header className="measurement-hero">
+      <p className="eyebrow">Measurement evidence</p>
+      <h1>{title}</h1>
+      <p>{subtitle}</p>
+    </header>
+  );
+}

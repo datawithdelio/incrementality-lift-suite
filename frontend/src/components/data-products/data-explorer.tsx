@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type {
   DataQuality,
@@ -15,20 +15,12 @@ import {
   type VisualizationTab,
 } from "./explorer-visualizations";
 
+import { RowEvidenceTable } from "./row-evidence-table";
+
 const number = (value: number) =>
   new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2,
   }).format(value);
-
-function formatPreviewValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") {
-    return "—";
-  }
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
-  return String(value);
-}
 
 function formatDatasetStatus(status: string): string {
   return status
@@ -48,9 +40,7 @@ function formatByteSize(bytes: number): string {
 }
 
 function formatDate(value: string | null): string {
-  return value
-    ? new Date(value).toLocaleString()
-    : "Not uploaded yet";
+  return value ? new Date(value).toLocaleString() : "Not uploaded yet";
 }
 
 export function DataExplorer({
@@ -58,18 +48,36 @@ export function DataExplorer({
   quality,
   dataset,
   selectedOutcome,
+  selectedInterventionDate,
+  onInterventionDateChange,
   onOutcomeChange,
   onFilterMissing,
+  toolbar,
+  versionControl,
+  exportHref,
+  onPreviousPage,
+  onNextPage,
 }: {
-  state: LoadState<DatasetPreview>;
+  state:
+    | LoadState<DatasetPreview>
+    | {
+        kind: "unavailable";
+        uploadHref: string;
+      };
   quality?: DataQuality;
   dataset?: Dataset;
   selectedOutcome?: string;
+  selectedInterventionDate?: string;
+  onInterventionDateChange?: (value: string) => void;
   onOutcomeChange?: (column: string) => void;
   onFilterMissing?: (column: string) => void;
+  toolbar?: ReactNode;
+  versionControl?: ReactNode;
+  exportHref?: string;
+  onPreviousPage?: () => void;
+  onNextPage?: () => void;
 }) {
-  const [activeTab, setActiveTab] =
-    useState<VisualizationTab>("trend");
+  const [activeTab, setActiveTab] = useState<VisualizationTab>("trend");
 
   if (state.kind === "loading") {
     return <State title="Profiling your dataset" />;
@@ -77,6 +85,31 @@ export function DataExplorer({
   if (state.kind === "permission") {
     return <State title="You don’t have access to this dataset" />;
   }
+  if (state.kind === "unavailable") {
+    return (
+      <section
+        className="project-state-card"
+        aria-labelledby="dataset-unavailable-heading"
+      >
+        <h1 id="dataset-unavailable-heading">Dataset file is unavailable</h1>
+
+        <p>
+          The dataset record still exists, but its uploaded CSV can no longer be
+          accessed. Upload the file again to continue exploring this project.
+        </p>
+
+        <div className="project-state-actions">
+          <a
+            className="project-button project-button-primary"
+            href={state.uploadHref}
+          >
+            Re-upload dataset
+          </a>
+        </div>
+      </section>
+    );
+  }
+
   if (state.kind === "error") {
     return <State title="This dataset could not be inspected" />;
   }
@@ -86,89 +119,47 @@ export function DataExplorer({
     return <State title="This dataset has no rows" />;
   }
 
-  const names = Object.keys(data.rows[0] ?? {});
-
   return (
     <div className="data-explorer-content">
       <DatasetSummary
         data={data}
         dataset={dataset}
         quality={quality}
+        versionControl={versionControl}
       />
+
+      {toolbar}
+
+      <div className="explorer-analysis-layout">
+        {data.visualizations ? (
+          <ExplorerVisualizations
+            visualizations={data.visualizations}
+            columns={data.columns}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            selectedOutcome={selectedOutcome}
+            selectedInterventionDate={selectedInterventionDate}
+            onInterventionDateChange={onInterventionDateChange}
+            onOutcomeChange={onOutcomeChange}
+            onFilterMissing={onFilterMissing}
+          />
+        ) : (
+          <DistributionPanels data={data} />
+        )}
+
+        {quality ? (
+          <QualityPanel quality={quality} onOpenTab={setActiveTab} />
+        ) : null}
+      </div>
 
       <ColumnProfiles data={data} />
 
-      {data.visualizations ? (
-        <ExplorerVisualizations
-          visualizations={data.visualizations}
-          columns={data.columns}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          selectedOutcome={selectedOutcome}
-          onOutcomeChange={onOutcomeChange}
-          onFilterMissing={onFilterMissing}
-        />
-      ) : (
-        <DistributionPanels data={data} />
-      )}
-
-      {quality ? (
-        <QualityPanel
-          quality={quality}
-          onOpenTab={setActiveTab}
-        />
-      ) : null}
-
-      <section
-        className="panel explorer-table"
-        aria-labelledby="explorer-table-heading"
-      >
-        <div className="explorer-section-heading">
-          <div>
-            <p className="eyebrow">Row-level evidence</p>
-            <h2 id="explorer-table-heading">
-              Inspect filtered rows
-            </h2>
-            <p>
-              Verify individual observations behind the profile and
-              charts.
-            </p>
-          </div>
-          <span className="explorer-page-status">
-            Page {number(data.page)} of {number(data.total_pages)}
-          </span>
-        </div>
-
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                {names.map((name) => (
-                  <th key={name}>{name}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row, index) => (
-                <tr key={index}>
-                  {names.map((name) => (
-                    <td
-                      key={name}
-                      data-missing={
-                        row[name] === null
-                        || row[name] === undefined
-                        || row[name] === ""
-                      }
-                    >
-                      {formatPreviewValue(row[name])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <RowEvidenceTable
+        data={data}
+        exportHref={exportHref}
+        onPreviousPage={onPreviousPage}
+        onNextPage={onNextPage}
+      />
     </div>
   );
 }
@@ -177,21 +168,18 @@ function DatasetSummary({
   data,
   dataset,
   quality,
+  versionControl,
 }: {
   data: DatasetPreview;
   dataset?: Dataset;
   quality?: DataQuality;
+  versionControl?: ReactNode;
 }) {
   return (
-    <section
-      className="explorer-summary"
-      aria-label="Dataset summary"
-    >
+    <section className="explorer-summary" aria-label="Dataset summary">
       <article className="explorer-summary-primary">
         <span>Dataset</span>
-        <strong>
-          {dataset?.source_filename ?? "Selected dataset"}
-        </strong>
+        <strong>{dataset?.source_filename ?? "Selected dataset"}</strong>
         {dataset ? (
           <small className="explorer-summary-detail">
             <span>{formatByteSize(dataset.byte_size)}</span>
@@ -200,6 +188,13 @@ function DatasetSummary({
         ) : (
           <small>Profile ready</small>
         )}
+      </article>
+      <article className="explorer-summary-version">
+        <span>Version</span>
+
+        {versionControl ?? <strong>Current</strong>}
+
+        <small>Dataset snapshot</small>
       </article>
       <article>
         <span>Rows</span>
@@ -210,9 +205,7 @@ function DatasetSummary({
         </strong>
         {dataset ? (
           <small className="explorer-summary-detail">
-            <span>
-              {number(dataset.column_count ?? data.columns.length)}
-            </span>
+            <span>{number(dataset.column_count ?? data.columns.length)}</span>
             <span>columns</span>
           </small>
         ) : (
@@ -237,9 +230,7 @@ function DatasetSummary({
       </article>
       <article data-ready={quality?.ready}>
         <span>Method readiness</span>
-        <strong>
-          {quality ? `${quality.score}/100` : "Assessing"}
-        </strong>
+        <strong>{quality ? `${quality.score}/100` : "Assessing"}</strong>
         <small>
           {quality
             ? quality.ready
@@ -258,9 +249,7 @@ function ColumnProfiles({ data }: { data: DatasetPreview }) {
       <summary>
         <span>
           <strong>Column profiles</strong>
-          <small>
-            Types, missingness, range, and cardinality
-          </small>
+          <small>Types, missingness, range, and cardinality</small>
         </span>
         <span>{data.columns.length} columns</span>
       </summary>
@@ -279,8 +268,7 @@ function ColumnProfiles({ data }: { data: DatasetPreview }) {
             </small>
             {column.mean !== null ? (
               <small>
-                Mean {number(column.mean)} · Median{" "}
-                {number(column.median ?? 0)}
+                Mean {number(column.mean)} · Median {number(column.median ?? 0)}
               </small>
             ) : null}
           </article>
@@ -292,10 +280,7 @@ function ColumnProfiles({ data }: { data: DatasetPreview }) {
 
 function DistributionPanels({ data }: { data: DatasetPreview }) {
   const treatment = Object.entries(data.treatment_distribution);
-  const maximum = Math.max(
-    1,
-    ...treatment.map(([, count]) => count),
-  );
+  const maximum = Math.max(1, ...treatment.map(([, count]) => count));
   return (
     <section className="distribution-grid">
       <article className="panel">
@@ -321,14 +306,12 @@ function DistributionPanels({ data }: { data: DatasetPreview }) {
         <p className="eyebrow">Outcome distribution</p>
         <h2>Range and center</h2>
         <div className="technical-grid">
-          {Object.entries(data.outcome_distribution).map(
-            ([metric, value]) => (
-              <div className="metric" key={metric}>
-                <span>{metric}</span>
-                <strong>{number(value)}</strong>
-              </div>
-            ),
-          )}
+          {Object.entries(data.outcome_distribution).map(([metric, value]) => (
+            <div className="metric" key={metric}>
+              <span>{metric}</span>
+              <strong>{number(value)}</strong>
+            </div>
+          ))}
         </div>
       </article>
     </section>
@@ -395,57 +378,100 @@ function QualityPanel({
   quality: DataQuality;
   onOpenTab: (tab: VisualizationTab) => void;
 }) {
-  return (
-    <section
-      className="panel quality-panel"
-      aria-labelledby="quality-heading"
-    >
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Method readiness</p>
-          <h2 id="quality-heading">
-            {quality.ready
-              ? "Ready to analyze"
-              : "Fix blocking issues first"}
-          </h2>
-          <p>
-            Every check stays visible so the score never hides a weak
-            design.
-          </p>
+  const issues = quality.findings.filter((item) => !item.passed);
+
+  const passedCount = quality.findings.filter((item) => item.passed).length;
+
+  const priorityFindings = [
+    ...issues,
+    ...quality.findings.filter((item) => item.passed),
+  ].slice(0, 3);
+
+  const renderFinding = (item: QualityFinding, compact = false) => {
+    const action = FINDING_ACTIONS[item.rule_id];
+
+    return (
+      <article
+        className={item.severity}
+        key={`${compact ? "summary" : "detail"}-${item.rule_id}`}
+        data-passed={item.passed}
+      >
+        <div className="quality-finding-status">
+          <span aria-hidden="true" />
+
+          <div>
+            <strong>{item.rule_id.replaceAll("_", " ")}</strong>
+
+            <p>{findingEvidence(item)}</p>
+          </div>
         </div>
+
+        {compact ? (
+          <small>{item.passed ? "Passed" : "Review"}</small>
+        ) : (
+          <>
+            <p>{item.recommendation}</p>
+
+            {action ? (
+              <button type="button" onClick={() => onOpenTab(action.tab)}>
+                {action.label}
+              </button>
+            ) : null}
+          </>
+        )}
+      </article>
+    );
+  };
+
+  return (
+    <aside
+      className="panel quality-panel quality-panel-compact"
+      aria-label="Data quality summary"
+    >
+      <header className="quality-summary-heading">
+        <div>
+          <p className="eyebrow">Data quality summary</p>
+
+          <h2>
+            {issues.length === 0
+              ? "All checks passed"
+              : `${issues.length} ${
+                  issues.length === 1 ? "issue needs" : "issues need"
+                } attention`}
+          </h2>
+
+          <p>Review the strongest signals before estimating lift.</p>
+        </div>
+
         <strong>{quality.score}/100</strong>
+      </header>
+
+      <div className="quality-summary-status" data-ready={quality.ready}>
+        <span aria-hidden="true" />
+
+        <div>
+          <strong>
+            {quality.ready ? "Ready for analysis" : "Action required"}
+          </strong>
+
+          <small>
+            {passedCount} of {quality.findings.length} checks passed
+          </small>
+        </div>
       </div>
-      <div className="finding-list">
-        {quality.findings.map((item) => {
-          const action = FINDING_ACTIONS[item.rule_id];
-          return (
-            <article
-              className={item.severity}
-              key={item.rule_id}
-            >
-              <span>
-                {item.passed ? "Passed" : item.severity}
-              </span>
-              <strong>
-                {item.rule_id.replaceAll("_", " ")}
-              </strong>
-              <p className="finding-evidence">
-                {findingEvidence(item)}
-              </p>
-              <p>{item.recommendation}</p>
-              {action ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenTab(action.tab)}
-                >
-                  {action.label}
-                </button>
-              ) : null}
-            </article>
-          );
-        })}
+
+      <div className="quality-summary-list">
+        {priorityFindings.map((item) => renderFinding(item, true))}
       </div>
-    </section>
+
+      <details className="quality-all-checks">
+        <summary>View all {quality.findings.length} checks</summary>
+
+        <div className="finding-list">
+          {quality.findings.map((item) => renderFinding(item))}
+        </div>
+      </details>
+    </aside>
   );
 }
 
