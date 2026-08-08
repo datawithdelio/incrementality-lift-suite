@@ -57,6 +57,16 @@ const lineage = {
 afterEach(cleanup);
 
 describe("ReproducibilityExperience", () => {
+  it("labels persisted run timestamps as UTC", () => {
+    render(
+      <ReproducibilityExperience
+        state={{ kind: "ready", data: lineage }}
+      />,
+    );
+
+    expect(screen.getAllByText("Jul 17, 2026, 8:00 PM UTC")).toHaveLength(2);
+  });
+
   it("shows a focused loading state", () => {
     render(
       <ReproducibilityExperience

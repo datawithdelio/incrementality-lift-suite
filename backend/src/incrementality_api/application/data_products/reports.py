@@ -33,6 +33,8 @@ class ReportModel:
     lineage: Mapping[str, object] = field(
         default_factory=dict,
     )
+    standard_error: float | None = None
+    p_value: float | None = None
 
     @property
     def conclusion(self) -> str:
@@ -80,6 +82,34 @@ class CsvReportRenderer:
         output = io.StringIO(newline="")
         writer = csv.writer(output, lineterminator="\n")
         writer.writerow(("section", "metric", "value"))
+        sample_counts_value = model.diagnostics.get("sample_counts", {})
+        sample_counts = (
+            sample_counts_value
+            if isinstance(sample_counts_value, Mapping)
+            else {}
+        )
+
+        relative_lift = model.business_impact.get("relative_lift")
+
+        incremental_outcome = model.business_impact.get("incremental_outcome")
+        if incremental_outcome is None:
+            incremental_outcome = model.business_impact.get("incremental_conversions")
+        if incremental_outcome is None:
+            incremental_outcome = model.business_impact.get("incremental_revenue")
+
+        treated_units = sample_counts.get(
+            "treated_units",
+            model.diagnostics.get("treated_units"),
+        )
+        control_units = sample_counts.get(
+            "control_units",
+            model.diagnostics.get("control_units"),
+        )
+        observations = sample_counts.get(
+            "observations",
+            model.diagnostics.get("sample_size"),
+        )
+
         rows = [
             ("overview", "title", model.title),
             ("overview", "analysis_run_id", model.analysis_run_id),
@@ -87,9 +117,33 @@ class CsvReportRenderer:
             ("versions", "dataset", f"{model.dataset_id}@{model.dataset_checksum}"),
             ("versions", "mapping_version", model.mapping_version),
             ("estimate", "conclusion", model.conclusion),
+            ("estimate", "effect", model.estimate),
+            ("estimate", "standard_error", model.standard_error),
+            ("estimate", "p_value", model.p_value),
+            ("estimate", "confidence_low", model.confidence_low),
+            ("estimate", "confidence_high", model.confidence_high),
             ("estimate", "confidence_interval", f"{model.confidence_low},{model.confidence_high}"),
+            ("business_impact", "relative_lift", relative_lift),
+            ("business_impact", "incremental_outcome", incremental_outcome),
+            ("sample", "treated_units", treated_units),
+            ("sample", "control_units", control_units),
+            ("sample", "observations", observations),
             ("quality", "summary", dict(model.quality_summary)),
         ]
+        if model.estimator == "synthetic_control":
+            rows.append(
+                (
+                    "synthetic_control",
+                    "pre_treatment_rmspe",
+                    model.diagnostics.get("pre_treatment_rmspe"),
+                )
+            )
+            donor_weights = model.diagnostics.get("donor_weights")
+            if isinstance(donor_weights, Mapping):
+                rows.extend(
+                    ("synthetic_control_donor_weight", str(donor), weight)
+                    for donor, weight in sorted(donor_weights.items())
+                )
         writer.writerows(rows)
         for key, value in _lineage_rows(model):
             writer.writerow(

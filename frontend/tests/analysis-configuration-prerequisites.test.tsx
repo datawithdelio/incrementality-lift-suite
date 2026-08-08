@@ -3,12 +3,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SESSION_TOKEN_KEY } from "../src/lib/auth/api";
 
-const { getProjectOverviewMock, getDatasetMock, getLatestSemanticMappingMock } =
+const {
+  fetchPreviewMock,
+  getProjectOverviewMock,
+  getDatasetMock,
+  getLatestSemanticMappingMock,
+} =
   vi.hoisted(() => ({
+    fetchPreviewMock: vi.fn(),
     getProjectOverviewMock: vi.fn(),
     getDatasetMock: vi.fn(),
     getLatestSemanticMappingMock: vi.fn(),
   }));
+
+vi.mock("../src/lib/data-products/api", async () => {
+  const actual = await vi.importActual<
+    typeof import("../src/lib/data-products/api")
+  >("../src/lib/data-products/api");
+
+  return {
+    ...actual,
+    fetchPreview: fetchPreviewMock,
+  };
+});
 
 vi.mock("../src/lib/projects/api", async () => {
   const actual = await vi.importActual<
@@ -110,6 +127,22 @@ describe("Analysis Configuration prerequisites", () => {
     getDatasetMock.mockResolvedValue(readyDataset);
 
     getLatestSemanticMappingMock.mockResolvedValue(mapping);
+
+    fetchPreviewMock.mockResolvedValue({
+      rows: [],
+      columns: [],
+      total_rows: 100,
+      page: 1,
+      page_size: 50,
+      total_pages: 2,
+      date_range: {
+        column: "date",
+        minimum: "2025-01-01",
+        maximum: "2025-12-31",
+      },
+      treatment_distribution: {},
+      outcome_distribution: {},
+    });
   });
 
   afterEach(async () => {

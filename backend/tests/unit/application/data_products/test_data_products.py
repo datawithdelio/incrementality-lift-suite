@@ -1,9 +1,12 @@
+import re
+import zlib
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from uuid import uuid4
 
 import pytest
+from reportlab.pdfbase.pdfutils import asciiBase85Decode  # type: ignore[import-untyped]
 
 from incrementality_api.application.data_products.explorer import (
     DatasetExplorer,
@@ -264,6 +267,79 @@ def report_model(*, causal_claim_allowed: bool = False) -> ReportModel:
     )
 
 
+def pdf_text(payload: bytes) -> str:
+    """Extract ReportLab text operands without adding a PDF test dependency."""
+    text_operands: list[str] = []
+    for stream in re.findall(rb"stream\r?\n(.*?)endstream", payload, re.DOTALL):
+        try:
+            decoded = zlib.decompress(asciiBase85Decode(stream.strip()))
+        except (ValueError, zlib.error):
+            decoded = stream
+        text_operands.extend(
+            item.decode("latin-1")
+            for item in re.findall(rb"\((.*?)\)\s*Tj", decoded, re.DOTALL)
+        )
+    return " ".join(text_operands)
+
+
+def test_pdf_uses_difference_in_differences_sections_instead_of_geo_content() -> None:
+    model = replace(
+        report_model(),
+        configuration={
+            "analysis_start_date": "2025-01-01",
+            "analysis_end_date": "2025-12-01",
+            "intervention_date": "2025-07-01",
+            "outcome_column": "revenue",
+            "unit_column": "market",
+        },
+        diagnostics={
+            "causal_claim_allowed": False,
+            "design_assessment": "weak",
+            "treated_units": 3,
+            "control_units": 3,
+            "sample_size": 72,
+        },
+    )
+
+    rendered = pdf_text(PdfReportRenderer().render(model))
+
+    assert "Design diagnostics and interpretation" in rendered
+    assert "Treated / control units" in rendered
+    assert "Geography detail" not in rendered
+    assert "Treated geographies" not in rendered
+
+
+def test_pdf_preserves_geo_holdout_sections_for_geo_reports() -> None:
+    model = replace(
+        report_model(),
+        estimator="geo_holdout",
+        estimator_version="geo-v1",
+        configuration={
+            "analysis_start_date": "2025-01-01",
+            "analysis_end_date": "2025-12-01",
+            "intervention_date": "2025-07-01",
+            "outcome_column": "revenue",
+            "unit_column": "market",
+        },
+        diagnostics={
+            "causal_claim_allowed": False,
+            "design_assessment": "weak",
+            "geographic_assignments": (
+                {"geo": "New York", "assignment": "treatment"},
+                {"geo": "Boston", "assignment": "control"},
+            ),
+            "balance_diagnostics": {"standardized_mean_difference": 0.17},
+            "sample_size": 72,
+        },
+    )
+
+    rendered = pdf_text(PdfReportRenderer().render(model))
+
+    assert "Geography detail and business interpretation" in rendered
+    assert "Treated / control geographies" in rendered
+    assert "Treated geographies" in rendered
+
+
 def test_report_renderers_are_reproducible_and_do_not_overstate_causality() -> None:
     model = report_model(causal_claim_allowed=False)
     csv_bytes = CsvReportRenderer().render(model)
@@ -273,6 +349,80 @@ def test_report_renderers_are_reproducible_and_do_not_overstate_causality() -> N
     assert b"directional association" in csv_bytes
     assert pdf_bytes.startswith(b"%PDF")
     assert b"causal increase" not in pdf_bytes
+
+
+def test_csv_report_exports_canonical_analysis_statistics() -> None:
+    model = replace(
+        report_model(),
+        estimate=16.35,
+        standard_error=0.728,
+        p_value=0.0002,
+        confidence_low=14.9,
+        confidence_high=17.8,
+        business_impact={
+            "relative_lift": 0.169,
+            "incremental_outcome": 981.0,
+        },
+        diagnostics={
+            "causal_claim_allowed": True,
+            "sample_counts": {
+                "treated_units": 6,
+                "control_units": 6,
+                "observations": 276,
+            },
+        },
+    )
+
+    payload = CsvReportRenderer().render(model).decode()
+
+    assert "estimate,effect,16.35" in payload
+    assert "estimate,standard_error,0.728" in payload
+    assert "estimate,p_value,0.0002" in payload
+    assert "estimate,confidence_low,14.9" in payload
+    assert "estimate,confidence_high,17.8" in payload
+    assert "business_impact,relative_lift,0.169" in payload
+    assert "business_impact,incremental_outcome,981.0" in payload
+    assert "sample,treated_units,6" in payload
+    assert "sample,control_units,6" in payload
+    assert "sample,observations,276" in payload
+
+
+def test_synthetic_control_reports_use_method_specific_diagnostics_and_inference() -> None:
+    model = replace(
+        report_model(),
+        estimator="synthetic_control",
+        estimator_version="synthetic-control-v1",
+        estimate=20.9,
+        standard_error=1.964,
+        p_value=0.111,
+        confidence_low=17.1,
+        confidence_high=24.8,
+        diagnostics={
+            "causal_claim_allowed": True,
+            "design_assessment": "valid",
+            "pre_treatment_rmspe": 0.82,
+            "donor_weights": {"Boston": 0.65, "Chicago": 0.35},
+            "sample_counts": {
+                "treated_units": 1,
+                "control_units": 2,
+                "observations": 120,
+            },
+        },
+        warnings=(),
+        limitations=(),
+    )
+
+    csv_payload = CsvReportRenderer().render(model).decode()
+    pdf_payload = pdf_text(PdfReportRenderer().render(model))
+
+    assert "synthetic_control,pre_treatment_rmspe,0.82" in csv_payload
+    assert "synthetic_control_donor_weight,Boston,0.65" in csv_payload
+    assert "synthetic_control_donor_weight,Chicago,0.35" in csv_payload
+    assert "Pre-treatment RMSPE" in pdf_payload
+    assert "Parallel trends" not in pdf_payload
+    assert "normal-approximation interval" in pdf_payload
+    assert "In-space placebo inference" in pdf_payload
+    assert "Jul 14, 2026 12:00 AM UTC" in pdf_payload
 
 
 class FakeClock:

@@ -93,7 +93,27 @@ function analysisPeriodValidationError(
   analysisStartDate: string,
   interventionDate: string,
   analysisEndDate: string,
+  datasetMinimumDate: string | null,
+  datasetMaximumDate: string | null,
 ): string | null {
+  if (datasetMinimumDate && datasetMaximumDate) {
+    const datedFields = [
+      ["Analysis start date", analysisStartDate],
+      ["Intervention date", interventionDate],
+      ["Analysis end date", analysisEndDate],
+    ] as const;
+
+    const outOfRangeField = datedFields.find(
+      ([, value]) =>
+        value.length > 0 &&
+        (value < datasetMinimumDate || value > datasetMaximumDate),
+    );
+
+    if (outOfRangeField) {
+      return `${outOfRangeField[0]} must be between ${datasetMinimumDate} and ${datasetMaximumDate}.`;
+    }
+  }
+
   if (
     analysisStartDate &&
     analysisEndDate &&
@@ -299,6 +319,28 @@ export function AnalysisConfigurationClient({
           });
           return;
         }
+
+        const loadedPreview = await fetchPreview(
+          workspaceId,
+          projectId,
+          dataset.id,
+          {
+            page: 1,
+            search: "",
+            sortColumn: "",
+            descending: false,
+            filterColumn: "",
+            filterValue: "",
+          },
+          sessionToken,
+          new AbortController().signal,
+        );
+
+        if (!active) {
+          return;
+        }
+
+        setPreview(loadedPreview);
 
         setState({
           kind: "ready",
@@ -722,12 +764,14 @@ export function AnalysisConfigurationClient({
   if (
     wizardStep === "filters" &&
     preview !== null &&
-    geographySummary !== null
+    geographySummary !== null &&
+    selectedEstimator !== null
   ) {
     return (
       <AnalysisFiltersStep
         preview={preview}
         geographySummary={geographySummary}
+        estimator={selectedEstimator}
         unitColumn={state.mapping.unit_column}
         selectedFilterColumn={selectedFilterColumn}
         selectedFilterOperator={selectedFilterOperator}
@@ -813,6 +857,8 @@ export function AnalysisConfigurationClient({
       analysisStartDate,
       interventionDate,
       analysisEndDate,
+      preview?.date_range?.minimum ?? null,
+      preview?.date_range?.maximum ?? null,
     );
 
     const periodComplete =
@@ -820,13 +866,19 @@ export function AnalysisConfigurationClient({
       analysisEndDate.length > 0 &&
       (!showInterventionDate || interventionDate.length > 0);
 
-    const canContinuePeriod = periodComplete && periodValidationError === null;
+    const canContinuePeriod =
+      periodComplete &&
+      preview?.date_range !== null &&
+      preview?.date_range !== undefined &&
+      periodValidationError === null;
 
     return (
       <AnalysisPeriodStep
         analysisStartDate={analysisStartDate}
         interventionDate={interventionDate}
         analysisEndDate={analysisEndDate}
+        datasetMinimumDate={preview?.date_range?.minimum ?? null}
+        datasetMaximumDate={preview?.date_range?.maximum ?? null}
         showInterventionDate={showInterventionDate}
         validationError={periodValidationError}
         previewError={previewError}

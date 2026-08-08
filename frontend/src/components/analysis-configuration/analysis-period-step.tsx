@@ -2,6 +2,8 @@ type AnalysisPeriodStepProps = {
   analysisStartDate: string;
   interventionDate: string;
   analysisEndDate: string;
+  datasetMinimumDate?: string | null;
+  datasetMaximumDate?: string | null;
   showInterventionDate: boolean;
   validationError: string | null;
   previewError: string | null;
@@ -19,6 +21,8 @@ type PeriodFieldProps = {
   value: string;
   badge: string;
   badgeTone: "pre" | "intervention" | "post";
+  minimumDate: string | null;
+  maximumDate: string | null;
   onChange: (value: string) => void;
 };
 
@@ -28,6 +32,8 @@ function PeriodField({
   value,
   badge,
   badgeTone,
+  minimumDate,
+  maximumDate,
   onChange,
 }: PeriodFieldProps) {
   return (
@@ -41,6 +47,8 @@ function PeriodField({
         type="date"
         aria-label={label}
         value={value}
+        min={minimumDate ?? undefined}
+        max={maximumDate ?? undefined}
         onChange={(event) => {
           onChange(event.target.value);
         }}
@@ -76,6 +84,8 @@ export function AnalysisPeriodStep({
   analysisStartDate,
   interventionDate,
   analysisEndDate,
+  datasetMinimumDate = null,
+  datasetMaximumDate = null,
   showInterventionDate,
   validationError,
   previewError,
@@ -134,6 +144,8 @@ export function AnalysisPeriodStep({
             value={analysisStartDate}
             badge="Pre-period"
             badgeTone="pre"
+            minimumDate={datasetMinimumDate}
+            maximumDate={datasetMaximumDate}
             onChange={onAnalysisStartDateChange}
           />
 
@@ -144,6 +156,8 @@ export function AnalysisPeriodStep({
               value={interventionDate}
               badge="Intervention"
               badgeTone="intervention"
+              minimumDate={datasetMinimumDate}
+              maximumDate={datasetMaximumDate}
               onChange={onInterventionDateChange}
             />
           )}
@@ -154,6 +168,8 @@ export function AnalysisPeriodStep({
             value={analysisEndDate}
             badge={showInterventionDate ? "Post-period" : "Analysis end"}
             badgeTone="post"
+            minimumDate={datasetMinimumDate}
+            maximumDate={datasetMaximumDate}
             onChange={onAnalysisEndDateChange}
           />
         </div>

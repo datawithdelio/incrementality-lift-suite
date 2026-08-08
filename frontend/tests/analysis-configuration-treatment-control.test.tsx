@@ -294,7 +294,7 @@ describe("Analysis Configuration treatment and control", () => {
       date_range: {
         column: "date",
         minimum: "2025-01-01",
-        maximum: "2025-01-03",
+        maximum: "2025-12-31",
       },
       treatment_distribution: {
         "0": 2,

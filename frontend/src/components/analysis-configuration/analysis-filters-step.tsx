@@ -6,6 +6,7 @@ import type {
 import { AnalysisGeographyMapLoader } from "./analysis-geography-map-loader";
 
 import type {
+  AnalysisEstimatorType,
   FilterOperator,
   FilterRule as RequestFilterRule,
   FilterValue,
@@ -23,6 +24,7 @@ type FilterOperatorOption = {
 type AnalysisFiltersStepProps = {
   preview: DatasetPreview;
   geographySummary: GeographySummary;
+  estimator: AnalysisEstimatorType;
   unitColumn: string;
 
   selectedFilterColumn: string;
@@ -244,6 +246,7 @@ function humanizeMetricName(value: string): string {
 export function AnalysisFiltersStep({
   preview,
   geographySummary,
+  estimator,
   unitColumn,
   selectedFilterColumn,
   selectedFilterOperator,
@@ -266,6 +269,7 @@ export function AnalysisFiltersStep({
   onExcludedSegmentChange,
   onContinue,
 }: AnalysisFiltersStepProps) {
+  const coordinatesRelevant = estimator === "geo_holdout";
   const selectedColumn =
     preview.columns.find((column) => column.name === selectedFilterColumn) ??
     null;
@@ -495,26 +499,37 @@ export function AnalysisFiltersStep({
               geographies
             </span>
 
-            <span>
-              <strong>{coordinateReadyCount}</strong>
-              map-ready
-            </span>
+            {coordinatesRelevant ? (
+              <>
+                <span>
+                  <strong>{coordinateReadyCount}</strong>
+                  map-ready
+                </span>
 
-            <span>
-              <strong>
-                {geographySummary.total_geographies - coordinateReadyCount}
-              </strong>
-              coordinates required
-            </span>
+                <span>
+                  <strong>
+                    {geographySummary.total_geographies - coordinateReadyCount}
+                  </strong>
+                  coordinates required
+                </span>
+              </>
+            ) : (
+              <span>
+                <strong>Not needed</strong>
+                coordinates for this method
+              </span>
+            )}
           </div>
 
-          <AnalysisGeographyMapLoader
-            geographies={geographySummary.geographies}
-            selectedGeographies={selectedGeographies}
-            excludedGeographies={excludedGeographies}
-            onInclude={onSelectedGeographyChange}
-            onExclude={onExcludedGeographyChange}
-          />
+          {coordinatesRelevant ? (
+            <AnalysisGeographyMapLoader
+              geographies={geographySummary.geographies}
+              selectedGeographies={selectedGeographies}
+              excludedGeographies={excludedGeographies}
+              onInclude={onSelectedGeographyChange}
+              onExclude={onExcludedGeographyChange}
+            />
+          ) : null}
 
           <div
             className="analysis-geography-grid"
@@ -549,14 +564,16 @@ export function AnalysisFiltersStep({
                       </span>
                     </div>
 
-                    <span
-                      className="analysis-geography-card__status"
-                      data-status={geography?.coordinate_status ?? "missing"}
-                    >
-                      {geography?.coordinate_status === "verified"
-                        ? "Map ready"
-                        : "Coordinates required"}
-                    </span>
+                    {coordinatesRelevant ? (
+                      <span
+                        className="analysis-geography-card__status"
+                        data-status={geography?.coordinate_status ?? "missing"}
+                      >
+                        {geography?.coordinate_status === "verified"
+                          ? "Map ready"
+                          : "Coordinates required"}
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="analysis-geography-card__metrics">

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ResultsExperience } from "../src/components/results/results-experience";
@@ -180,6 +180,12 @@ describe("ResultsExperience", () => {
   it("renders synthetic-control donor and placebo evidence", () => {
     const synthetic = structuredClone(base);
     synthetic.estimator_type = "synthetic_control";
+    synthetic.result!.p_value = 0.111;
+    synthetic.result!.confidence_interval = {
+      low: 17.1,
+      high: 24.8,
+      confidence_level: 0.95,
+    };
     synthetic.result!.technical_diagnostics = {
       ...synthetic.result!.technical_diagnostics,
       donor_weights: { "donor-a": 0.7, "donor-b": 0.3 },
@@ -193,6 +199,22 @@ describe("ResultsExperience", () => {
     expect(screen.getByText("Synthetic control fit")).toBeInTheDocument();
     expect(screen.getByText("Donor weights")).toBeInTheDocument();
     expect(screen.getByText("Placebo evidence")).toBeInTheDocument();
+    expect(
+      screen.getByText(/normal-approximation interval.*17.1 to 24.8/i),
+    ).toHaveTextContent("In-space placebo inference: p = 0.111");
+
+    const technicalDetails = screen.getByText("Technical details").closest("details");
+    expect(technicalDetails).not.toBeNull();
+    expect(
+      within(technicalDetails as HTMLElement).getByText(
+        "Synthetic control with constrained donor weights",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(technicalDetails as HTMLElement).queryByText(
+        "Difference-in-differences",
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("renders geographic assignments independently of fetching", () => {

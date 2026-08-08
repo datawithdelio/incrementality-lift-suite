@@ -4,8 +4,8 @@ from __future__ import annotations
 import io
 import math
 from collections.abc import Mapping, Sequence
-from datetime import datetime
-from typing import Protocol
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, cast
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors  # type: ignore[import-untyped]
@@ -23,26 +23,8 @@ from reportlab.platypus import (  # type: ignore[import-untyped]
     TableStyle,
 )
 
-
-class ReportModelLike(Protocol):
-    title: str
-    generated_at: datetime
-    analysis_run_id: str
-    estimator: str
-    estimator_version: str
-    dataset_id: str
-    dataset_checksum: str
-    mapping_version: int
-    configuration: Mapping[str, object]
-    estimate: float
-    confidence_low: float
-    confidence_high: float
-    diagnostics: Mapping[str, object]
-    warnings: tuple[str, ...]
-    business_impact: Mapping[str, object]
-    quality_summary: Mapping[str, object]
-    limitations: tuple[str, ...]
-    lineage: Mapping[str, object]
+if TYPE_CHECKING:
+    from incrementality_api.application.data_products.reports import ReportModel
 
 
 INK = colors.HexColor("#171522")
@@ -82,7 +64,7 @@ def deep(value: object, names: set[str]) -> object | None:
     if isinstance(value, Mapping):
         for key, item in value.items():
             if str(key) in names:
-                return item
+                return cast(object, item)
         for item in value.values():
             found = deep(item, names)
             if found is not None:
@@ -333,7 +315,7 @@ def properties(rows: Sequence[tuple[str, object]], width: float) -> Table:
     return table
 
 
-class GeoMap(Flowable):
+class GeoMap(Flowable):  # type: ignore[misc]
     OUTLINE = (
         (-124.7, 48.6),
         (-123.1, 46),
@@ -415,7 +397,7 @@ class GeoMap(Flowable):
         c.restoreState()
 
 
-class Gauge(Flowable):
+class Gauge(Flowable):  # type: ignore[misc]
     def __init__(self, value: float | None, width: float, height: float):
         super().__init__()
         self.value = value
@@ -468,6 +450,261 @@ class Gauge(Flowable):
         c.restoreState()
 
 
+class ComparisonChart(Flowable):  # type: ignore[misc]
+    def __init__(
+        self,
+        series: Sequence[Mapping[str, object]],
+        *,
+        width: float,
+        height: float,
+        title: str = "Observed versus expected outcome",
+    ):
+        super().__init__()
+        self.series = series
+        self.width = width
+        self.height = height
+        self.title = title
+
+    def draw(self) -> None:
+        c = self.canv
+        c.saveState()
+        c.setFillColor(colors.white)
+        c.setStrokeColor(LINE)
+        c.roundRect(0, 0, self.width, self.height, 10, fill=1, stroke=1)
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 9.5)
+        c.drawString(14, self.height - 20, self.title)
+        c.setFont("Helvetica", 6.5)
+        c.setFillColor(MUTED)
+        c.drawString(14, self.height - 31, "Saved estimator diagnostic series")
+
+        points = [
+            (
+                index,
+                number(item.get("observed")),
+                number(item.get("counterfactual")),
+                number(item.get("period")),
+            )
+            for index, item in enumerate(self.series)
+        ]
+        valid = [item for item in points if item[1] is not None and item[2] is not None]
+        if len(valid) < 2:
+            self._empty(c)
+            c.restoreState()
+            return
+
+        left, bottom = 38, 34
+        chart_width = self.width - left - 16
+        chart_height = self.height - bottom - 50
+        values = [value for item in valid for value in item[1:3] if value is not None]
+        minimum, maximum = min(values), max(values)
+        padding = max((maximum - minimum) * 0.12, 1)
+        minimum -= padding
+        maximum += padding
+
+        def x(index: int) -> float:
+            return left + index / max(1, len(points) - 1) * chart_width
+
+        def y(value: float) -> float:
+            return bottom + (value - minimum) / max(maximum - minimum, 1e-9) * chart_height
+
+        c.setStrokeColor(colors.HexColor("#ECE9F2"))
+        c.setLineWidth(0.45)
+        for line_index in range(4):
+            line_y = bottom + line_index / 3 * chart_height
+            c.line(left, line_y, left + chart_width, line_y)
+            label = minimum + line_index / 3 * (maximum - minimum)
+            c.setFillColor(MUTED)
+            c.setFont("Helvetica", 5.8)
+            c.drawRightString(left - 5, line_y - 2, fmt(label, 0))
+
+        intervention_index = next(
+            (
+                index
+                for index, _, _, period in points
+                if period is not None and period >= 0
+            ),
+            None,
+        )
+        if intervention_index is not None:
+            intervention_x = x(intervention_index)
+            c.setStrokeColor(colors.HexColor("#B9B3C8"))
+            c.setDash(2, 2)
+            c.line(intervention_x, bottom, intervention_x, bottom + chart_height)
+            c.setDash()
+            c.setFillColor(MUTED)
+            c.setFont("Helvetica-Bold", 5.6)
+            c.drawCentredString(intervention_x, bottom + chart_height + 5, "INTERVENTION")
+
+        self._line(c, valid, x=x, y=y, value_index=1, color=PURPLE, dashed=False)
+        self._line(
+            c,
+            valid,
+            x=x,
+            y=y,
+            value_index=2,
+            color=colors.HexColor("#8FCDB2"),
+            dashed=True,
+        )
+        self._legend(c)
+        c.restoreState()
+
+    def _line(
+        self,
+        canvas: Canvas,
+        points: Sequence[tuple[int, float | None, float | None, float | None]],
+        *,
+        x: object,
+        y: object,
+        value_index: int,
+        color: object,
+        dashed: bool,
+    ) -> None:
+        project_x = x
+        project_y = y
+        path = canvas.beginPath()
+        started = False
+        canvas.setStrokeColor(color)
+        canvas.setFillColor(color)
+        canvas.setLineWidth(1.6)
+        if dashed:
+            canvas.setDash(4, 2)
+        for point in points:
+            value = point[value_index]
+            if value is None:
+                continue
+            point_x = project_x(point[0])  # type: ignore[operator]
+            point_y = project_y(value)  # type: ignore[operator]
+            if started:
+                path.lineTo(point_x, point_y)
+            else:
+                path.moveTo(point_x, point_y)
+                started = True
+            canvas.circle(point_x, point_y, 2.1, fill=1, stroke=0)
+        canvas.drawPath(path, fill=0, stroke=1)
+        canvas.setDash()
+
+    def _legend(self, canvas: Canvas) -> None:
+        canvas.setFont("Helvetica", 6.2)
+        canvas.setFillColor(PURPLE)
+        canvas.circle(14, 14, 2.5, fill=1, stroke=0)
+        canvas.setFillColor(MUTED)
+        canvas.drawString(20, 12, "Observed")
+        canvas.setFillColor(colors.HexColor("#8FCDB2"))
+        canvas.circle(72, 14, 2.5, fill=1, stroke=0)
+        canvas.setFillColor(MUTED)
+        canvas.drawString(78, 12, "Expected without treatment")
+
+    def _empty(self, canvas: Canvas) -> None:
+        canvas.setFillColor(SUBTLE)
+        canvas.roundRect(14, 28, self.width - 28, self.height - 72, 7, fill=1, stroke=0)
+        canvas.setFillColor(MUTED)
+        canvas.setFont("Helvetica", 7)
+        canvas.drawCentredString(
+            self.width / 2,
+            self.height / 2 - 4,
+            "Time-series diagnostic data was not captured for this run.",
+        )
+
+
+class EffectChart(Flowable):  # type: ignore[misc]
+    def __init__(
+        self,
+        series: Sequence[Mapping[str, object]],
+        *,
+        width: float,
+        height: float,
+        title: str = "Effect over time",
+    ):
+        super().__init__()
+        self.series = series
+        self.width = width
+        self.height = height
+        self.title = title
+
+    def draw(self) -> None:
+        c = self.canv
+        c.saveState()
+        c.setFillColor(colors.white)
+        c.setStrokeColor(LINE)
+        c.roundRect(0, 0, self.width, self.height, 10, fill=1, stroke=1)
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 9.5)
+        c.drawString(14, self.height - 20, self.title)
+        c.setFont("Helvetica", 6.5)
+        c.setFillColor(MUTED)
+        c.drawString(14, self.height - 31, "Estimated effect with available uncertainty")
+
+        points: list[tuple[float, float, float, float]] = []
+        for index, item in enumerate(self.series):
+            effect = number(item.get("coefficient") if "coefficient" in item else item.get("effect"))
+            if effect is None:
+                continue
+            low = number(item.get("confidence_interval_low"))
+            high = number(item.get("confidence_interval_high"))
+            period = number(item.get("period"))
+            points.append(
+                (
+                    float(index) if period is None else period,
+                    effect,
+                    effect if low is None else low,
+                    effect if high is None else high,
+                )
+            )
+        if not points:
+            c.setFillColor(SUBTLE)
+            c.roundRect(14, 28, self.width - 28, self.height - 72, 7, fill=1, stroke=0)
+            c.setFillColor(MUTED)
+            c.setFont("Helvetica", 7)
+            c.drawCentredString(
+                self.width / 2,
+                self.height / 2 - 4,
+                "Effect-over-time diagnostics were not captured for this run.",
+            )
+            c.restoreState()
+            return
+
+        left, bottom = 38, 34
+        chart_width = self.width - left - 16
+        chart_height = self.height - bottom - 50
+        minimum = min(0.0, *(point[2] for point in points))
+        maximum = max(0.0, *(point[3] for point in points))
+        padding = max((maximum - minimum) * 0.12, 1)
+        minimum -= padding
+        maximum += padding
+
+        def x(index: int) -> float:
+            return left + index / max(1, len(points) - 1) * chart_width
+
+        def y(value: float) -> float:
+            return bottom + (value - minimum) / max(maximum - minimum, 1e-9) * chart_height
+
+        c.setStrokeColor(colors.HexColor("#ECE9F2"))
+        c.setLineWidth(0.45)
+        for line_index in range(4):
+            line_y = bottom + line_index / 3 * chart_height
+            c.line(left, line_y, left + chart_width, line_y)
+        c.setStrokeColor(colors.HexColor("#9A94A8"))
+        c.setDash(2, 2)
+        c.line(left, y(0), left + chart_width, y(0))
+        c.setDash()
+
+        for index, (period, effect, low, high) in enumerate(points):
+            point_x = x(index)
+            c.setStrokeColor(colors.HexColor("#9A86F2"))
+            c.setLineWidth(1)
+            c.line(point_x, y(low), point_x, y(high))
+            c.setFillColor(PURPLE)
+            c.circle(point_x, y(effect), 2.8, fill=1, stroke=0)
+            c.setFillColor(MUTED)
+            c.setFont("Helvetica", 5.6)
+            c.drawCentredString(point_x, 20, fmt(period, 0))
+        c.setFillColor(MUTED)
+        c.setFont("Helvetica", 6)
+        c.drawString(14, 12, "Event time")
+        c.restoreState()
+
+
 def chips(items: Sequence[Mapping[str, object]], *, treatment: bool) -> Table:
     values = [text(item.get("geo"), "Unknown") for item in items[:16]]
     if len(items) > 16:
@@ -496,7 +733,7 @@ class PdfReportRenderer:
     media_type = "application/pdf"
     extension = "pdf"
 
-    def render(self, model: ReportModelLike) -> bytes:
+    def render(self, model: ReportModel) -> bytes:
         out = io.BytesIO()
         doc = SimpleDocTemplate(
             out,
@@ -528,6 +765,7 @@ class PdfReportRenderer:
         ]
         treated = [item for item in assignments if item.get("assignment") == "treatment"]
         holdout = [item for item in assignments if item.get("assignment") == "holdout"]
+        is_geo = model.estimator == "geo_holdout"
         relative_lift = deep_number(impact, "relative_lift")
         incremental = deep_number(
             impact,
@@ -542,11 +780,41 @@ class PdfReportRenderer:
             "observation_count",
             "observations",
         )
-        standard_error = deep_number(diagnostics, "standard_error")
-        p_value = deep_number(diagnostics, "p_value")
+        standard_error = number(model.standard_error)
+        p_value = number(model.p_value)
         balance = deep_number(
             mapping(diagnostics.get("balance_diagnostics")), "standardized_mean_difference"
         )
+        treated_units = deep_number(diagnostics, "treated_units")
+        control_units = deep_number(diagnostics, "control_units")
+        if is_geo:
+            treated_units = treated_units if treated_units is not None else float(len(treated))
+            control_units = control_units if control_units is not None else float(len(holdout))
+        parallel = mapping(diagnostics.get("parallel_trends"))
+        parallel_passed = parallel.get("passed") is True
+        pre_rmspe = deep_number(diagnostics, "pre_treatment_rmspe")
+        effective_sample_size = deep_number(diagnostics, "effective_sample_size")
+        max_r_hat = deep_number(diagnostics, "max_r_hat")
+        if model.estimator == "difference_in_differences":
+            comparability_label = "Parallel trends"
+            comparability_value = "Passed" if parallel_passed else "Review"
+            comparability_note = "Pre-period diagnostic"
+        elif model.estimator == "synthetic_control":
+            comparability_label = "Pre-treatment RMSPE"
+            comparability_value = fmt(pre_rmspe, 2)
+            comparability_note = "Counterfactual fit"
+        elif model.estimator == "marketing_mix_model":
+            comparability_label = "Maximum R-hat"
+            comparability_value = fmt(max_r_hat, 2)
+            comparability_note = "Posterior convergence"
+        elif model.estimator == "off_policy_evaluation":
+            comparability_label = "Effective sample size"
+            comparability_value = fmt(effective_sample_size, 0)
+            comparability_note = "Weighted policy evidence"
+        else:
+            comparability_label = "Pre-period comparability"
+            comparability_value = fmt(balance, 2)
+            comparability_note = "Standardized mean difference"
         design = human(
             diagnostics.get("design_assessment") or quality.get("design_assessment") or "valid"
         )
@@ -562,6 +830,14 @@ class PdfReportRenderer:
             if p_value is not None and p_value < 0.001
             else (f"p = {p_value:.3f}" if p_value is not None else "p unavailable")
         )
+        inference_summary = (
+            f"95% normal-approximation interval {fmt(model.confidence_low, 1)} to "
+            f"{fmt(model.confidence_high, 1)} (using the placebo-effect standard error). "
+            f"In-space placebo inference: {p_text}."
+            if model.estimator == "synthetic_control"
+            else f"95% confidence interval {fmt(model.confidence_low, 1)} to "
+            f"{fmt(model.confidence_high, 1)}. {p_text}"
+        )
         story: list[Flowable] = []
 
         story += title_block(
@@ -572,7 +848,7 @@ class PdfReportRenderer:
         story += [
             callout(
                 "Analysis conclusion",
-                "The balanced geo holdout supports a credible incremental campaign effect."
+                "The saved diagnostics support a credible incremental effect."
                 if causal
                 else "The estimate is directional and requires cautious interpretation.",
                 "The estimate is supported by the saved diagnostic evidence."
@@ -600,9 +876,9 @@ class PdfReportRenderer:
                             green=design.lower() == "valid",
                         ),
                         card(
-                            "Pre-period comparability",
-                            fmt(balance, 2),
-                            "Standardized mean difference",
+                            comparability_label,
+                            comparability_value,
+                            comparability_note,
                         ),
                     ]
                 ],
@@ -629,7 +905,10 @@ class PdfReportRenderer:
                     ("Analysis period", f"{date(analysis_start)} to {date(analysis_end)}"),
                     ("Intervention date", date(intervention)),
                     ("Outcome", outcome),
-                    ("Treated / control geographies", f"{len(treated)} / {len(holdout)}"),
+                    (
+                        "Treated / control geographies" if is_geo else "Treated / control units",
+                        f"{fmt(treated_units, 0)} / {fmt(control_units, 0)}",
+                    ),
                     ("Observations", fmt(sample_size, 0)),
                 ),
                 CONTENT,
@@ -640,7 +919,7 @@ class PdfReportRenderer:
             [
                 [
                     para(
-                        f"95% confidence interval {fmt(model.confidence_low, 1)} to {fmt(model.confidence_high, 1)}. {p_text}",
+                        inference_summary,
                         "dark",
                     )
                 ]
@@ -694,25 +973,134 @@ class PdfReportRenderer:
             ),
             Spacer(1, 10),
         ]
-        story += [
-            Table(
-                [
+        if is_geo:
+            evidence_visuals: list[Flowable] = [
+                Table(
                     [
-                        GeoMap(assignments, CONTENT * 0.62 - 6, 220),
-                        Gauge(balance, CONTENT * 0.38 - 6, 220),
-                    ]
-                ],
-                colWidths=[CONTENT * 0.62, CONTENT * 0.38],
-                style=TableStyle(
-                    [
-                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ]
+                        [
+                            GeoMap(assignments, CONTENT * 0.62 - 6, 220),
+                            Gauge(balance, CONTENT * 0.38 - 6, 220),
+                        ]
+                    ],
+                    colWidths=[CONTENT * 0.62, CONTENT * 0.38],
+                    style=TableStyle(
+                        [
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ]
+                    ),
                 ),
-            ),
-            Spacer(1, 10),
-        ]
+                Spacer(1, 10),
+            ]
+        elif model.estimator in {"difference_in_differences", "synthetic_control"}:
+            observed_series = [
+                dict(item)
+                for item in sequence(diagnostics.get("observed_vs_counterfactual"))
+                if isinstance(item, Mapping)
+            ]
+            effect_key = (
+                "event_study"
+                if model.estimator == "difference_in_differences"
+                else "treatment_effects_over_time"
+            )
+            effect_series = [
+                dict(item)
+                for item in sequence(diagnostics.get(effect_key))
+                if isinstance(item, Mapping)
+            ]
+            evidence_visuals = [
+                Table(
+                    [
+                        [
+                            ComparisonChart(
+                                observed_series,
+                                width=CONTENT * 0.5 - 6,
+                                height=220,
+                            ),
+                            EffectChart(
+                                effect_series,
+                                width=CONTENT * 0.5 - 6,
+                                height=220,
+                            ),
+                        ]
+                    ],
+                    colWidths=[CONTENT * 0.5] * 2,
+                    style=TableStyle(
+                        [
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ]
+                    ),
+                ),
+                Spacer(1, 10),
+            ]
+        else:
+            convergence = mapping(diagnostics.get("convergence"))
+            overlap = mapping(diagnostics.get("propensity_overlap"))
+            evidence_visuals = [
+                Table(
+                    [
+                        [
+                            properties(
+                                (
+                                    (
+                                        "Evidence type",
+                                        "Posterior channel contribution"
+                                        if model.estimator == "marketing_mix_model"
+                                        else "Historical policy comparison",
+                                    ),
+                                    (
+                                        "Channels",
+                                        len(mapping(diagnostics.get("channel_contributions"))),
+                                    ),
+                                    (
+                                        "Effective sample size",
+                                        fmt(effective_sample_size, 0),
+                                    ),
+                                    (
+                                        "Reliability",
+                                        human(diagnostics.get("reliability")),
+                                    ),
+                                ),
+                                CONTENT * 0.48,
+                            ),
+                            properties(
+                                (
+                                    (
+                                        "Maximum R-hat",
+                                        fmt(convergence.get("max_r_hat"), 2),
+                                    ),
+                                    (
+                                        "Divergences",
+                                        fmt(convergence.get("divergences"), 0),
+                                    ),
+                                    (
+                                        "Maximum importance weight",
+                                        fmt(overlap.get("maximum_importance_weight"), 2),
+                                    ),
+                                    (
+                                        "Extreme weights",
+                                        fmt(diagnostics.get("extreme_weight_count"), 0),
+                                    ),
+                                ),
+                                CONTENT * 0.48,
+                            ),
+                        ]
+                    ],
+                    colWidths=[CONTENT * 0.5] * 2,
+                    style=TableStyle(
+                        [
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ]
+                    ),
+                ),
+                Spacer(1, 10),
+            ]
+        story += evidence_visuals
         story += [
             Table(
                 [
@@ -725,7 +1113,7 @@ class PdfReportRenderer:
                                     "None" if not model.warnings else len(model.warnings),
                                 ),
                                 ("Causal evidence", "Supported" if causal else "Not supported"),
-                                ("Pre-period balance", fmt(balance, 2)),
+                                (comparability_label, comparability_value),
                             ),
                             CONTENT * 0.48,
                         ),
@@ -733,8 +1121,10 @@ class PdfReportRenderer:
                             (
                                 ("Method", human(model.estimator)),
                                 (
-                                    "Treated / control geographies",
-                                    f"{len(treated)} / {len(holdout)}",
+                                    "Treated / control geographies"
+                                    if is_geo
+                                    else "Treated / control units",
+                                    f"{fmt(treated_units, 0)} / {fmt(control_units, 0)}",
                                 ),
                                 ("Observations", fmt(sample_size, 0)),
                                 ("Standard error", fmt(standard_error, 3)),
@@ -769,53 +1159,59 @@ class PdfReportRenderer:
             PageBreak(),
         ]
 
-        story += title_block(
-            model.title,
-            "Geography detail and business interpretation",
-            "Detailed view of the experimental design across geographies and how to interpret the result.",
+        detail_title = (
+            "Geography detail and business interpretation"
+            if is_geo
+            else "Design diagnostics and interpretation"
         )
-        assignment = Table(
-            [
+        detail_description = (
+            "Detailed view of the experimental design across geographies and how to interpret the result."
+            if is_geo
+            else "Method-specific evidence, limitations, and practical guidance for interpreting the estimate."
+        )
+        story += title_block(model.title, detail_title, detail_description)
+        filters = deep(config, {"row_filters", "eligibility_filters"})
+        excluded = deep(config, {"excluded_geographies"})
+        geography_column = deep(config, {"geography_column", "unit_column"})
+        if is_geo:
+            assignment = Table(
                 [
                     [
-                        para("TREATED GEOGRAPHIES", "eyebrow"),
-                        Spacer(1, 5),
-                        chips(treated, treatment=True),
-                    ],
-                    [
-                        para("CONTROL GEOGRAPHIES (HOLDOUT)", "eyebrow"),
-                        Spacer(1, 5),
-                        chips(holdout, treatment=False),
-                    ],
-                ]
-            ],
-            colWidths=[CONTENT / 2] * 2,
-            rowHeights=[118],
-        )
-        assignment.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                    ("BOX", (0, 0), (-1, -1), 0.8, PURPLE_LINE),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE),
-                    ("ROUNDEDCORNERS", [10]),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 12),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-                    ("TOPPADDING", (0, 0), (-1, -1), 12),
-                ]
+                        [
+                            para("TREATED GEOGRAPHIES", "eyebrow"),
+                            Spacer(1, 5),
+                            chips(treated, treatment=True),
+                        ],
+                        [
+                            para("CONTROL GEOGRAPHIES (HOLDOUT)", "eyebrow"),
+                            Spacer(1, 5),
+                            chips(holdout, treatment=False),
+                        ],
+                    ]
+                ],
+                colWidths=[CONTENT / 2] * 2,
+                rowHeights=[118],
             )
-        )
-        story += [assignment, Spacer(1, 10)]
-        filters, excluded, geography_column = (
-            deep(config, {"row_filters", "eligibility_filters"}),
-            deep(config, {"excluded_geographies"}),
-            deep(config, {"geography_column", "unit_column"}),
-        )
+            assignment.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                        ("BOX", (0, 0), (-1, -1), 0.8, PURPLE_LINE),
+                        ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE),
+                        ("ROUNDEDCORNERS", [10]),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                        ("TOPPADDING", (0, 0), (-1, -1), 12),
+                    ]
+                )
+            )
+            story += [assignment, Spacer(1, 10)]
+
         interpretation = (
-            "The intervention appears to increase the mapped outcome relative to the holdout geographies."
+            "The intervention is associated with an increase in the mapped outcome."
             if model.estimate > 0
-            else "The intervention appears to reduce the mapped outcome relative to the holdout geographies."
+            else "The intervention is associated with a reduction in the mapped outcome."
         )
         interpretation_box = Table(
             [
@@ -824,7 +1220,9 @@ class PdfReportRenderer:
                         para("BUSINESS INTERPRETATION", "eyebrow"),
                         Spacer(1, 6),
                         Paragraph(
-                            f"- {escape(interpretation)}<br/>- {'The balanced holdout design supports causal interpretation.' if causal else 'The current diagnostics do not support a definitive causal interpretation.'}<br/>- Use the estimate with assumptions about limited spillover and continued comparability.",
+                            f"- {escape(interpretation)}<br/>"
+                            f"- {'The saved diagnostics support causal interpretation.' if causal else 'The saved diagnostics do not support a definitive causal interpretation.'}<br/>"
+                            "- Apply the estimate only to the documented population, period, and assignment.",
                             STYLES["dark"],
                         ),
                     ]
@@ -846,26 +1244,28 @@ class PdfReportRenderer:
                 ]
             )
         )
+        if is_geo:
+            design_rows: Sequence[tuple[str, object]] = (
+                ("Row filters", "None" if not filters else short(filters, 60)),
+                ("Included geographies", len(treated) + len(holdout)),
+                (
+                    "Excluded geographies",
+                    "None" if not excluded else short(excluded, 60),
+                ),
+                ("Geography column", human(geography_column)),
+                ("Outcome", outcome),
+            )
+        else:
+            design_rows = (
+                ("Method", human(model.estimator)),
+                ("Design quality", design),
+                (comparability_label, comparability_value),
+                ("Treated / control units", f"{fmt(treated_units, 0)} / {fmt(control_units, 0)}"),
+                ("Outcome", outcome),
+            )
         story += [
             Table(
-                [
-                    [
-                        properties(
-                            (
-                                ("Row filters", "None" if not filters else short(filters, 60)),
-                                ("Included geographies", len(treated) + len(holdout)),
-                                (
-                                    "Excluded geographies",
-                                    "None" if not excluded else short(excluded, 60),
-                                ),
-                                ("Geography column", human(geography_column)),
-                                ("Outcome", outcome),
-                            ),
-                            CONTENT * 0.47,
-                        ),
-                        interpretation_box,
-                    ]
-                ],
+                [[properties(design_rows, CONTENT * 0.47), interpretation_box]],
                 colWidths=[CONTENT * 0.5] * 2,
                 style=TableStyle(
                     [
@@ -877,12 +1277,39 @@ class PdfReportRenderer:
             ),
             Spacer(1, 10),
         ]
-        assumptions = list(model.limitations) or [
-            "Holdout geographies remain comparable to treated geographies absent the intervention.",
-            "Results reflect the analysis-wide estimate, not market-specific causal effects.",
-            "The estimate depends on the mapped outcome definition and analysis time window.",
-            "External shocks and spillovers should still be considered.",
-        ]
+        default_assumptions = {
+            "difference_in_differences": (
+                "Parallel trends should hold before the intervention.",
+                "Treatment timing and group membership are correctly mapped.",
+                "No unmodeled event differentially affects one group at intervention.",
+            ),
+            "synthetic_control": (
+                "The donor pool can reproduce the treated unit before intervention.",
+                "No donor is materially affected by the intervention.",
+                "The pre-treatment fit remains informative after intervention.",
+            ),
+            "geo_holdout": (
+                "Holdout geographies remain comparable absent the intervention.",
+                "Spillovers between treated and holdout geographies are limited.",
+                "External shocks do not differentially affect the groups.",
+            ),
+            "marketing_mix_model": (
+                "Media inputs and outcomes are consistently measured over time.",
+                "The model specification captures material seasonality and response shape.",
+                "Posterior convergence is sufficient for business interpretation.",
+            ),
+            "off_policy_evaluation": (
+                "Logged behavior propensities are valid and strictly positive.",
+                "The target policy has adequate overlap with historical decisions.",
+                "The reward model and propensity model are correctly specified for doubly robust use.",
+            ),
+        }
+        assumptions = list(model.limitations) or list(
+            default_assumptions.get(
+                model.estimator,
+                ("Interpret the estimate within the documented analysis design.",),
+            )
+        )
         assumption_box = Table(
             [
                 [
@@ -1124,7 +1551,9 @@ class PdfReportRenderer:
                             ),
                             (
                                 "Generated on",
-                                model.generated_at.strftime("%b %-d, %Y %I:%M %p"),
+                                model.generated_at.astimezone(UTC).strftime(
+                                    "%b %-d, %Y %I:%M %p UTC"
+                                ),
                             ),
                         ),
                         CONTENT * 0.48,
@@ -1311,7 +1740,10 @@ class PdfReportRenderer:
                             ),
                             (
                                 "Treated / control",
-                                (f"{len(treated_names)} / {len(control_names)}"),
+                                (
+                                f"{len(treated_names) if treated_names else int(treated_units or 0)} / "
+                                f"{len(control_names) if control_names else int(control_units or 0)}"
+                            ),
                             ),
                         ),
                         CONTENT * 0.48,
@@ -1382,6 +1814,10 @@ class PdfReportRenderer:
         )
         story += [boundary]
 
+        page_names = dict(PAGE_NAMES)
+        if not is_geo:
+            page_names[3] = "DESIGN & INTERPRETATION"
+
         def header_footer(canvas: Canvas, document: SimpleDocTemplate) -> None:
             del document
             canvas.saveState()
@@ -1401,10 +1837,12 @@ class PdfReportRenderer:
             canvas.line(42, 28, W - 42, 28)
             canvas.setFillColor(PURPLE)
             canvas.setFont("Helvetica-Bold", 6.5)
-            canvas.drawString(42, 15, PAGE_NAMES.get(page, "REPORT"))
+            page_label = page_names.get(page, "REPORT")
+            canvas.drawString(42, 15, page_label)
             canvas.setFillColor(MUTED)
             canvas.setFont("Helvetica", 6.3)
-            canvas.drawString(142, 15, short(model.title, 38))
+            label_width = canvas.stringWidth(page_label, "Helvetica-Bold", 6.5)
+            canvas.drawString(42 + label_width + 16, 15, short(model.title, 38))
             canvas.setFillColor(PURPLE)
             canvas.setFont("Helvetica-Bold", 9)
             canvas.drawRightString(W - 42, 15, f"{page} of 4")

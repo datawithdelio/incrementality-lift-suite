@@ -262,7 +262,7 @@ describe("Analysis Configuration filters and selections", () => {
       date_range: {
         column: "date",
         minimum: "2025-01-01",
-        maximum: "2025-01-02",
+        maximum: "2025-12-31",
       },
       treatment_distribution: {
         "0": 1,
@@ -437,6 +437,38 @@ describe("Analysis Configuration filters and selections", () => {
       "type",
       "text",
     );
+  });
+
+  it("does not present coordinates as required for Synthetic Control", async () => {
+    render(
+      <AnalysisConfigurationClient
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Synthetic Control/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.change(screen.getByLabelText("Analysis start date"), {
+      target: { value: "2025-01-01" },
+    });
+    fireEvent.change(screen.getByLabelText("Intervention date"), {
+      target: { value: "2025-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("Analysis end date"), {
+      target: { value: "2025-03-31" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByRole("heading", {
+      name: "Filter and select population",
+    });
+
+    expect(screen.queryByText(/coordinates required/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Not needed")).toBeInTheDocument();
+    expect(document.querySelector(".analysis-geography-map")).not.toBeInTheDocument();
   });
 
   it("adds and removes a typed filter rule from the analysis draft", async () => {

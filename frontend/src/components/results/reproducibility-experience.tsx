@@ -47,13 +47,14 @@ function formatDate(value: string): string {
     return value;
   }
 
-  return new Intl.DateTimeFormat(
+  return `${new Intl.DateTimeFormat(
     "en-US",
     {
       dateStyle: "medium",
       timeStyle: "short",
+      timeZone: "UTC",
     },
-  ).format(date);
+  ).format(date)} UTC`;
 }
 
 function formatBytes(value: number): string {

@@ -17,14 +17,30 @@ import {
 import { SESSION_TOKEN_KEY } from "../src/lib/auth/api";
 
 const {
+  fetchPreviewMock,
   getProjectOverviewMock,
   getDatasetMock,
   getLatestSemanticMappingMock,
 } = vi.hoisted(() => ({
+  fetchPreviewMock: vi.fn(),
   getProjectOverviewMock: vi.fn(),
   getDatasetMock: vi.fn(),
   getLatestSemanticMappingMock: vi.fn(),
 }));
+
+vi.mock(
+  "../src/lib/data-products/api",
+  async () => {
+    const actual = await vi.importActual<
+      typeof import("../src/lib/data-products/api")
+    >("../src/lib/data-products/api");
+
+    return {
+      ...actual,
+      fetchPreview: fetchPreviewMock,
+    };
+  },
+);
 
 vi.mock(
   "../src/lib/projects/api",
@@ -140,6 +156,22 @@ describe(
         control_value: "0",
         created_at: "2026-07-18T00:04:00Z",
         updated_at: "2026-07-18T00:04:00Z",
+      });
+
+      fetchPreviewMock.mockResolvedValue({
+        rows: [],
+        columns: [],
+        total_rows: 100,
+        page: 1,
+        page_size: 50,
+        total_pages: 2,
+        date_range: {
+          column: "date",
+          minimum: "2025-01-01",
+          maximum: "2025-12-31",
+        },
+        treatment_distribution: {},
+        outcome_distribution: {},
       });
     });
 
@@ -493,6 +525,38 @@ describe(
       expect(
         periodContinue,
       ).toBeEnabled();
+    });
+
+    it("blocks analysis dates outside the dataset range", async () => {
+      render(
+        <AnalysisConfigurationClient
+          workspaceId="workspace-1"
+          projectId="project-1"
+        />,
+      );
+
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: /Synthetic Control/i,
+        }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      fireEvent.change(screen.getByLabelText("Analysis start date"), {
+        target: { value: "2024-12-31" },
+      });
+      fireEvent.change(screen.getByLabelText("Intervention date"), {
+        target: { value: "2025-05-25" },
+      });
+      fireEvent.change(screen.getByLabelText("Analysis end date"), {
+        target: { value: "2025-07-27" },
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Analysis start date must be between 2025-01-01 and 2025-12-31.",
+      );
+      expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+      expect(screen.queryByText("Dates are ready for the next step.")).not.toBeInTheDocument();
     });
 
     it("rejects an intervention date without a usable pre-period", async () => {

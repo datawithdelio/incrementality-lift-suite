@@ -308,6 +308,12 @@ export function ResultsExperience({
       ? `${confidenceLevel}% posterior interval ${number(
           result.confidence_interval.low,
         )} to ${number(result.confidence_interval.high)}`
+      : data.estimator_type === "synthetic_control"
+        ? `${confidenceLevel}% normal-approximation interval (using the placebo-effect standard error) ${number(
+            result.confidence_interval.low,
+          )} to ${number(
+            result.confidence_interval.high,
+          )}. In-space placebo inference: ${resultPValueText(result.p_value)}.`
       : `${confidenceLevel}% confidence interval ${number(
           result.confidence_interval.low,
         )} to ${number(result.confidence_interval.high)}. ${resultPValueText(
@@ -673,9 +679,18 @@ export function ResultsExperience({
               label="Model"
               value={String(
                 objectValue(diagnostics.model_specification).formula ??
-                  "Difference-in-differences",
+                  (data.estimator_type === "synthetic_control"
+                    ? "Synthetic control with constrained donor weights"
+                    : estimatorLabel[data.estimator_type] ??
+                      data.estimator_type),
               )}
             />
+            {data.estimator_type === "difference_in_differences" ? (
+              <Metric
+                label="Covariate adjustment"
+                value="None in did-v1; mapped covariates are not used in estimation"
+              />
+            ) : null}
             <Metric label="Design assessment" value={designAssessment} />
           </div>
           <Link className="result-technical-link" href={lineageHref}>
