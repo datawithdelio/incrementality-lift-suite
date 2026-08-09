@@ -6,7 +6,7 @@ import {
   MagnifyingGlassIcon,
 } from "@phosphor-icons/react";
 import { useAnalysisResult } from "@/lib/results/use-analysis-result";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type ExplorerOptions, queueReport } from "@/lib/data-products/api";
 import {
@@ -14,6 +14,7 @@ import {
   useReports,
 } from "@/lib/data-products/use-data-products";
 import {
+  datasetEstimatorPreferenceKey,
   datasetMappingPath,
   datasetQualityPath,
 } from "../../lib/datasets/routes";
@@ -85,12 +86,25 @@ export function ExplorerClient({
   const [interventionDate, setInterventionDate] = useState(() =>
     explorerParameter("intervention"),
   );
-  const [estimator, setEstimator] = useState("difference_in_differences");
+  const [estimator, setEstimator] = useState(() =>
+    explorerParameter("estimator") === "marketing_mix_model"
+      ? "marketing_mix_model"
+      : typeof window !== "undefined" &&
+          window.localStorage.getItem(
+            datasetEstimatorPreferenceKey(datasetId),
+          ) === "marketing_mix_model"
+        ? "marketing_mix_model"
+        : "difference_in_differences",
+  );
   const [viewName, setViewName] = useState("");
   const [selectedView, setSelectedView] = useState("");
   const [savedViews, setSavedViews] = useState<SavedExplorerView[]>(() =>
     savedExplorerViews(datasetId),
   );
+  const usesInterventionDate = estimator !== "marketing_mix_model";
+  const effectiveInterventionDate = usesInterventionDate
+    ? interventionDate
+    : "";
 
   const options = useMemo<ExplorerOptions>(
     () => ({
@@ -102,7 +116,8 @@ export function ExplorerClient({
       filterOperator,
       filterValue,
       outcomeColumn,
-      interventionDate,
+      interventionDate: effectiveInterventionDate,
+      estimator,
     }),
     [
       page,
@@ -113,9 +128,16 @@ export function ExplorerClient({
       filterOperator,
       filterValue,
       outcomeColumn,
-      interventionDate,
+      effectiveInterventionDate,
+      estimator,
     ],
   );
+
+  const clearInvalidInterventionDate = useCallback((rejectedValue: string) => {
+    setInterventionDate((currentValue) =>
+      currentValue === rejectedValue ? "" : currentValue,
+    );
+  }, []);
 
   const { state, quality, versions, dataset } = useDatasetExplorer(
     workspaceId,
@@ -123,6 +145,7 @@ export function ExplorerClient({
     datasetId,
     options,
     estimator,
+    clearInvalidInterventionDate,
   );
   const base =
     `/api/v1/workspaces/${workspaceId}/projects/${projectId}` +
@@ -132,6 +155,10 @@ export function ExplorerClient({
   const columns = state.kind === "ready" ? state.data.columns : [];
 
   useEffect(() => {
+    window.localStorage.setItem(
+      datasetEstimatorPreferenceKey(datasetId),
+      estimator,
+    );
     const params = new URLSearchParams();
     if (search) params.set("columns", search);
     if (sortColumn) params.set("sort", sortColumn);
@@ -144,9 +171,12 @@ export function ExplorerClient({
       params.set("value", filterValue);
     }
     if (outcomeColumn) params.set("outcome", outcomeColumn);
+    if (estimator === "marketing_mix_model") {
+      params.set("estimator", estimator);
+    }
 
-    if (interventionDate) {
-      params.set("intervention", interventionDate);
+    if (effectiveInterventionDate) {
+      params.set("intervention", effectiveInterventionDate);
     }
     const query = params.toString();
     window.history.replaceState(
@@ -162,7 +192,9 @@ export function ExplorerClient({
     filterOperator,
     filterValue,
     outcomeColumn,
-    interventionDate,
+    effectiveInterventionDate,
+    estimator,
+    datasetId,
   ]);
 
   const changeVersion = (id: string) => {
@@ -259,7 +291,14 @@ export function ExplorerClient({
           <a href={datasetQualityPath(workspaceId, projectId, datasetId)}>
             View Data Quality
           </a>
-          <a href={datasetMappingPath(workspaceId, projectId, datasetId)}>
+          <a
+            href={datasetMappingPath(
+              workspaceId,
+              projectId,
+              datasetId,
+              estimator,
+            )}
+          >
             Semantic Mapping
           </a>
 
@@ -385,28 +424,6 @@ export function ExplorerClient({
                 </select>
               </label>
 
-              <label className="explorer-field explorer-method-field">
-                <span className="sr-only">Causal method</span>
-
-                <select
-                  aria-label="Causal method"
-                  value={estimator}
-                  onChange={(event) => setEstimator(event.target.value)}
-                >
-                  <option value="difference_in_differences">
-                    Difference in Differences
-                  </option>
-                  <option value="synthetic_control">Synthetic Control</option>
-                  <option value="geo_holdout">Geo Holdout</option>
-                  <option value="marketing_mix_model">
-                    Marketing Mix Modeling
-                  </option>
-                  <option value="off_policy_evaluation">
-                    Off-Policy Evaluation
-                  </option>
-                </select>
-              </label>
-
               <label className="explorer-checkbox">
                 <input
                   type="checkbox"
@@ -452,7 +469,9 @@ export function ExplorerClient({
           </section>
         }
         selectedOutcome={outcomeColumn}
-        selectedInterventionDate={interventionDate}
+        estimator={estimator}
+        onEstimatorChange={setEstimator}
+        selectedInterventionDate={effectiveInterventionDate}
         onInterventionDateChange={(value) => {
           setInterventionDate(value);
 

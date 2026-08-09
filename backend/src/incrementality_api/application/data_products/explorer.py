@@ -28,6 +28,7 @@ class DatasetExplorerQuery:
     column_search: str | None = None
     outcome_column: str | None = None
     intervention_date: str | None = None
+    estimator: str = "difference_in_differences"
 
     def __post_init__(self) -> None:
         if self.page < 1:
@@ -66,10 +67,10 @@ class DateRange:
 class ExplorerSemanticMapping:
     time_column: str
     unit_column: str
-    treatment_column: str
+    treatment_column: str | None
     outcome_column: str
-    treatment_value: str
-    control_value: str
+    treatment_value: str | None
+    control_value: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +162,12 @@ class DatasetExplorerResult:
     treatment_distribution: dict[str, int]
     outcome_distribution: dict[str, float]
     visualizations: DatasetVisualizations
+
+
+class InvalidInterventionDateError(ValueError):
+    """Raised when an explicit intervention date falls outside the dataset."""
+
+    pass
 
 
 class DatasetExplorer:
@@ -358,6 +365,24 @@ class DatasetExplorer:
             post_column,
             query.intervention_date,
         )
+        trend = (
+            cls._outcome_trend(
+                rows,
+                time_column,
+                outcome_column,
+                treatment_start,
+            )
+            if query.estimator == "marketing_mix_model"
+            else cls._trend(
+                rows,
+                time_column,
+                outcome_column,
+                treatment_column,
+                treatment_value,
+                control_value,
+                treatment_start,
+            )
+        )
         distribution = cls._distribution_summary(
             rows,
             outcome_column,
@@ -378,15 +403,7 @@ class DatasetExplorer:
             treatment_column=treatment_column,
             outcome_column=outcome_column,
             treatment_start_date=treatment_start,
-            trend=cls._trend(
-                rows,
-                time_column,
-                outcome_column,
-                treatment_column,
-                treatment_value,
-                control_value,
-                treatment_start,
-            ),
+            trend=trend,
             distribution=distribution,
             missingness=cls._missingness(rows, names),
             balance=balance,
@@ -510,9 +527,9 @@ class DatasetExplorer:
                 or explicit < available_periods[0]
                 or explicit > available_periods[-1]
             ):
-                raise ValueError(
-                    "Intervention date must fall inside the dataset date range."
-                )
+                raise InvalidInterventionDateError(
+                "Intervention date must fall inside the dataset date range."
+            )
             return explicit
 
         if post_column is None:
@@ -524,6 +541,44 @@ class DatasetExplorer:
             if row[time_column] and cls._is_truthy(row[post_column])
         ]
         return min(periods, default=None)
+
+    @classmethod
+    def _outcome_trend(
+        cls,
+        rows: list[dict[str, str]],
+        time_column: str | None,
+        outcome_column: str | None,
+        treatment_start: str | None,
+    ) -> tuple[TrendPoint, ...]:
+        if time_column is None or outcome_column is None:
+            return ()
+
+        aggregates: dict[str, list[float]] = {}
+        for row in rows:
+            period = row[time_column]
+            if not period:
+                continue
+            try:
+                outcome = float(row[outcome_column])
+            except ValueError:
+                continue
+            aggregates.setdefault(period, []).append(outcome)
+
+        return tuple(
+            TrendPoint(
+                period=period,
+                treatment_value=mean(values),
+                control_value=None,
+                treatment_observations=len(values),
+                control_observations=0,
+                phase=(
+                    "post"
+                    if treatment_start is not None and period >= treatment_start
+                    else "pre"
+                ),
+            )
+            for period, values in sorted(aggregates.items())
+        )
 
     @classmethod
     def _trend(

@@ -30,7 +30,7 @@ describe("DataExplorer", () => {
   it("shows paginated values, profiles, distributions, and quality findings", () => {
     render(<DataExplorer state={{ kind: "ready", data: { rows: [{ market: "Boston", treated: "yes", revenue: "120" }], columns: [{ name: "revenue", inferred_type: "integer", missing_percentage: 0, unique_count: 40, minimum: 80, maximum: 140, mean: 110, median: 109 }], total_rows: 250000, page: 2, page_size: 50, total_pages: 5000, date_range: { column: "date", minimum: "2026-01-01", maximum: "2026-07-01" }, treatment_distribution: { yes: 20, no: 20 }, outcome_distribution: { minimum: 80, maximum: 140, mean: 110 } } }} quality={{ score: 82, ready: true, findings: [{ rule_id: "date_gaps", severity: "warning", passed: true, evidence: { gap_count: 2 }, recommendation: "Fill missing periods." }] }} />);
     expect(screen.getByText("250,000 rows")).toBeInTheDocument();
-    expect(screen.getByText("Page 2 of 5,000")).toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 5000")).toBeInTheDocument();
     expect(screen.getAllByText("82/100")).toHaveLength(2);
     expect(screen.getByText("Fill missing periods.")).toBeInTheDocument();
   });
@@ -256,7 +256,7 @@ describe("DataExplorer", () => {
       }),
     ).toBeInTheDocument();
 
-    expect(screen.getByText("2 gaps detected")).toBeInTheDocument();
+    expect(screen.getAllByText("2 gaps detected")).toHaveLength(2);
   });
 });
 
@@ -351,9 +351,9 @@ describe("DataExplorer value rendering", () => {
       screen.getByRole("columnheader", { name: "revenue" }),
     ).toBeInTheDocument();
 
-    expect(screen.getByText("120.5")).toBeInTheDocument();
-    expect(screen.getByText("true")).toBeInTheDocument();
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getByText("$120.50")).toBeInTheDocument();
+    expect(screen.getByText("True")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 });
 

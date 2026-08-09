@@ -67,6 +67,24 @@ def _lineage_rows(
     )
 
 
+def _diagnostic_label(value: object, fallback: str) -> str:
+    rendered = str(value).strip() if value is not None else ""
+    return rendered.replace("_", " ").capitalize() if rendered else fallback
+
+
+def _pre_period_comparability(model: ReportModel) -> object | None:
+    if model.estimator == "synthetic_control":
+        return model.diagnostics.get("pre_treatment_rmspe")
+
+    balance = model.diagnostics.get("balance_diagnostics")
+    if isinstance(balance, Mapping):
+        standardized_difference = balance.get("standardized_mean_difference")
+        if standardized_difference is not None:
+            return standardized_difference
+
+    return model.diagnostics.get("pre_period_comparability")
+
+
 class ReportRenderer(Protocol):
     media_type: str
     extension: str
@@ -110,6 +128,17 @@ class CsvReportRenderer:
             model.diagnostics.get("sample_size"),
         )
 
+        design_quality = _diagnostic_label(
+            model.diagnostics.get("design_assessment")
+            or model.quality_summary.get("design_assessment"),
+            "Valid",
+        )
+        causal_evidence = (
+            "Supported"
+            if model.diagnostics.get("causal_claim_allowed") is True
+            else "Not supported"
+        )
+
         rows = [
             ("overview", "title", model.title),
             ("overview", "analysis_run_id", model.analysis_run_id),
@@ -128,8 +157,19 @@ class CsvReportRenderer:
             ("sample", "treated_units", treated_units),
             ("sample", "control_units", control_units),
             ("sample", "observations", observations),
-            ("quality", "summary", dict(model.quality_summary)),
+            ("diagnostics", "design_quality", design_quality),
+            (
+                "diagnostics",
+                "pre_period_comparability",
+                _pre_period_comparability(model),
+            ),
+            ("diagnostics", "causal_evidence", causal_evidence),
+            ("diagnostics", "blocking_warnings", len(model.warnings)),
         ]
+        rows.extend(
+            ("dataset_readiness", str(metric), value)
+            for metric, value in sorted(model.quality_summary.items())
+        )
         if model.estimator == "synthetic_control":
             rows.append(
                 (

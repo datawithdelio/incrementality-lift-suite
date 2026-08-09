@@ -170,7 +170,7 @@ describe("premium Data Explorer experience", () => {
       }),
     ).toHaveValue("weekly");
 
-    expect(screen.getByText("Intervention date")).toBeInTheDocument();
+    expect(screen.getByText("Detected intervention date")).toBeInTheDocument();
 
     expect(screen.getByText("Jul 1, 2025")).toBeInTheDocument();
 
@@ -189,6 +189,59 @@ describe("premium Data Explorer experience", () => {
     expect(screen.getByText("Post-treatment")).toBeInTheDocument();
 
     expect(screen.queryByText("+9.8%")).not.toBeInTheDocument();
+
+    expect(
+      screen.getByRole("region", {
+        name: "Treatment and control balance",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("removes treatment framing for MMM while preserving raw row columns", () => {
+    const mmmResponse = {
+      ...backendExplorerResponse,
+      rows: [
+        {
+          ...backendExplorerResponse.rows[0],
+          treated: 1,
+          post: 0,
+          treatment_group: 1,
+        },
+      ],
+    };
+
+    render(
+      <DataExplorer
+        estimator="marketing_mix_model"
+        selectedOutcome="conversions"
+        state={
+          {
+            kind: "ready",
+            data: mmmResponse,
+          } as never
+        }
+      />,
+    );
+
+    expect(
+      screen.queryByRole("region", {
+        name: "Treatment and control balance",
+      }),
+    ).not.toBeInTheDocument();
+
+    const rowTable = screen.getByRole("table");
+    expect(
+      within(rowTable).getByRole("columnheader", { name: "treated" }),
+    ).toBeInTheDocument();
+    expect(
+      within(rowTable).getByRole("columnheader", { name: "post" }),
+    ).toBeInTheDocument();
+    expect(
+      within(rowTable).getByRole("columnheader", {
+        name: "treatment group",
+      }),
+    ).toBeInTheDocument();
+    expect(within(rowTable).queryByText("Treated")).not.toBeInTheDocument();
   });
 
   it("does not select an unrelated numeric column over the backend outcome", () => {

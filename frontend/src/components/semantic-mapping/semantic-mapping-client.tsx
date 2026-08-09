@@ -6,12 +6,15 @@ import {
   ArrowRight,
 } from "@phosphor-icons/react";
 import {
+  useCallback,
   useEffect,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import { SESSION_TOKEN_KEY } from "@/lib/auth/api";
 import {
+  datasetEstimatorPreferenceKey,
   datasetExplorePath,
   datasetQualityPath,
 } from "@/lib/datasets/routes";
@@ -36,6 +39,13 @@ type SemanticMappingClientProps = {
   workspaceId: string;
   projectId: string;
   datasetId: string;
+  estimator?: string;
+};
+
+type SemanticMappingDraft = CreateSemanticMappingInput & {
+  treatment_column: string;
+  treatment_value: string;
+  control_value: string;
 };
 
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
@@ -91,14 +101,14 @@ type SemanticMappingState =
       columns: ColumnSummary[];
       rows: Array<Record<string, unknown>>;
       mapping: SemanticMapping | null;
-      draft: CreateSemanticMappingInput;
+      draft: SemanticMappingDraft;
     }
   | {
       kind: "error";
       message: string;
     };
 
-function emptyDraft(): CreateSemanticMappingInput {
+function emptyDraft(): SemanticMappingDraft {
   return {
     time_column: "",
     unit_column: "",
@@ -113,7 +123,7 @@ function emptyDraft(): CreateSemanticMappingInput {
 
 function draftFromMapping(
   mapping: SemanticMapping | null,
-): CreateSemanticMappingInput {
+): SemanticMappingDraft {
   if (mapping === null) {
     return emptyDraft();
   }
@@ -121,14 +131,14 @@ function draftFromMapping(
   return {
     time_column: mapping.time_column,
     unit_column: mapping.unit_column,
-    treatment_column: mapping.treatment_column,
+    treatment_column: mapping.treatment_column ?? "",
     outcome_column: mapping.outcome_column,
     spend_column: mapping.spend_column,
     covariate_columns: [
       ...mapping.covariate_columns,
     ],
-    treatment_value: mapping.treatment_value,
-    control_value: mapping.control_value,
+    treatment_value: mapping.treatment_value ?? "",
+    control_value: mapping.control_value ?? "",
   };
 }
 
@@ -169,7 +179,7 @@ type SemanticRole =
   | "covariate_columns";
 
 function isColumnAssignedElsewhere(
-  draft: CreateSemanticMappingInput,
+  draft: SemanticMappingDraft,
   columnName: string,
   currentRole: SemanticRole,
 ): boolean {
@@ -217,8 +227,9 @@ type SemanticMappingValidationColumn = {
 };
 
 function validateSemanticMappingDraft(
-  draft: CreateSemanticMappingInput,
+  draft: SemanticMappingDraft,
   columns: readonly SemanticMappingValidationColumn[],
+  requiresTreatment: boolean,
 ): string | null {
   const columnsByName = new Map(
     columns.map((column) => [
@@ -253,21 +264,23 @@ function validateSemanticMappingDraft(
     return "Choose a valid unit column before continuing.";
   }
 
-  const treatmentColumn = columnsByName.get(
-    draft.treatment_column,
-  );
+  if (requiresTreatment) {
+    const treatmentColumn = columnsByName.get(
+      draft.treatment_column,
+    );
 
-  if (
-    !treatmentColumn
-    || ![
-      "boolean",
-      "integer",
-      "string",
-    ].includes(
-      treatmentColumn.inferred_type,
-    )
-  ) {
-    return "Choose a valid treatment column before continuing.";
+    if (
+      !treatmentColumn
+      || ![
+        "boolean",
+        "integer",
+        "string",
+      ].includes(
+        treatmentColumn.inferred_type,
+      )
+    ) {
+      return "Choose a valid treatment column before continuing.";
+    }
   }
 
   const outcomeColumn = columnsByName.get(
@@ -301,8 +314,8 @@ function validateSemanticMappingDraft(
   const assignedRoles = [
     draft.time_column,
     draft.unit_column,
-    draft.treatment_column,
     draft.outcome_column,
+    ...(requiresTreatment ? [draft.treatment_column] : []),
     ...(draft.spend_column === null
       ? []
       : [draft.spend_column]),
@@ -357,33 +370,35 @@ function validateSemanticMappingDraft(
     return "Covariate columns must not overlap assigned semantic roles.";
   }
 
-  const treatmentValue =
-    draft.treatment_value.trim();
+  if (requiresTreatment) {
+    const treatmentValue =
+      draft.treatment_value.trim();
 
-  const controlValue =
-    draft.control_value.trim();
+    const controlValue =
+      draft.control_value.trim();
 
-  if (!treatmentValue) {
-    return "Treatment value must not be blank.";
-  }
+    if (!treatmentValue) {
+      return "Treatment value must not be blank.";
+    }
 
-  if (!controlValue) {
-    return "Control value must not be blank.";
-  }
+    if (!controlValue) {
+      return "Control value must not be blank.";
+    }
 
-  if (treatmentValue.length > 255) {
-    return "Treatment value must not exceed 255 characters.";
-  }
+    if (treatmentValue.length > 255) {
+      return "Treatment value must not exceed 255 characters.";
+    }
 
-  if (controlValue.length > 255) {
-    return "Control value must not exceed 255 characters.";
-  }
+    if (controlValue.length > 255) {
+      return "Control value must not exceed 255 characters.";
+    }
 
-  if (
-    treatmentValue.toLocaleLowerCase()
-    === controlValue.toLocaleLowerCase()
-  ) {
-    return "Treatment and control values must be distinct.";
+    if (
+      treatmentValue.toLocaleLowerCase()
+      === controlValue.toLocaleLowerCase()
+    ) {
+      return "Treatment and control values must be distinct.";
+    }
   }
 
   return null;
@@ -426,10 +441,36 @@ function observedColumnValues(
   return values;
 }
 
+function resolveMappingEstimator(
+  routeEstimator: string | undefined,
+  storedEstimator: string | null,
+): string {
+  if (routeEstimator === "marketing_mix_model") {
+    return "marketing_mix_model";
+  }
+
+  if (routeEstimator) {
+    return "difference_in_differences";
+  }
+
+  return storedEstimator === "marketing_mix_model"
+    ? "marketing_mix_model"
+    : "difference_in_differences";
+}
+
+function subscribeToEstimatorPreference(
+  onStoreChange: () => void,
+): () => void {
+  window.addEventListener("storage", onStoreChange);
+
+  return () => window.removeEventListener("storage", onStoreChange);
+}
+
 export function SemanticMappingClient({
   workspaceId,
   projectId,
   datasetId,
+  estimator: routeEstimator,
 }: SemanticMappingClientProps) {
   const router = useRouter();
   const [state, setState] =
@@ -444,6 +485,36 @@ export function SemanticMappingClient({
     useState<SaveState>({
       kind: "idle",
     });
+  const readEstimatorPreference = useCallback(
+    () =>
+      resolveMappingEstimator(
+        routeEstimator,
+        window.localStorage.getItem(
+          datasetEstimatorPreferenceKey(datasetId),
+        ),
+      ),
+    [datasetId, routeEstimator],
+  );
+  const readServerEstimatorPreference = useCallback(
+    () => resolveMappingEstimator(routeEstimator, null),
+    [routeEstimator],
+  );
+  const estimator = useSyncExternalStore(
+    subscribeToEstimatorPreference,
+    readEstimatorPreference,
+    readServerEstimatorPreference,
+  );
+  const requiresTreatment = estimator !== "marketing_mix_model";
+  const visibleSteps = requiresTreatment
+    ? SEMANTIC_MAPPING_STEPS
+    : SEMANTIC_MAPPING_STEPS.filter((wizardStep) => wizardStep.number !== 3);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      datasetEstimatorPreferenceKey(datasetId),
+      estimator,
+    );
+  }, [datasetId, estimator]);
 
   useEffect(() => {
     let active = true;
@@ -522,13 +593,21 @@ export function SemanticMappingClient({
           return;
         }
 
+        const draft = draftFromMapping(mapping);
+
+        if (!requiresTreatment) {
+          draft.treatment_column = "";
+          draft.treatment_value = "";
+          draft.control_value = "";
+        }
+
         setState({
           kind: "ready",
           dataset,
           columns: preview.columns,
           rows: preview.rows,
           mapping,
-          draft: draftFromMapping(mapping),
+          draft,
         });
       } catch {
         if (active && !controller.signal.aborted) {
@@ -551,6 +630,8 @@ export function SemanticMappingClient({
     workspaceId,
     projectId,
     datasetId,
+    estimator,
+    requiresTreatment,
   ]);
 
   if (state.kind === "loading") {
@@ -746,7 +827,7 @@ export function SemanticMappingClient({
     }
 
     setStepError(null);
-    setStep(3);
+    setStep(requiresTreatment ? 3 : 4);
   }
 
   function updateTreatmentColumn(
@@ -902,8 +983,11 @@ export function SemanticMappingClient({
       === state.draft.time_column
       || state.draft.outcome_column
       === state.draft.unit_column
-      || state.draft.outcome_column
-      === state.draft.treatment_column;
+      || (
+        requiresTreatment
+        && state.draft.outcome_column
+          === state.draft.treatment_column
+      );
 
     if (
       selectedColumn === undefined
@@ -956,7 +1040,7 @@ export function SemanticMappingClient({
       const assignedColumns = new Set([
         current.draft.time_column,
         current.draft.unit_column,
-        current.draft.treatment_column,
+        ...(requiresTreatment ? [current.draft.treatment_column] : []),
         current.draft.outcome_column,
         current.draft.spend_column,
       ]);
@@ -995,6 +1079,7 @@ export function SemanticMappingClient({
       validateSemanticMappingDraft(
         state.draft,
         state.columns,
+        requiresTreatment,
       );
 
     if (validationError !== null) {
@@ -1013,6 +1098,9 @@ export function SemanticMappingClient({
       state.rows,
       state.draft.treatment_column,
     );
+  const visibleStepIndex = visibleSteps.findIndex(
+    (wizardStep) => wizardStep.number === step,
+  );
 
   async function saveMapping(): Promise<void> {
     if (
@@ -1040,13 +1128,30 @@ export function SemanticMappingClient({
     });
 
     try {
-      const savedMapping =
-        await createSemanticMapping(
+      const request: CreateSemanticMappingInput = requiresTreatment
+        ? state.draft
+        : {
+            time_column: state.draft.time_column,
+            unit_column: state.draft.unit_column,
+            outcome_column: state.draft.outcome_column,
+            spend_column: state.draft.spend_column,
+            covariate_columns: state.draft.covariate_columns,
+          };
+      const savedMapping = requiresTreatment
+        ? await createSemanticMapping(
+            token,
+            workspaceId,
+            projectId,
+            datasetId,
+            request,
+          )
+        : await createSemanticMapping(
           token,
           workspaceId,
           projectId,
           datasetId,
-          state.draft,
+          request,
+          estimator,
         );
 
       setState((current) => {
@@ -1097,7 +1202,7 @@ export function SemanticMappingClient({
             Semantic Mapping
           </h1>
           <p>
-            Step {step} of 6
+            Step {visibleStepIndex + 1} of {visibleSteps.length}
           </p>
 
           {state.mapping !== null ? (
@@ -1112,8 +1217,8 @@ export function SemanticMappingClient({
           aria-label="Semantic Mapping steps"
         >
           <ol>
-            {SEMANTIC_MAPPING_STEPS.map(
-              (wizardStep) => (
+            {visibleSteps.map(
+              (wizardStep, index) => (
                 <li
                   key={wizardStep.number}
                   aria-current={
@@ -1124,13 +1229,13 @@ export function SemanticMappingClient({
                   className={
                     step === wizardStep.number
                       ? "is-current"
-                      : step > wizardStep.number
+                      : index < visibleStepIndex
                         ? "is-complete"
                         : undefined
                   }
                 >
                   <span aria-hidden="true">
-                    {wizardStep.number}
+                    {index + 1}
                   </span>
                   <strong>
                     {wizardStep.label}
@@ -1150,6 +1255,7 @@ export function SemanticMappingClient({
               workspaceId,
               projectId,
               datasetId,
+              estimator,
             )}
           >
             Explore Dataset
@@ -1466,7 +1572,7 @@ export function SemanticMappingClient({
               type="button"
               onClick={() => {
                 setStepError(null);
-                setStep(3);
+                setStep(requiresTreatment ? 3 : 2);
               }}
             >
               Back
@@ -1640,6 +1746,7 @@ export function SemanticMappingClient({
           >
             <SemanticMappingReview
               draft={state.draft}
+              includeTreatment={requiresTreatment}
             />
 
             {saveState.kind === "success" ? (

@@ -47,6 +47,8 @@ export function DataExplorer({
   state,
   quality,
   dataset,
+  estimator,
+  onEstimatorChange,
   selectedOutcome,
   selectedInterventionDate,
   onInterventionDateChange,
@@ -66,6 +68,8 @@ export function DataExplorer({
       };
   quality?: DataQuality;
   dataset?: Dataset;
+  estimator?: string;
+  onEstimatorChange?: (value: string) => void;
   selectedOutcome?: string;
   selectedInterventionDate?: string;
   onInterventionDateChange?: (value: string) => void;
@@ -137,6 +141,8 @@ export function DataExplorer({
             columns={data.columns}
             activeTab={activeTab}
             onTabChange={setActiveTab}
+            estimator={estimator}
+            onEstimatorChange={onEstimatorChange}
             selectedOutcome={selectedOutcome}
             selectedInterventionDate={selectedInterventionDate}
             onInterventionDateChange={onInterventionDateChange}
@@ -156,6 +162,7 @@ export function DataExplorer({
 
       <RowEvidenceTable
         data={data}
+        frameTreatmentValues={estimator !== "marketing_mix_model"}
         exportHref={exportHref}
         onPreviousPage={onPreviousPage}
         onNextPage={onNextPage}

@@ -72,8 +72,10 @@ function createProps(): SettingsProps {
     controlGeoAssignments: [],
     geoCoordinates: {},
     geoOutcomeKind: "outcome",
-    spendColumn: "spend",
-    covariateColumns: [],
+    mediaChannels: [],
+    controlColumns: [],
+    aggregateSpendColumn: "total_spend",
+    mappedOutcomeColumn: "revenue",
     mmmSeasonalityPeriod: "52",
     mmmOutcomeKind: "revenue",
     mmmAdstockDecay: {},
@@ -84,7 +86,6 @@ function createProps(): SettingsProps {
     onGeoOutcomeKindChange: vi.fn(),
     onGeoCoordinateChange: vi.fn(),
     onMmmSeasonalityPeriodChange: vi.fn(),
-    onMmmOutcomeKindChange: vi.fn(),
     onMmmAdstockDecayChange: vi.fn(),
     onMmmSaturationHalfSpendChange: vi.fn(),
     onRewardColumnChange: vi.fn(),
@@ -157,25 +158,37 @@ describe("premium estimator settings", () => {
   it("presents channel-level Marketing Mix settings", () => {
     const props = renderSettings({
       estimator: "marketing_mix_model",
-      spendColumn: "spend",
-      covariateColumns: ["revenue"],
+      mediaChannels: ["paid_search_spend", "social_spend"],
+      controlColumns: ["sessions", "holiday", "promotion"],
+      aggregateSpendColumn: "total_spend",
+      mappedOutcomeColumn: "conversions",
+      mmmOutcomeKind: "conversions",
     });
 
     expect(screen.getByLabelText("Seasonality period")).toHaveValue(52);
 
-    expect(screen.getByLabelText("Adstock decay spend")).toHaveValue(0.5);
+    expect(screen.getByLabelText("MMM outcome kind")).toHaveValue(
+      "conversions",
+    );
+    expect(screen.getByLabelText("MMM outcome kind")).toHaveAttribute(
+      "readonly",
+    );
+    expect(screen.getByLabelText("Adstock decay paid_search_spend")).toHaveValue(0.5);
 
-    expect(screen.getByLabelText("Saturation half-spend revenue")).toHaveValue(
+    expect(screen.getByLabelText("Saturation half-spend social_spend")).toHaveValue(
       1,
     );
 
-    fireEvent.change(screen.getByLabelText("Adstock decay spend"), {
+    fireEvent.change(screen.getByLabelText("Adstock decay paid_search_spend"), {
       target: {
         value: "0.7",
       },
     });
 
-    expect(props.onMmmAdstockDecayChange).toHaveBeenCalledWith("spend", "0.7");
+    expect(props.onMmmAdstockDecayChange).toHaveBeenCalledWith(
+      "paid_search_spend",
+      "0.7",
+    );
   });
 
   it("shows Off-policy readiness from the configured reward columns", () => {

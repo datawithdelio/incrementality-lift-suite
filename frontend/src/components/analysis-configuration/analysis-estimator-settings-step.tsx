@@ -22,8 +22,10 @@ type AnalysisEstimatorSettingsStepProps = {
 
   geoOutcomeKind: string;
 
-  spendColumn: string | null;
-  covariateColumns: string[];
+  mediaChannels: string[];
+  controlColumns: string[];
+  aggregateSpendColumn: string | null;
+  mappedOutcomeColumn: string;
 
   mmmSeasonalityPeriod: string;
   mmmOutcomeKind: string;
@@ -45,8 +47,6 @@ type AnalysisEstimatorSettingsStepProps = {
   ) => void;
 
   onMmmSeasonalityPeriodChange: (value: string) => void;
-
-  onMmmOutcomeKindChange: (value: string) => void;
 
   onMmmAdstockDecayChange: (channel: string, value: string) => void;
 
@@ -121,8 +121,10 @@ export function AnalysisEstimatorSettingsStep({
   controlGeoAssignments,
   geoCoordinates,
   geoOutcomeKind,
-  spendColumn,
-  covariateColumns,
+  mediaChannels,
+  controlColumns,
+  aggregateSpendColumn,
+  mappedOutcomeColumn,
   mmmSeasonalityPeriod,
   mmmOutcomeKind,
   mmmAdstockDecay,
@@ -133,7 +135,6 @@ export function AnalysisEstimatorSettingsStep({
   onGeoOutcomeKindChange,
   onGeoCoordinateChange,
   onMmmSeasonalityPeriodChange,
-  onMmmOutcomeKindChange,
   onMmmAdstockDecayChange,
   onMmmSaturationHalfSpendChange,
   onRewardColumnChange,
@@ -170,18 +171,12 @@ export function AnalysisEstimatorSettingsStep({
     (value) => coordinateValidationMessage(geoCoordinates[value]) !== null,
   ).length;
 
-  const mmmChannels = Array.from(
-    new Set(
-      [spendColumn, ...covariateColumns].filter(
-        (value): value is string =>
-          typeof value === "string" && value.length > 0,
-      ),
-    ),
-  );
-
   const seasonalityPeriod = Number(mmmSeasonalityPeriod);
 
-  const mmmReady = Number.isInteger(seasonalityPeriod) && seasonalityPeriod > 1;
+  const mmmReady =
+    mediaChannels.length > 0
+    && Number.isInteger(seasonalityPeriod)
+    && seasonalityPeriod > 1;
 
   const offPolicySettingsReady =
     rewardColumn.length > 0 && expectedRewardColumn.length > 0;
@@ -195,7 +190,7 @@ export function AnalysisEstimatorSettingsStep({
 
   const readinessMessage =
     estimator === "difference_in_differences"
-      ? "No additional estimator settings are required."
+      ? "No additional estimator settings are required. did-v1 uses an unadjusted Difference in Differences specification; mapped covariates are preserved for lineage but are not included in estimation."
       : estimator === "synthetic_control"
         ? "The treated unit and donor pool fully define this estimator."
         : estimator === "geo_holdout"
@@ -206,10 +201,12 @@ export function AnalysisEstimatorSettingsStep({
               } attention.`
           : estimator === "marketing_mix_model"
             ? mmmReady
-              ? `${mmmChannels.length} media ${
-                  mmmChannels.length === 1 ? "channel is" : "channels are"
+              ? `${mediaChannels.length} media ${
+                  mediaChannels.length === 1 ? "channel is" : "channels are"
                 } configured.`
-              : "Enter a seasonality period greater than one."
+              : mediaChannels.length === 0
+                ? "No channel-level spend columns were detected."
+                : "Enter a seasonality period greater than one."
             : offPolicySettingsReady
               ? "Reward columns and evaluation method are ready."
               : "Select both reward columns before continuing.";
@@ -277,8 +274,9 @@ export function AnalysisEstimatorSettingsStep({
                 </p>
 
                 <small>
-                  The analysis period and mapped treatment assignment provide
-                  the required estimator inputs.
+                  did-v1 estimates outcome ~ treated + post + treated:post
+                  with standard errors clustered by unit. Mapped covariates are
+                  preserved for lineage but are not included in this estimator.
                 </small>
               </span>
             </article>
@@ -476,7 +474,7 @@ export function AnalysisEstimatorSettingsStep({
           <div className="analysis-settings-content">
             <div className="analysis-settings-summary">
               <span>
-                <strong>{mmmChannels.length}</strong>
+                <strong>{mediaChannels.length}</strong>
 
                 <small>Media channels</small>
               </span>
@@ -535,27 +533,38 @@ export function AnalysisEstimatorSettingsStep({
                 <span>
                   <strong>MMM outcome kind</strong>
 
-                  <small>Business interpretation of the modeled outcome.</small>
+                  <small>
+                    Derived from mapped outcome “{mappedOutcomeColumn}”.
+                  </small>
                 </span>
 
-                <select
+                <input
+                  type="text"
                   aria-label="MMM outcome kind"
                   value={mmmOutcomeKind}
-                  onChange={(event) => {
-                    onMmmOutcomeKindChange(event.target.value);
-                  }}
-                >
-                  <option value="revenue">Revenue</option>
-
-                  <option value="conversions">Conversions</option>
-
-                  <option value="outcome">Outcome</option>
-                </select>
+                  readOnly
+                />
               </label>
             </div>
 
+            <dl className="analysis-mmm-role-summary">
+              <div>
+                <dt>Aggregate spend</dt>
+                <dd>{aggregateSpendColumn ?? "Not mapped"}</dd>
+              </div>
+
+              <div>
+                <dt>Control variables</dt>
+                <dd>
+                  {controlColumns.length > 0
+                    ? controlColumns.join(", ")
+                    : "None mapped"}
+                </dd>
+              </div>
+            </dl>
+
             <div className="analysis-mmm-channel-grid">
-              {mmmChannels.map((channel) => (
+              {mediaChannels.map((channel) => (
                 <fieldset className="analysis-mmm-channel-card" key={channel}>
                   <legend>
                     <span aria-hidden="true">↗</span>

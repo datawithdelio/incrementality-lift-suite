@@ -5,6 +5,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
     Request,
     status,
 )
@@ -58,6 +59,7 @@ from incrementality_api.application.datasets.upload_dataset import (
     UploadDataset,
     UploadDatasetCommand,
 )
+from incrementality_api.domain.analysis_runs.status import AnalysisEstimatorType
 from incrementality_api.domain.authorization.permissions import (
     WorkspacePermission,
 )
@@ -278,6 +280,10 @@ async def create_project_dataset_semantic_mapping(
         CreateDatasetSemanticMapping,
         Depends(get_create_dataset_semantic_mapping_service),
     ],
+    estimator: Annotated[
+        AnalysisEstimatorType,
+        Query(),
+    ] = AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
 ) -> DatasetSemanticMappingResponse:
     try:
         mapping = await service.execute(
@@ -288,12 +294,13 @@ async def create_project_dataset_semantic_mapping(
                 created_by_user_id=principal.user_id,
                 time_column=request.time_column,
                 unit_column=request.unit_column,
-                treatment_column=(request.treatment_column),
+                treatment_column=request.treatment_column,
                 outcome_column=request.outcome_column,
                 spend_column=request.spend_column,
                 covariate_columns=(request.covariate_columns),
-                treatment_value=(request.treatment_value),
+                treatment_value=request.treatment_value,
                 control_value=request.control_value,
+                estimator=estimator,
             )
         )
     except DatasetUnavailableError as error:

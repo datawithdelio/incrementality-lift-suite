@@ -197,6 +197,28 @@ def test_creates_valid_semantic_mapping() -> None:
     assert mapping.updated_at == MAPPING_CREATED_AT
 
 
+def test_creates_mmm_mapping_without_treatment_roles() -> None:
+    mapping = create_mapping(
+        treatment_column=None,
+        treatment_value=None,
+        control_value=None,
+    )
+
+    assert mapping.treatment_column is None
+    assert mapping.treatment_value is None
+    assert mapping.control_value is None
+
+
+def test_rejects_partial_treatment_mapping() -> None:
+    with pytest.raises(
+        InvalidDatasetSemanticMappingError,
+        match="must be supplied together",
+    ):
+        create_mapping(
+            treatment_column=None,
+        )
+
+
 def test_rejects_dataset_that_is_not_ready() -> None:
     dataset = Dataset.register(
         workspace_id=uuid4(),

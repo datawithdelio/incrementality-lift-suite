@@ -9,6 +9,12 @@ from incrementality_api.application.datasets.ports import (
     DatasetClock,
     DatasetSemanticMappingUnitOfWork,
 )
+from incrementality_api.domain.analysis_runs.status import (
+    AnalysisEstimatorType,
+)
+from incrementality_api.domain.datasets.errors import (
+    InvalidDatasetSemanticMappingError,
+)
 from incrementality_api.domain.datasets.semantic_mapping import (
     DatasetSemanticMapping,
 )
@@ -22,12 +28,13 @@ class CreateDatasetSemanticMappingCommand:
     created_by_user_id: UUID
     time_column: str
     unit_column: str
-    treatment_column: str
+    treatment_column: str | None
     outcome_column: str
     spend_column: str | None
     covariate_columns: tuple[str, ...]
-    treatment_value: str
-    control_value: str
+    treatment_value: str | None
+    control_value: str | None
+    estimator: AnalysisEstimatorType = AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES
 
 
 class CreateDatasetSemanticMapping:
@@ -46,6 +53,20 @@ class CreateDatasetSemanticMapping:
         self,
         command: CreateDatasetSemanticMappingCommand,
     ) -> DatasetSemanticMapping:
+        treatment_fields = (
+            command.treatment_column,
+            command.treatment_value,
+            command.control_value,
+        )
+        if (
+            command.estimator is not AnalysisEstimatorType.MARKETING_MIX_MODEL
+            and any(value is None for value in treatment_fields)
+        ):
+            raise InvalidDatasetSemanticMappingError(
+                "Treatment column, treatment value, and control value are required "
+                "for this estimator."
+            )
+
         async with self._unit_of_work:
             dataset = await self._unit_of_work.datasets.get_by_scope(
                 workspace_id=command.workspace_id,

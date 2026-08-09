@@ -353,47 +353,112 @@ class GeoMap(Flowable):  # type: ignore[misc]
     def draw(self) -> None:
         c = self.canv
         c.saveState()
-        c.setFillColor(SUBTLE)
+        c.setFillColor(colors.white)
         c.setStrokeColor(LINE)
         c.roundRect(0, 0, self.width, self.height, 10, fill=1, stroke=1)
-        x0, y0, mw, mh = 12, 28, self.width - 24, self.height - 42
+
+        coordinates = [
+            (lat, lon)
+            for item in self.assignments
+            if (lat := number(item.get("latitude"))) is not None
+            and (lon := number(item.get("longitude"))) is not None
+        ]
+        treated_count = sum(item.get("assignment") == "treatment" for item in self.assignments)
+        holdout_count = len(self.assignments) - treated_count
+
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.drawString(12, self.height - 17, "Assignment geography")
+        c.setFillColor(MUTED)
+        c.setFont("Helvetica", 6.2)
+        c.drawRightString(
+            self.width - 12,
+            self.height - 17,
+            f"{treated_count} treated  /  {holdout_count} holdout",
+        )
+
+        x0, y0, mw, mh = 12, 29, self.width - 24, self.height - 58
+        c.setFillColor(SUBTLE)
+        c.setStrokeColor(colors.HexColor("#EFEAF8"))
+        c.roundRect(x0, y0, mw, mh, 7, fill=1, stroke=1)
+
+        if coordinates:
+            latitudes = [lat for lat, _ in coordinates]
+            longitudes = [lon for _, lon in coordinates]
+            lat_center = (min(latitudes) + max(latitudes)) / 2
+            lon_center = (min(longitudes) + max(longitudes)) / 2
+            lat_span = max(max(latitudes) - min(latitudes), 1.5) * 1.28
+            lon_span = max(max(longitudes) - min(longitudes), 1.5) * 1.28
+            lat_min, lon_min = lat_center - lat_span / 2, lon_center - lon_span / 2
+        else:
+            lat_span, lon_span = 26.5, 60
+            lat_min, lon_min = 24, -126
 
         def project(lon: float, lat: float) -> tuple[float, float]:
-            return x0 + (lon + 126) / 60 * mw, y0 + (lat - 24) / 26.5 * mh
+            return (
+                x0 + (lon - lon_min) / lon_span * mw,
+                y0 + (lat - lat_min) / lat_span * mh,
+            )
 
-        c.setStrokeColor(colors.HexColor("#ECEAF0"))
-        c.setLineWidth(0.4)
+        c.setStrokeColor(colors.HexColor("#EAE6F2"))
+        c.setLineWidth(0.35)
+        c.setDash(1, 3)
         for i in range(1, 6):
             c.line(x0 + mw * i / 6, y0, x0 + mw * i / 6, y0 + mh)
         for i in range(1, 4):
             c.line(x0, y0 + mh * i / 4, x0 + mw, y0 + mh * i / 4)
-        points = [project(lon, lat) for lon, lat in self.OUTLINE]
-        path = c.beginPath()
-        path.moveTo(*points[0])
-        for point in points[1:]:
-            path.lineTo(*point)
-        path.close()
-        c.setFillColor(colors.HexColor("#F0F1F4"))
-        c.setStrokeColor(colors.HexColor("#D6D8DE"))
-        c.drawPath(path, fill=1, stroke=1)
+        c.setDash()
+
+        if not coordinates:
+            points = [project(lon, lat) for lon, lat in self.OUTLINE]
+            path = c.beginPath()
+            path.moveTo(*points[0])
+            for point in points[1:]:
+                path.lineTo(*point)
+            path.close()
+            c.setFillColor(colors.HexColor("#F0F1F4"))
+            c.setStrokeColor(colors.HexColor("#D6D8DE"))
+            c.drawPath(path, fill=1, stroke=1)
+
         for item in self.assignments:
             lat, lon = number(item.get("latitude")), number(item.get("longitude"))
             if lat is None or lon is None:
                 continue
             x, y = project(lon, lat)
-            c.setFillColor(PURPLE if item.get("assignment") == "treatment" else GREEN)
-            c.setStrokeColor(colors.white)
-            c.setLineWidth(1.3)
-            c.circle(x, y, 4.2, fill=1, stroke=1)
+            treatment = item.get("assignment") == "treatment"
+            c.setFillColor(PURPLE_SOFT if treatment else GREEN_SOFT)
+            c.setStrokeColor(PURPLE_LINE if treatment else GREEN_LINE)
+            c.setLineWidth(0.5)
+            c.circle(x, y, 6.1, fill=1, stroke=1)
+
+            c.setFillColor(PURPLE if treatment else colors.white)
+            c.setStrokeColor(colors.white if treatment else GREEN)
+            c.setLineWidth(1.35)
+            c.circle(x, y, 3.8, fill=1, stroke=1)
+            if not treatment:
+                c.setFillColor(GREEN)
+                c.circle(x, y, 1.25, fill=1, stroke=0)
+
+        c.setFillColor(MUTED)
+        c.setFont("Helvetica", 5.8)
+        c.drawString(x0 + 7, y0 + mh - 11, "LOCAL ASSIGNMENT VIEW")
+
         c.setFont("Helvetica", 6.4)
         c.setFillColor(MUTED)
-        c.drawString(12, 11, "Treated geographies")
+        c.drawString(16, 11, "Treated geographies")
         c.setFillColor(PURPLE)
-        c.circle(7, 13, 3, fill=1, stroke=0)
+        c.setStrokeColor(colors.white)
+        c.setLineWidth(1)
+        c.circle(9, 13, 3.2, fill=1, stroke=1)
+
         c.setFillColor(MUTED)
-        c.drawString(106, 11, "Holdout geographies")
+        c.drawString(122, 11, "Holdout geographies")
+        c.setFillColor(colors.white)
+        c.setStrokeColor(GREEN)
+        c.setLineWidth(1.2)
+        c.circle(115, 13, 3.2, fill=1, stroke=1)
         c.setFillColor(GREEN)
-        c.circle(101, 13, 3, fill=1, stroke=0)
+        c.circle(115, 13, 1, fill=1, stroke=0)
         c.restoreState()
 
 
@@ -758,6 +823,13 @@ class PdfReportRenderer:
                 model.lineage,
             ),
         )
+        semantic = mapping(deep(lineage, {"semantic_mapping_snapshot"}))
+        selection = mapping(deep(lineage, {"analysis_selection_snapshot"}))
+        geography_column = (
+            selection.get("geography_column")
+            or deep(config, {"geography_column", "unit_column"})
+            or semantic.get("unit_column")
+        )
         assignments = [
             dict(item)
             for item in sequence(diagnostics.get("geographic_assignments"))
@@ -872,7 +944,9 @@ class PdfReportRenderer:
                         card(
                             "Design quality",
                             design,
-                            "Meets current diagnostic policy",
+                            "Meets current diagnostic policy"
+                            if design.lower() == "valid"
+                            else "Does not meet current diagnostic policy",
                             green=design.lower() == "valid",
                         ),
                         card(
@@ -1172,7 +1246,6 @@ class PdfReportRenderer:
         story += title_block(model.title, detail_title, detail_description)
         filters = deep(config, {"row_filters", "eligibility_filters"})
         excluded = deep(config, {"excluded_geographies"})
-        geography_column = deep(config, {"geography_column", "unit_column"})
         if is_geo:
             assignment = Table(
                 [
@@ -1252,7 +1325,7 @@ class PdfReportRenderer:
                     "Excluded geographies",
                     "None" if not excluded else short(excluded, 60),
                 ),
-                ("Geography column", human(geography_column)),
+                ("Geography column", text(geography_column)),
                 ("Outcome", outcome),
             )
         else:
@@ -1353,8 +1426,6 @@ class PdfReportRenderer:
             PageBreak(),
         ]
 
-        semantic = mapping(deep(lineage, {"semantic_mapping_snapshot"}))
-        selection = mapping(deep(lineage, {"analysis_selection_snapshot"}))
         libraries = deep(lineage, {"statistical_library_versions", "libraries"})
         source_revision = deep(lineage, {"source_revision"}) or "Not available"
         random_seed = deep(lineage, {"random_seed"}) or deep(config, {"random_seed"})
@@ -1647,18 +1718,6 @@ class PdfReportRenderer:
         filter_summary = short(
             " · ".join(filter_names) if filter_names else "None",
             68,
-        )
-
-        geography_column = (
-            selection.get("geography_column")
-            or deep(
-                config,
-                {
-                    "geography_column",
-                    "unit_column",
-                },
-            )
-            or semantic.get("unit_column")
         )
 
         mapping_selection_table = Table(

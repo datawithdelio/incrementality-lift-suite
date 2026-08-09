@@ -18,6 +18,7 @@ import type {
 
 type SemanticMappingReviewProps = {
   draft: CreateSemanticMappingInput;
+  includeTreatment?: boolean;
 };
 
 type MappingAssignment = {
@@ -29,8 +30,9 @@ type MappingAssignment = {
 
 function mappingAssignments(
   draft: CreateSemanticMappingInput,
+  includeTreatment: boolean,
 ): MappingAssignment[] {
-  return [
+  const assignments: MappingAssignment[] = [
     {
       label: "Time",
       value: draft.time_column,
@@ -40,11 +42,6 @@ function mappingAssignments(
       label: "Unit",
       value: draft.unit_column,
       icon: Cube,
-    },
-    {
-      label: "Treatment",
-      value: draft.treatment_column,
-      icon: ArrowsOutLineHorizontal,
     },
     {
       label: "Outcome",
@@ -78,23 +75,56 @@ function mappingAssignments(
           : undefined,
       icon: SlidersHorizontal,
     },
-    {
-      label: "Treatment value",
-      value: draft.treatment_value,
-      state: "treatment",
-      icon: Hash,
-    },
-    {
-      label: "Control value",
-      value: draft.control_value,
-      state: "control",
-      icon: Hash,
-    },
   ];
+
+  if (includeTreatment) {
+    assignments.splice(2, 0, {
+      label: "Treatment",
+      value: draft.treatment_column ?? "",
+      icon: ArrowsOutLineHorizontal,
+    });
+    assignments.push(
+      {
+        label: "Treatment value",
+        value: draft.treatment_value ?? "",
+        state: "treatment",
+        icon: Hash,
+      },
+      {
+        label: "Control value",
+        value: draft.control_value ?? "",
+        state: "control",
+        icon: Hash,
+      },
+    );
+  }
+
+  return assignments;
+}
+
+function reviewRequest(
+  draft: CreateSemanticMappingInput,
+  includeTreatment: boolean,
+): Record<string, unknown> {
+  if (includeTreatment) {
+    return draft;
+  }
+
+  return Object.fromEntries(
+    Object.entries(draft).filter(
+      ([key]) =>
+        ![
+          "treatment_column",
+          "treatment_value",
+          "control_value",
+        ].includes(key),
+    ),
+  );
 }
 
 export function SemanticMappingReview({
   draft,
+  includeTreatment = true,
 }: SemanticMappingReviewProps) {
   return (
     <>
@@ -128,7 +158,7 @@ export function SemanticMappingReview({
         className="mapping-assignment-list"
         aria-label="Mapping assignments"
       >
-        {mappingAssignments(draft).map(
+        {mappingAssignments(draft, includeTreatment).map(
           (assignment) => {
             const Icon = assignment.icon;
 
@@ -180,7 +210,7 @@ export function SemanticMappingReview({
         </summary>
 
         <pre aria-label="Semantic mapping request">
-          {JSON.stringify(draft, null, 2)}
+          {JSON.stringify(reviewRequest(draft, includeTreatment), null, 2)}
         </pre>
       </details>
 

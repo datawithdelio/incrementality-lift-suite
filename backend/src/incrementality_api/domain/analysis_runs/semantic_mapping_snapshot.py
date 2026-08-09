@@ -24,12 +24,12 @@ class SemanticMappingSnapshot:
 
     time_column: str
     unit_column: str
-    treatment_column: str
+    treatment_column: str | None
     outcome_column: str
     spend_column: str | None
     covariate_columns: tuple[str, ...]
-    treatment_value: str
-    control_value: str
+    treatment_value: str | None
+    control_value: str | None
 
     @classmethod
     def create(
@@ -37,23 +37,42 @@ class SemanticMappingSnapshot:
         *,
         time_column: str,
         unit_column: str,
-        treatment_column: str,
+        treatment_column: str | None,
         outcome_column: str,
         spend_column: str | None,
         covariate_columns: Sequence[str],
-        treatment_value: str,
-        control_value: str,
+        treatment_value: str | None,
+        control_value: str | None,
     ) -> Self:
         time = cls._normalize_column(time_column)
         unit = cls._normalize_column(unit_column)
-        treatment = cls._normalize_column(treatment_column)
+        treatment_fields = (treatment_column, treatment_value, control_value)
+        if any(value is None for value in treatment_fields) and not all(
+            value is None for value in treatment_fields
+        ):
+            raise InvalidAnalysisRunError(
+                "Treatment column, treatment value, and control value must be supplied together."
+            )
+        treatment = (
+            None if treatment_column is None else cls._normalize_column(treatment_column)
+        )
         outcome = cls._normalize_column(outcome_column)
         spend = None if spend_column is None else cls._normalize_column(spend_column)
         covariates = tuple(cls._normalize_column(name) for name in covariate_columns)
-        treated = cls._normalize_value(treatment_value, field_name="Treatment value")
-        control = cls._normalize_value(control_value, field_name="Control value")
+        treated = (
+            None
+            if treatment_value is None
+            else cls._normalize_value(treatment_value, field_name="Treatment value")
+        )
+        control = (
+            None
+            if control_value is None
+            else cls._normalize_value(control_value, field_name="Control value")
+        )
 
-        reserved = [time, unit, treatment, outcome]
+        reserved = [time, unit, outcome]
+        if treatment is not None:
+            reserved.append(treatment)
         if spend is not None:
             reserved.append(spend)
         if len(set(reserved)) != len(reserved):
@@ -64,7 +83,7 @@ class SemanticMappingSnapshot:
             raise InvalidAnalysisRunError(
                 "Covariate columns must not overlap assigned semantic roles."
             )
-        if treated.casefold() == control.casefold():
+        if treated is not None and control is not None and treated.casefold() == control.casefold():
             raise InvalidAnalysisRunError("Treatment and control values must be distinct.")
 
         return cls(
@@ -86,12 +105,16 @@ class SemanticMappingSnapshot:
         string_fields = (
             "time_column",
             "unit_column",
-            "treatment_column",
             "outcome_column",
-            "treatment_value",
-            "control_value",
         )
         if not all(isinstance(values[field], str) for field in string_fields):
+            raise InvalidAnalysisRunError("Semantic mapping snapshot fields have invalid types.")
+        treatment_fields = (
+            values["treatment_column"],
+            values["treatment_value"],
+            values["control_value"],
+        )
+        if not all(value is None or isinstance(value, str) for value in treatment_fields):
             raise InvalidAnalysisRunError("Semantic mapping snapshot fields have invalid types.")
         spend = values["spend_column"]
         if spend is not None and not isinstance(spend, str):

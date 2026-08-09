@@ -257,13 +257,16 @@ describe(
             "marketing_mix_model",
           outcomeKind: "revenue",
           seasonalityPeriod: 52,
+          mediaChannels: ["paid_search_spend", "social_spend"],
+          controlColumns: ["sessions", "holiday", "promotion"],
+          aggregateSpendColumn: "total_spend",
           adstockDecay: {
-            spend: 0.5,
-            social: 0.3,
+            paid_search_spend: 0.5,
+            social_spend: 0.3,
           },
           saturationHalfSpend: {
-            spend: 20,
-            social: 10,
+            paid_search_spend: 20,
+            social_spend: 10,
           },
         },
       };
@@ -283,13 +286,16 @@ describe(
           "2025-12-31",
         outcome_kind: "revenue",
         seasonality_period: 52,
+        media_channels: ["paid_search_spend", "social_spend"],
+        control_columns: ["sessions", "holiday", "promotion"],
+        aggregate_spend_column: "total_spend",
         adstock_decay: {
-          spend: 0.5,
-          social: 0.3,
+          paid_search_spend: 0.5,
+          social_spend: 0.3,
         },
         saturation_half_spend: {
-          spend: 20,
-          social: 10,
+          paid_search_spend: 20,
+          social_spend: 10,
         },
       });
 

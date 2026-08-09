@@ -15,7 +15,7 @@ import { useEffect, useMemo } from "react";
 
 import type { LatLngBoundsExpression } from "leaflet";
 
-type GeographySelectionState = "included" | "excluded" | "neutral";
+export type GeographySelectionState = "included" | "excluded" | "neutral";
 
 type AnalysisGeographyMapProps = {
   geographies: GeographySummaryItem[];
@@ -47,6 +47,10 @@ function selectionState(
   }
 
   return "neutral";
+}
+
+function selectionStateLabel(state: GeographySelectionState): string {
+  return state === "neutral" ? "Unassigned" : state;
 }
 
 function FitVerifiedBounds({
@@ -81,35 +85,52 @@ function FitVerifiedBounds({
   return null;
 }
 
-function markerPathOptions(state: GeographySelectionState): {
+export function geographyMarkerRadius(observationCount: number): number {
+  return Math.min(
+    11,
+    Math.max(7, 6 + Math.log10(Math.max(0, observationCount) + 1) * 1.5),
+  );
+}
+
+export function markerPathOptions(state: GeographySelectionState): {
+  className: string;
   color: string;
   fillColor: string;
   fillOpacity: number;
+  opacity: number;
   weight: number;
 } {
   if (state === "included") {
     return {
-      color: "#5936d9",
-      fillColor: "#6d4bea",
-      fillOpacity: 0.9,
-      weight: 3,
+      className:
+        "analysis-geography-marker analysis-geography-marker--included",
+      color: "#ffffff",
+      fillColor: "#6246e5",
+      fillOpacity: 0.96,
+      opacity: 1,
+      weight: 2.5,
     };
   }
 
   if (state === "excluded") {
     return {
-      color: "#a13c46",
-      fillColor: "#cc5b66",
-      fillOpacity: 0.82,
-      weight: 3,
+      className:
+        "analysis-geography-marker analysis-geography-marker--excluded",
+      color: "#a43d49",
+      fillColor: "#fff5f6",
+      fillOpacity: 0.98,
+      opacity: 1,
+      weight: 2.5,
     };
   }
 
   return {
-    color: "#536174",
+    className: "analysis-geography-marker analysis-geography-marker--neutral",
+    color: "#5f6878",
     fillColor: "#ffffff",
-    fillOpacity: 0.94,
-    weight: 2,
+    fillOpacity: 0.96,
+    opacity: 0.92,
+    weight: 2.25,
   };
 }
 
@@ -201,7 +222,7 @@ export function AnalysisGeographyMap({
 
       <p className="analysis-geography-map__instructions">
         Select a marker to cycle through included, excluded, and unassigned
-        states.
+        states. Marker size reflects observation volume.
       </p>
 
       <MapContainer
@@ -226,10 +247,7 @@ export function AnalysisGeographyMap({
             excludedGeographies,
           );
 
-          const radius = Math.min(
-            19,
-            Math.max(8, 7 + Math.log10(geography.observation_count + 1) * 3),
-          );
+          const radius = geographyMarkerRadius(geography.observation_count);
 
           return (
             <CircleMarker
@@ -243,13 +261,25 @@ export function AnalysisGeographyMap({
                 },
               }}
             >
-              <Tooltip direction="top" offset={[0, -4]}>
-                <strong>{geography.value}</strong>
-                <br />
-                {geography.observation_count.toLocaleString("en-US")}{" "}
-                observations
-                <br />
-                Status: {state}
+              <Tooltip
+                className="analysis-geography-map__tooltip"
+                direction="top"
+                offset={[0, -8]}
+                opacity={1}
+                sticky
+              >
+                <span className="analysis-geography-map__tooltip-content">
+                  <strong>{geography.value}</strong>
+
+                  <span>
+                    {geography.observation_count.toLocaleString("en-US")}{" "}
+                    observations
+                  </span>
+
+                  <small data-state={state}>
+                    {selectionStateLabel(state)}
+                  </small>
+                </span>
               </Tooltip>
 
               <Popup>
@@ -296,7 +326,7 @@ export function AnalysisGeographyMap({
             <button
               key={geography.value}
               type="button"
-              aria-label={`Change map selection for ${geography.value}. Current status: ${state}`}
+              aria-label={`Change map selection for ${geography.value}. Current status: ${selectionStateLabel(state)}`}
               data-state={state}
               onClick={() => {
                 cycleSelection(geography.value);
@@ -304,7 +334,7 @@ export function AnalysisGeographyMap({
             >
               <span>{geography.value}</span>
 
-              <small>{state}</small>
+              <small>{selectionStateLabel(state)}</small>
             </button>
           );
         })}

@@ -112,6 +112,9 @@ export type AnalysisEstimatorSettings =
         | "conversions"
         | "outcome";
       seasonalityPeriod: number;
+      mediaChannels: string[];
+      controlColumns: string[];
+      aggregateSpendColumn: string | null;
       adstockDecay: Record<
         string,
         number
@@ -270,6 +273,14 @@ function mapEstimatorSettings(
       return {
         outcome_kind:
           settings.outcomeKind,
+        media_channels: [
+          ...settings.mediaChannels,
+        ],
+        control_columns: [
+          ...settings.controlColumns,
+        ],
+        aggregate_spend_column:
+          settings.aggregateSpendColumn,
         seasonality_period:
           settings.seasonalityPeriod,
         adstock_decay:

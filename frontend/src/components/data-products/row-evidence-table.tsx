@@ -135,11 +135,13 @@ function treatmentStatus(
 
 export function RowEvidenceTable({
   data,
+  frameTreatmentValues = true,
   exportHref,
   onPreviousPage,
   onNextPage,
 }: {
   data: DatasetPreview;
+  frameTreatmentValues?: boolean;
   exportHref?: string;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
@@ -290,7 +292,9 @@ export function RowEvidenceTable({
 
                   const column = columnsByName.get(name);
 
-                  const status = treatmentStatus(name, value);
+                  const status = frameTreatmentValues
+                    ? treatmentStatus(name, value)
+                    : null;
 
                   const missing =
                     value === null || value === undefined || value === "";

@@ -26,6 +26,7 @@ from incrementality_api.application.authorization.authenticate_workspace import 
 from incrementality_api.application.data_products.explorer import (
     DatasetExplorerQuery,
     DatasetFilter,
+    InvalidInterventionDateError,
 )
 from incrementality_api.application.data_products.services import (
     DatasetProductQuery,
@@ -59,6 +60,7 @@ def _explorer_query(
     column_search: str | None,
     outcome_column: str | None = None,
     intervention_date: str | None = None,
+    estimator: str = "difference_in_differences",
 ) -> DatasetExplorerQuery:
     filters = (
         (DatasetFilter(filter_column, filter_operator, filter_value or ""),)
@@ -74,6 +76,7 @@ def _explorer_query(
         column_search,
         outcome_column,
         intervention_date,
+        estimator,
     )
 
 
@@ -94,6 +97,7 @@ async def preview_dataset(
     column_search: str | None = None,
     outcome_column: str | None = None,
     intervention_date: str | None = None,
+    estimator: str = "difference_in_differences",
     mapping_version: int | None = None,
 ) -> DatasetPreviewResponse:
     del principal
@@ -111,10 +115,16 @@ async def preview_dataset(
                 column_search,
                 outcome_column,
                 intervention_date,
+                estimator,
             ),
         )
     except DatasetUnavailableError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    except InvalidInterventionDateError as error:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            str(error),
+        ) from error
     return DatasetPreviewResponse.model_validate(result, from_attributes=True)
 
 

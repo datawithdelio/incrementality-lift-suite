@@ -534,7 +534,8 @@ export function AnalysisConfigurationReview({
                 {draft.settings.kind === "difference_in_differences" && (
                   <p className="analysis-review-empty">
                     No additional Difference in Differences settings are
-                    required.
+                    required. did-v1 is unadjusted; mapped covariates are retained
+                    in lineage but are not included in the fitted model.
                   </p>
                 )}
 

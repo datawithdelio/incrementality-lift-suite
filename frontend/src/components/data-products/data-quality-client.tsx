@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useDataQuality } from "../../lib/data-products/use-data-products";
 import {
+  datasetEstimatorPreferenceKey,
   datasetExplorePath,
   datasetMappingPath,
 } from "../../lib/datasets/routes";
@@ -21,9 +22,20 @@ export function DataQualityClient({
   projectId,
   datasetId,
 }: DataQualityClientProps) {
-  const [estimator, setEstimator] = useState(
-    "difference_in_differences",
+  const [estimator, setEstimator] = useState(() =>
+    typeof window !== "undefined" &&
+    window.localStorage.getItem(datasetEstimatorPreferenceKey(datasetId)) ===
+      "marketing_mix_model"
+      ? "marketing_mix_model"
+      : "difference_in_differences",
   );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      datasetEstimatorPreferenceKey(datasetId),
+      estimator,
+    );
+  }, [datasetId, estimator]);
 
   const { state, dataset } = useDataQuality(
     workspaceId,
@@ -40,6 +52,7 @@ export function DataQualityClient({
             workspaceId,
             projectId,
             datasetId,
+            estimator,
           )}
         >
           Explore Dataset
@@ -50,6 +63,7 @@ export function DataQualityClient({
             workspaceId,
             projectId,
             datasetId,
+            estimator,
           )}
         >
           Semantic Mapping

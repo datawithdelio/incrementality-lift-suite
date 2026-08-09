@@ -1,10 +1,13 @@
 import json
 from dataclasses import replace
 
+import pytest
+
 from incrementality_api.application.analysis_execution.estimation import (
     GeoHoldoutInput,
     MarketingMixInput,
     OffPolicyEvaluationInput,
+    PermanentEstimationError,
     SyntheticControlInput,
 )
 from incrementality_api.application.analysis_execution.input_loading import (
@@ -72,17 +75,32 @@ def test_builds_aggregated_marketing_mix_channels() -> None:
     _job, metadata = build_metadata()
     mapping = replace(
         metadata.mapping,
-        spend_column="search",
-        covariate_columns=("social",),
+        outcome_column="conversions",
+        spend_column="total_spend",
+        covariate_columns=("sessions", "holiday", "promotion"),
+    )
+    media_channels = (
+        "paid_search_spend",
+        "social_spend",
+        "tv_spend",
+        "display_spend",
+        "email_spend",
     )
     rows = (
         {
             "date": f"2026-01-{day:02d}",
             "market": "all",
             "treated": "no",
-            "revenue": str(100 + day),
-            "search": str(20 + day),
-            "social": str(10 + day),
+            "conversions": str(100 + day),
+            "total_spend": str(75 + day * 5),
+            "paid_search_spend": str(20 + day),
+            "social_spend": str(10 + day),
+            "tv_spend": str(15 + day),
+            "display_spend": str(12 + day),
+            "email_spend": str(8 + day),
+            "sessions": str(1_000 + day),
+            "holiday": "0",
+            "promotion": "1",
         }
         for day in range(1, 13)
     )
@@ -91,10 +109,13 @@ def test_builds_aggregated_marketing_mix_channels() -> None:
         estimator_type=AnalysisEstimatorType.MARKETING_MIX_MODEL,
         configuration_json=json.dumps(
             {
-                "adstock_decay": {"search": 0.5, "social": 0.3},
-                "saturation_half_spend": {"search": 20, "social": 10},
+                "media_channels": list(media_channels),
+                "control_columns": ["sessions", "holiday", "promotion"],
+                "aggregate_spend_column": "total_spend",
+                "adstock_decay": dict.fromkeys(media_channels, 0.5),
+                "saturation_half_spend": dict.fromkeys(media_channels, 20),
                 "seasonality_period": 7,
-                "outcome_kind": "revenue",
+                "outcome_kind": "conversions",
             }
         ),
     )
@@ -102,7 +123,60 @@ def test_builds_aggregated_marketing_mix_channels() -> None:
     result = MarketingMixInputBuilder().build(rows=tuple(rows), mapping=mapping, run=run)
 
     assert isinstance(result, MarketingMixInput)
-    assert result.observations[0].channel_spend == {"search": 21.0, "social": 11.0}
+    assert result.outcome_kind == "conversions"
+    assert result.observations[0].channel_spend == {
+        "paid_search_spend": 21.0,
+        "social_spend": 11.0,
+        "tv_spend": 16.0,
+        "display_spend": 13.0,
+        "email_spend": 9.0,
+    }
+    assert result.observations[0].controls == {
+        "sessions": 1001.0,
+        "holiday": 0.0,
+        "promotion": 1.0,
+    }
+    assert "total_spend" not in result.observations[0].channel_spend
+
+
+def test_rejects_mmm_outcome_kind_that_disagrees_with_mapped_outcome() -> None:
+    _job, metadata = build_metadata()
+    mapping = replace(
+        metadata.mapping,
+        outcome_column="conversions",
+        spend_column="total_spend",
+        covariate_columns=("sessions",),
+    )
+    rows = tuple(
+        {
+            "date": f"2026-01-{day:02d}",
+            "conversions": str(100 + day),
+            "paid_search_spend": str(20 + day),
+            "sessions": str(1_000 + day),
+        }
+        for day in range(1, 13)
+    )
+    run = replace(
+        metadata.run,
+        estimator_type=AnalysisEstimatorType.MARKETING_MIX_MODEL,
+        configuration_json=json.dumps(
+            {
+                "media_channels": ["paid_search_spend"],
+                "control_columns": ["sessions"],
+                "aggregate_spend_column": "total_spend",
+                "adstock_decay": {"paid_search_spend": 0.5},
+                "saturation_half_spend": {"paid_search_spend": 20},
+                "seasonality_period": 7,
+                "outcome_kind": "revenue",
+            }
+        ),
+    )
+
+    with pytest.raises(
+        PermanentEstimationError,
+        match="outcome_kind must match the mapped outcome column",
+    ):
+        MarketingMixInputBuilder().build(rows=rows, mapping=mapping, run=run)
 
 
 def test_builds_off_policy_input_from_custom_policy_columns() -> None:

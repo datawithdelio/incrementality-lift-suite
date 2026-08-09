@@ -21,6 +21,9 @@ type DataProductFailure = "permission" | "error";
 
 type DatasetExplorerFailure = DataProductFailure | "unavailable";
 
+const INVALID_INTERVENTION_DETAIL =
+  "Intervention date must fall inside the dataset date range.";
+
 const failure = (error: unknown): DataProductFailure => {
   if (
     error instanceof DataProductApiError &&
@@ -39,12 +42,19 @@ const explorerFailure = (error: unknown): DatasetExplorerFailure => {
 
   return failure(error);
 };
+
+const isInvalidInterventionError = (error: unknown): boolean =>
+  error instanceof DataProductApiError &&
+  error.status === 422 &&
+  error.detail === INVALID_INTERVENTION_DETAIL;
+
 export function useDatasetExplorer(
   workspace: string,
   project: string,
   dataset: string,
   options: ExplorerOptions,
   estimator: string,
+  onInvalidInterventionDate?: (value: string) => void,
 ) {
   const [state, setState] = useState<
     | LoadState<DatasetPreview>
@@ -143,6 +153,15 @@ export function useDatasetExplorer(
           return;
         }
 
+        if (
+          options.interventionDate &&
+          onInvalidInterventionDate &&
+          isInvalidInterventionError(error)
+        ) {
+          onInvalidInterventionDate(options.interventionDate);
+          return;
+        }
+
         const kind = explorerFailure(error);
 
         if (kind === "unavailable") {
@@ -168,7 +187,14 @@ export function useDatasetExplorer(
     return () => {
       controller.abort();
     };
-  }, [workspace, project, dataset, options, estimator]);
+  }, [
+    workspace,
+    project,
+    dataset,
+    options,
+    estimator,
+    onInvalidInterventionDate,
+  ]);
 
   return {
     state,

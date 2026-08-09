@@ -49,12 +49,12 @@ class DatasetSemanticMapping:
     version: int
     time_column: str
     unit_column: str
-    treatment_column: str
+    treatment_column: str | None
     outcome_column: str
     spend_column: str | None
     covariate_columns: tuple[str, ...]
-    treatment_value: str
-    control_value: str
+    treatment_value: str | None
+    control_value: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -71,12 +71,12 @@ class DatasetSemanticMapping:
         version: int,
         time_column: str,
         unit_column: str,
-        treatment_column: str,
+        treatment_column: str | None,
         outcome_column: str,
         spend_column: str | None,
         covariate_columns: tuple[str, ...],
-        treatment_value: str,
-        control_value: str,
+        treatment_value: str | None,
+        control_value: str | None,
         created_at: datetime,
     ) -> Self:
         if dataset.status is not DatasetStatus.READY:
@@ -104,8 +104,23 @@ class DatasetSemanticMapping:
         normalized_unit = cls._normalize_column_name(
             unit_column,
         )
-        normalized_treatment = cls._normalize_column_name(
+        treatment_fields = (
             treatment_column,
+            treatment_value,
+            control_value,
+        )
+
+        if any(value is None for value in treatment_fields) and not all(
+            value is None for value in treatment_fields
+        ):
+            raise InvalidDatasetSemanticMappingError(
+                "Treatment column, treatment value, and control value must be supplied together."
+            )
+
+        normalized_treatment = (
+            None
+            if treatment_column is None
+            else cls._normalize_column_name(treatment_column)
         )
         normalized_outcome = cls._normalize_column_name(
             outcome_column,
@@ -125,9 +140,11 @@ class DatasetSemanticMapping:
         assigned_roles = [
             normalized_time,
             normalized_unit,
-            normalized_treatment,
             normalized_outcome,
         ]
+
+        if normalized_treatment is not None:
+            assigned_roles.append(normalized_treatment)
 
         if normalized_spend is not None:
             assigned_roles.append(
@@ -153,9 +170,13 @@ class DatasetSemanticMapping:
             columns_by_name,
             normalized_unit,
         )
-        treatment_profile = cls._require_column(
-            columns_by_name,
-            normalized_treatment,
+        treatment_profile = (
+            None
+            if normalized_treatment is None
+            else cls._require_column(
+                columns_by_name,
+                normalized_treatment,
+            )
         )
         outcome_profile = cls._require_column(
             columns_by_name,
@@ -174,7 +195,10 @@ class DatasetSemanticMapping:
         if unit_profile.inferred_type not in _UNIT_TYPES:
             raise InvalidDatasetSemanticMappingError("Unit column must be string or integer.")
 
-        if treatment_profile.inferred_type not in _TREATMENT_TYPES:
+        if (
+            treatment_profile is not None
+            and treatment_profile.inferred_type not in _TREATMENT_TYPES
+        ):
             raise InvalidDatasetSemanticMappingError(
                 "Treatment column must be boolean, integer, or string."
             )
@@ -191,16 +215,28 @@ class DatasetSemanticMapping:
             if spend_profile.inferred_type not in _NUMERIC_TYPES:
                 raise InvalidDatasetSemanticMappingError("Spend column must be numeric.")
 
-        normalized_treatment_value = cls._normalize_value(
-            treatment_value,
-            field_name="Treatment value",
+        normalized_treatment_value = (
+            None
+            if treatment_value is None
+            else cls._normalize_value(
+                treatment_value,
+                field_name="Treatment value",
+            )
         )
-        normalized_control_value = cls._normalize_value(
-            control_value,
-            field_name="Control value",
+        normalized_control_value = (
+            None
+            if control_value is None
+            else cls._normalize_value(
+                control_value,
+                field_name="Control value",
+            )
         )
 
-        if normalized_treatment_value.casefold() == normalized_control_value.casefold():
+        if (
+            normalized_treatment_value is not None
+            and normalized_control_value is not None
+            and normalized_treatment_value.casefold() == normalized_control_value.casefold()
+        ):
             raise InvalidDatasetSemanticMappingError(
                 "Treatment and control values must be distinct."
             )

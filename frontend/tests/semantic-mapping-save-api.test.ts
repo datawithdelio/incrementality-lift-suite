@@ -82,6 +82,53 @@ describe("semantic mapping save API", () => {
     expect(result.version).toBe(2);
   });
 
+  it("omits treatment fields from an MMM save", async () => {
+    const request = {
+      time_column: "event_date",
+      unit_column: "region",
+      outcome_column: "revenue",
+      spend_column: "ad_spend",
+      covariate_columns: ["holiday_flag"],
+    };
+    const savedMapping = {
+      id: "mapping-mmm",
+      dataset_id: "dataset-1",
+      created_by_user_id: "user-1",
+      version: 1,
+      ...request,
+      treatment_column: null,
+      treatment_value: null,
+      control_value: null,
+      created_at: "2026-08-08T18:00:00Z",
+      updated_at: "2026-08-08T18:00:00Z",
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify(savedMapping), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    await createSemanticMapping(
+      "session-token",
+      "workspace-1",
+      "project-1",
+      "dataset-1",
+      request,
+      "marketing_mix_model",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/workspaces/workspace-1/projects/project-1/datasets/dataset-1/semantic-mappings?estimator=marketing_mix_model",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(request),
+      }),
+    );
+  });
+
   it("surfaces backend 422 validation detail and status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

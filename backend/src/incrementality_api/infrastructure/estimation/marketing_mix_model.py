@@ -17,8 +17,10 @@ from incrementality_api.infrastructure.estimation.package_versions import (
 @dataclass(frozen=True, slots=True)
 class MarketingMixDesign:
     channel_names: tuple[str, ...]
+    control_names: tuple[str, ...]
     outcomes: np.ndarray
     raw_spend: np.ndarray
+    controls: np.ndarray
     transformed_channels: np.ndarray
     seasonality: np.ndarray
 
@@ -57,13 +59,26 @@ class MarketingMixTransformer:
             raise PermanentEstimationError("Marketing mix modeling requires channel spend.")
         if any(tuple(sorted(item.channel_spend)) != channel_names for item in observations):
             raise PermanentEstimationError("Channel spend columns must be consistent by period.")
+        control_names = tuple(sorted(observations[0].controls))
+        if any(tuple(sorted(item.controls)) != control_names for item in observations):
+            raise PermanentEstimationError("MMM control columns must be consistent by period.")
         raw_spend = np.asarray(
             [[item.channel_spend[name] for name in channel_names] for item in observations],
             dtype=float,
         )
         outcomes = np.asarray([item.outcome for item in observations], dtype=float)
-        if not np.isfinite(raw_spend).all() or not np.isfinite(outcomes).all():
-            raise PermanentEstimationError("MMM outcomes and spend must be finite.")
+        controls = np.asarray(
+            [[item.controls[name] for name in control_names] for item in observations],
+            dtype=float,
+        ).reshape(len(observations), len(control_names))
+        if (
+            not np.isfinite(raw_spend).all()
+            or not np.isfinite(controls).all()
+            or not np.isfinite(outcomes).all()
+        ):
+            raise PermanentEstimationError(
+                "MMM outcomes, channel spend, and controls must be finite."
+            )
         if (raw_spend < 0).any():
             raise PermanentEstimationError("MMM channel spend must be nonnegative.")
         transformed = np.zeros_like(raw_spend)
@@ -93,8 +108,10 @@ class MarketingMixTransformer:
         )
         return MarketingMixDesign(
             channel_names=channel_names,
+            control_names=control_names,
             outcomes=outcomes,
             raw_spend=raw_spend,
+            controls=controls,
             transformed_channels=transformed,
             seasonality=seasonality,
         )
@@ -142,6 +159,14 @@ class PyMCMarketingMixModelRunner:
                 + pm.math.dot(design.transformed_channels, beta)
                 + pm.math.dot(design.seasonality, season_beta)
             )
+            if design.control_names:
+                control_beta = pm.Normal(
+                    "control_beta",
+                    mu=0,
+                    sigma=outcome_scale,
+                    shape=len(design.control_names),
+                )
+                mu = mu + pm.math.dot(design.controls, control_beta)
             pm.Normal("outcome", mu=mu, sigma=sigma, observed=design.outcomes)
             inference = pm.sample(
                 draws=self._draws,
@@ -307,6 +332,7 @@ class BayesianMarketingMixEstimator:
                 "family": "Bayesian additive media mix",
                 "adstock": dict(estimator_input.adstock_decay),
                 "saturation": "Hill half-spend curve",
+                "control_columns": list(design.control_names),
             },
             "warnings": warnings,
             "plain_language_conclusion": conclusion,

@@ -506,6 +506,25 @@ async def test_complete_semantic_mapping_api_lifecycle(
         assert second_response.status_code == 201
         assert second_response.json()["version"] == 2
 
+        mmm_payload = mapping_payload()
+        mmm_payload.pop("treatment_column")
+        mmm_payload.pop("treatment_value")
+        mmm_payload.pop("control_value")
+
+        mmm_response = await client.post(
+            f"{mapping_url}?estimator=marketing_mix_model",
+            headers={
+                "Authorization": (f"Bearer {primary_token}"),
+            },
+            json=mmm_payload,
+        )
+
+        assert mmm_response.status_code == 201
+        assert mmm_response.json()["version"] == 3
+        assert mmm_response.json()["treatment_column"] is None
+        assert mmm_response.json()["treatment_value"] is None
+        assert mmm_response.json()["control_value"] is None
+
         latest_response = await client.get(
             f"{mapping_url}/latest",
             headers={
@@ -514,7 +533,8 @@ async def test_complete_semantic_mapping_api_lifecycle(
         )
 
         assert latest_response.status_code == 200
-        assert latest_response.json()["version"] == 2
+        assert latest_response.json()["version"] == 3
+        assert latest_response.json()["treatment_column"] is None
 
         historical_response = await client.get(
             f"{mapping_url}/1",
@@ -608,7 +628,10 @@ async def test_complete_semantic_mapping_api_lifecycle(
             ).all()
         )
 
-    assert mapping_count == 2
-    assert covariate_count == 4
-    assert [mapping.version for mapping in mappings] == [1, 2]
+    assert mapping_count == 3
+    assert covariate_count == 6
+    assert [mapping.version for mapping in mappings] == [1, 2, 3]
+    assert mappings[-1].treatment_column is None
+    assert mappings[-1].treatment_value is None
+    assert mappings[-1].control_value is None
     assert all(mapping.dataset_id == dataset_id for mapping in mappings)

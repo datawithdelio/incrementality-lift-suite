@@ -517,6 +517,72 @@ describe("Analysis Configuration treatment and control", () => {
   });
 
   it("shows backend-compatible MMM settings", async () => {
+    getLatestSemanticMappingMock.mockResolvedValue({
+      id: "mapping-mmm",
+      dataset_id: "dataset-1",
+      created_by_user_id: "user-1",
+      version: 4,
+      time_column: "date",
+      unit_column: "geo",
+      treatment_column: null,
+      outcome_column: "conversions",
+      spend_column: "total_spend",
+      covariate_columns: ["sessions", "holiday", "promotion"],
+      treatment_value: null,
+      control_value: null,
+      created_at: "2026-08-08T00:00:00Z",
+      updated_at: "2026-08-08T00:00:00Z",
+    });
+    const channelNames = [
+      "paid_search_spend",
+      "social_spend",
+      "tv_spend",
+      "display_spend",
+      "email_spend",
+    ];
+    const numericColumn = (name: string) => ({
+      name,
+      inferred_type: "float",
+      missing_percentage: 0,
+      unique_count: 3,
+      minimum: 0,
+      maximum: 100,
+      mean: 10,
+      median: 10,
+    });
+    fetchPreviewMock.mockResolvedValue({
+      rows: [],
+      columns: [
+        {
+          ...numericColumn("date"),
+          inferred_type: "date",
+          minimum: "2025-01-01",
+          maximum: "2025-12-31",
+        },
+        {
+          ...numericColumn("geo"),
+          inferred_type: "string",
+        },
+        numericColumn("conversions"),
+        ...channelNames.map(numericColumn),
+        numericColumn("total_spend"),
+        numericColumn("sessions"),
+        numericColumn("holiday"),
+        numericColumn("promotion"),
+      ],
+      total_rows: 3,
+      page: 1,
+      page_size: 50,
+      total_pages: 1,
+      date_range: {
+        column: "date",
+        minimum: "2025-01-01",
+        maximum: "2025-12-31",
+      },
+      treatment_distribution: {},
+      outcome_distribution: {},
+    });
+
     await moveToFilters(/Marketing Mix Modeling/i);
 
     fireEvent.click(
@@ -545,16 +611,32 @@ describe("Analysis Configuration treatment and control", () => {
 
     expect(screen.getByLabelText("Seasonality period")).toHaveValue(52);
 
-    expect(screen.getByLabelText("MMM outcome kind")).toHaveValue("revenue");
-
-    expect(screen.getByLabelText("Adstock decay spend")).toHaveAttribute(
-      "type",
-      "number",
+    expect(screen.getByLabelText("MMM outcome kind")).toHaveValue(
+      "conversions",
+    );
+    expect(screen.getByLabelText("MMM outcome kind")).toHaveAttribute(
+      "readonly",
     );
 
-    expect(
-      screen.getByLabelText("Saturation half-spend spend"),
-    ).toHaveAttribute("type", "number");
+    for (const channel of channelNames) {
+      expect(screen.getByLabelText(`Adstock decay ${channel}`)).toHaveAttribute(
+        "type",
+        "number",
+      );
+    }
+
+    for (const nonChannel of [
+      "total_spend",
+      "sessions",
+      "holiday",
+      "promotion",
+    ]) {
+      expect(
+        screen.queryByLabelText(`Adstock decay ${nonChannel}`),
+      ).not.toBeInTheDocument();
+    }
+
+    expect(screen.getByText("sessions, holiday, promotion")).toBeInTheDocument();
   });
 
   it("collects Off-policy assignment and supported estimator settings", async () => {

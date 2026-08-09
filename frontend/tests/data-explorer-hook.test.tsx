@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import {
   afterEach,
   beforeEach,
@@ -31,14 +31,15 @@ vi.mock("../src/lib/data-products/api", () => ({
   fetchReports: vi.fn(),
   DataProductApiError: class DataProductApiError extends Error {
     constructor(
-      message: string,
       readonly status: number,
+      readonly detail?: string,
     ) {
-      super(message);
+      super("Data product is unavailable.");
     }
   },
 }));
 
+import { DataProductApiError } from "../src/lib/data-products/api";
 import { useDatasetExplorer } from "../src/lib/data-products/use-data-products";
 
 describe("useDatasetExplorer refetch state", () => {
@@ -95,6 +96,7 @@ describe("useDatasetExplorer refetch state", () => {
   });
 
   afterEach(() => {
+    cleanup();
     localStorage.clear();
   });
 
@@ -144,5 +146,97 @@ describe("useDatasetExplorer refetch state", () => {
     await waitFor(() => {
       expect(result.current.state.kind).toBe("loading");
     });
+  });
+
+  it("clears an invalid persisted intervention and recovers the explorer", async () => {
+    const clearInvalidIntervention = vi.fn();
+    fetchPreview.mockRejectedValueOnce(
+      new DataProductApiError(
+        422,
+        "Intervention date must fall inside the dataset date range.",
+      ),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ interventionDate }) =>
+        useDatasetExplorer(
+          "workspace-1",
+          "project-1",
+          "dataset-1",
+          {
+            page: 1,
+            search: "",
+            sortColumn: "",
+            descending: false,
+            filterColumn: "",
+            filterValue: "",
+            interventionDate,
+          },
+          "difference_in_differences",
+          clearInvalidIntervention,
+        ),
+      { initialProps: { interventionDate: "2025-05-25" } },
+    );
+
+    await waitFor(() => {
+      expect(clearInvalidIntervention).toHaveBeenCalledWith("2025-05-25");
+    });
+
+    rerender({ interventionDate: "" });
+
+    await waitFor(() => {
+      expect(result.current.state.kind).toBe("ready");
+    });
+
+    expect(fetchPreview).toHaveBeenLastCalledWith(
+      "workspace-1",
+      "project-1",
+      "dataset-1",
+      expect.objectContaining({ interventionDate: "" }),
+      "session-token",
+      expect.any(AbortSignal),
+    );
+    expect(assessQuality).toHaveBeenCalledWith(
+      "workspace-1",
+      "project-1",
+      "dataset-1",
+      "difference_in_differences",
+      "session-token",
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("does not swallow an unrelated 422 response", async () => {
+    const clearInvalidIntervention = vi.fn();
+    const options = {
+      page: 1,
+      search: "",
+      sortColumn: "",
+      descending: false,
+      filterColumn: "",
+      filterValue: "",
+      interventionDate: "2025-05-25",
+    };
+    fetchPreview.mockRejectedValueOnce(
+      new DataProductApiError(422, "The selected filter is invalid."),
+    );
+
+    const { result } = renderHook(() =>
+      useDatasetExplorer(
+        "workspace-1",
+        "project-1",
+        "dataset-1",
+        options,
+        "difference_in_differences",
+        clearInvalidIntervention,
+      ),
+    );
+
+    await waitFor(() => {
+      expect(result.current.state.kind).toBe("error");
+    });
+
+    expect(clearInvalidIntervention).not.toHaveBeenCalled();
+    expect(assessQuality).not.toHaveBeenCalled();
   });
 });

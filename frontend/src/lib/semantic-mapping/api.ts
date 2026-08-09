@@ -5,12 +5,12 @@ export type SemanticMapping = {
   version: number;
   time_column: string;
   unit_column: string;
-  treatment_column: string;
+  treatment_column: string | null;
   outcome_column: string;
   spend_column: string | null;
   covariate_columns: string[];
-  treatment_value: string;
-  control_value: string;
+  treatment_value: string | null;
+  control_value: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -113,12 +113,12 @@ export async function getLatestSemanticMapping(
 export type CreateSemanticMappingInput = {
   time_column: string;
   unit_column: string;
-  treatment_column: string;
+  treatment_column?: string;
   outcome_column: string;
   spend_column: string | null;
   covariate_columns: string[];
-  treatment_value: string;
-  control_value: string;
+  treatment_value?: string;
+  control_value?: string;
 };
 
 async function semanticMappingSaveErrorMessage(
@@ -148,25 +148,28 @@ export async function createSemanticMapping(
   projectId: string,
   datasetId: string,
   request: CreateSemanticMappingInput,
+  estimator = "difference_in_differences",
 ): Promise<SemanticMapping> {
   let response: Response;
+  const collectionPath = semanticMappingCollectionPath(
+    workspaceId,
+    projectId,
+    datasetId,
+  );
+  const requestPath =
+    estimator === "marketing_mix_model"
+      ? `${collectionPath}?estimator=marketing_mix_model`
+      : collectionPath;
 
   try {
-    response = await fetch(
-      semanticMappingCollectionPath(
-        workspaceId,
-        projectId,
-        datasetId,
-      ),
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(request),
+    response = await fetch(requestPath, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify(request),
+    });
   } catch {
     throw new SemanticMappingApiError(
       "Unable to connect while saving the semantic mapping.",

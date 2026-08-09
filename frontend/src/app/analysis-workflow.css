@@ -1555,17 +1555,20 @@
 }
 
 .analysis-geography-map__legend span[data-state="included"]::before {
-  border-color: #5936d9;
-  background: #6d4bea;
+  border-color: white;
+  background: #6246e5;
+  box-shadow:
+    0 0 0 1px #6246e5,
+    0 2px 5px rgb(60 40 145 / 22%);
 }
 
 .analysis-geography-map__legend span[data-state="excluded"]::before {
-  border-color: #a13c46;
-  background: #cc5b66;
+  border-color: #a43d49;
+  background: #fff5f6;
 }
 
 .analysis-geography-map__legend span[data-state="neutral"]::before {
-  border-color: #536174;
+  border-color: #5f6878;
   background: white;
 }
 
@@ -1599,6 +1602,94 @@
 .analysis-geography-map__canvas .leaflet-popup-content-wrapper {
   border-radius: var(--radius-control);
   box-shadow: 0 16px 42px rgb(15 23 42 / 18%);
+}
+
+.analysis-geography-map__canvas .analysis-geography-marker {
+  filter: drop-shadow(0 1px 2px rgb(15 23 42 / 24%));
+  transition:
+    fill-opacity 140ms ease,
+    filter 140ms ease,
+    stroke-width 140ms ease;
+}
+
+.analysis-geography-map__canvas .analysis-geography-marker:hover {
+  filter:
+    drop-shadow(0 2px 3px rgb(15 23 42 / 26%))
+    drop-shadow(0 0 5px rgb(98 70 229 / 22%));
+  fill-opacity: 1;
+  stroke-width: 3.25px;
+}
+
+.analysis-geography-map__canvas .analysis-geography-marker--excluded:hover {
+  filter:
+    drop-shadow(0 2px 3px rgb(15 23 42 / 24%))
+    drop-shadow(0 0 4px rgb(164 61 73 / 18%));
+}
+
+.analysis-geography-map__canvas .leaflet-tooltip.analysis-geography-map__tooltip {
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.7rem;
+  color: white;
+  background: #1d1b25;
+  box-shadow: 0 10px 28px rgb(15 23 42 / 24%);
+}
+
+.analysis-geography-map__canvas
+  .leaflet-tooltip-top.analysis-geography-map__tooltip::before {
+  border-top-color: #1d1b25;
+}
+
+.analysis-geography-map__tooltip-content {
+  display: grid;
+  gap: 0.18rem;
+  min-inline-size: 9.5rem;
+  padding: 0.65rem 0.72rem;
+}
+
+.analysis-geography-map__tooltip-content strong {
+  font-size: 0.78rem;
+  letter-spacing: -0.01em;
+}
+
+.analysis-geography-map__tooltip-content > span {
+  color: rgb(255 255 255 / 68%);
+  font-size: 0.68rem;
+}
+
+.analysis-geography-map__tooltip-content small {
+  display: inline-flex;
+  inline-size: fit-content;
+  align-items: center;
+  gap: 0.35rem;
+  margin-block-start: 0.22rem;
+  color: rgb(255 255 255 / 84%);
+  font-size: 0.65rem;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.analysis-geography-map__tooltip-content small::before {
+  content: "";
+  inline-size: 0.42rem;
+  block-size: 0.42rem;
+  border: 1px solid white;
+  border-radius: 50%;
+  background: white;
+}
+
+.analysis-geography-map__tooltip-content small[data-state="included"]::before {
+  background: #8a73f0;
+}
+
+.analysis-geography-map__tooltip-content small[data-state="excluded"]::before {
+  border-color: #f08c96;
+  background: transparent;
+}
+
+.analysis-geography-map__tooltip-content small[data-state="neutral"]::before {
+  border-color: #b7bfcc;
+  background: transparent;
 }
 
 .analysis-geography-map__popup {
@@ -1717,6 +1808,12 @@
 @media (max-width: 34rem) {
   .analysis-geography-map__canvas {
     block-size: 20rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-geography-map__canvas .analysis-geography-marker {
+    transition: none;
   }
 }
 
@@ -2821,6 +2918,41 @@ input[readonly][aria-label^="Longitude"] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.analysis-settings-primary-field input[readonly] {
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  cursor: default;
+}
+
+.analysis-mmm-role-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
+}
+
+.analysis-mmm-role-summary > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.analysis-mmm-role-summary dt {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.analysis-mmm-role-summary dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 760;
 }
 
 .analysis-policy-settings-grid {

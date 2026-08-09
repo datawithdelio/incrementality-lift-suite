@@ -255,6 +255,77 @@ describe("semantic mapping ready dataset experience", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("skips treatment mapping for Marketing Mix Modeling", async () => {
+    window.localStorage.setItem(
+      "incrementality_dataset_estimator_dataset-1",
+      "marketing_mix_model",
+    );
+
+    render(
+      <SemanticMappingClient
+        workspaceId="workspace-1"
+        projectId="project-1"
+        datasetId="dataset-1"
+      />,
+    );
+
+    expect(await screen.findByText("Step 1 of 5")).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("navigation", { name: "Semantic Mapping steps" }),
+      ).queryByText("Treatment"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Time column"), {
+      target: { value: "event_date" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Step 2 of 5")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Unit column"), {
+      target: { value: "region" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Step 3 of 5")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Outcome Identification" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Treatment Identification" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Outcome column"), {
+      target: { value: "revenue" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Step 4 of 5")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Spend and Covariates" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Step 5 of 5")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Review and Save" }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: "Mapping assignments" }))
+        .queryByText(/Treatment/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Semantic mapping request"),
+    ).not.toHaveTextContent("treatment_column");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByText("Step 4 of 5")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByText("Step 3 of 5")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByText("Step 2 of 5")).toBeInTheDocument();
+  });
+
   it("does not advance without a valid time-column selection", async () => {
     render(
       <SemanticMappingClient

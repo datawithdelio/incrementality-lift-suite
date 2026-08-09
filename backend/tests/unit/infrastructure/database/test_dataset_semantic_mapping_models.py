@@ -115,7 +115,13 @@ def test_dataset_semantic_mapping_table_contract() -> None:
     assert table.c.treatment_value.type.length == 255
     assert table.c.control_value.type.length == 255
 
-    assert table.c.spend_column.nullable is True
+    for optional_column in (
+        "spend_column",
+        "treatment_column",
+        "treatment_value",
+        "control_value",
+    ):
+        assert table.c[optional_column].nullable is True
 
     for required_column in (
         "dataset_id",
@@ -123,10 +129,7 @@ def test_dataset_semantic_mapping_table_contract() -> None:
         "version",
         "time_column",
         "unit_column",
-        "treatment_column",
         "outcome_column",
-        "treatment_value",
-        "control_value",
     ):
         assert table.c[required_column].nullable is False
 

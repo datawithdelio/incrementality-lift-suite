@@ -56,7 +56,7 @@ class DatasetSemanticMappingModel(
             name=("ck_dataset_semantic_mappings_unit_not_blank"),
         ),
         CheckConstraint(
-            "btrim(treatment_column) <> ''",
+            "treatment_column IS NULL OR btrim(treatment_column) <> ''",
             name=("ck_dataset_semantic_mappings_treatment_not_blank"),
         ),
         CheckConstraint(
@@ -68,21 +68,23 @@ class DatasetSemanticMappingModel(
             name=("ck_dataset_semantic_mappings_spend_not_blank"),
         ),
         CheckConstraint(
-            "btrim(treatment_value) <> ''",
+            "treatment_value IS NULL OR btrim(treatment_value) <> ''",
             name=("ck_dataset_semantic_mappings_treatment_value_not_blank"),
         ),
         CheckConstraint(
-            "btrim(control_value) <> ''",
+            "control_value IS NULL OR btrim(control_value) <> ''",
             name=("ck_dataset_semantic_mappings_control_value_not_blank"),
         ),
         CheckConstraint(
             """
             time_column <> unit_column
-            AND time_column <> treatment_column
             AND time_column <> outcome_column
-            AND unit_column <> treatment_column
             AND unit_column <> outcome_column
-            AND treatment_column <> outcome_column
+            AND (treatment_column IS NULL OR (
+                time_column <> treatment_column
+                AND unit_column <> treatment_column
+                AND treatment_column <> outcome_column
+            ))
             AND
             (
                 spend_column IS NULL
@@ -90,7 +92,7 @@ class DatasetSemanticMappingModel(
                 (
                     spend_column <> time_column
                     AND spend_column <> unit_column
-                    AND spend_column <> treatment_column
+                    AND (treatment_column IS NULL OR spend_column <> treatment_column)
                     AND spend_column <> outcome_column
                 )
             )
@@ -98,7 +100,12 @@ class DatasetSemanticMappingModel(
             name=("ck_dataset_semantic_mappings_roles_distinct"),
         ),
         CheckConstraint(
-            ("lower(btrim(treatment_value)) <> lower(btrim(control_value))"),
+            (
+                "(treatment_column IS NULL AND treatment_value IS NULL AND control_value IS NULL) "
+                "OR (treatment_column IS NOT NULL AND treatment_value IS NOT NULL "
+                "AND control_value IS NOT NULL AND "
+                "lower(btrim(treatment_value)) <> lower(btrim(control_value)))"
+            ),
             name=("ck_dataset_semantic_mappings_values_distinct"),
         ),
         ForeignKeyConstraint(
@@ -219,9 +226,9 @@ class DatasetSemanticMappingModel(
         nullable=False,
     )
 
-    treatment_column: Mapped[str] = mapped_column(
+    treatment_column: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
     )
 
     outcome_column: Mapped[str] = mapped_column(
@@ -234,14 +241,14 @@ class DatasetSemanticMappingModel(
         nullable=True,
     )
 
-    treatment_value: Mapped[str] = mapped_column(
+    treatment_value: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
     )
 
-    control_value: Mapped[str] = mapped_column(
+    control_value: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
     )
 
 

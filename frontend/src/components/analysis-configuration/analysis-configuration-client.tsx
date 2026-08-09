@@ -19,6 +19,7 @@ import type {
   AnalysisConfigurationDraft,
   FilterOperator,
 } from "@/lib/analysis-configuration/request";
+import { deriveMarketingMixConfiguration } from "@/lib/analysis-configuration/marketing-mix";
 
 import { useEffect, useState } from "react";
 
@@ -216,8 +217,6 @@ export function AnalysisConfigurationClient({
   const [geoOutcomeKind, setGeoOutcomeKind] = useState("outcome");
 
   const [mmmSeasonalityPeriod, setMmmSeasonalityPeriod] = useState("52");
-
-  const [mmmOutcomeKind, setMmmOutcomeKind] = useState("revenue");
 
   const [mmmAdstockDecay, setMmmAdstockDecay] = useState<
     Record<string, string>
@@ -512,13 +511,9 @@ export function AnalysisConfigurationClient({
                   targetPropensityColumn,
                 };
 
-    const mmmChannels = Array.from(
-      new Set(
-        [state.mapping.spend_column, ...state.mapping.covariate_columns].filter(
-          (value): value is string =>
-            typeof value === "string" && value.length > 0,
-        ),
-      ),
+    const mmmConfiguration = deriveMarketingMixConfiguration(
+      preview,
+      state.mapping,
     );
 
     const settings: AnalysisConfigurationDraft["settings"] =
@@ -552,19 +547,19 @@ export function AnalysisConfigurationClient({
             : selectedEstimator === "marketing_mix_model"
               ? {
                   kind: "marketing_mix_model",
-                  outcomeKind: mmmOutcomeKind as
-                    | "revenue"
-                    | "conversions"
-                    | "outcome",
+                  outcomeKind: mmmConfiguration.outcomeKind,
                   seasonalityPeriod: Number(mmmSeasonalityPeriod),
+                  mediaChannels: [...mmmConfiguration.mediaChannels],
+                  controlColumns: [...mmmConfiguration.controlColumns],
+                  aggregateSpendColumn: mmmConfiguration.aggregateSpendColumn,
                   adstockDecay: Object.fromEntries(
-                    mmmChannels.map((channel) => [
+                    mmmConfiguration.mediaChannels.map((channel) => [
                       channel,
                       Number(mmmAdstockDecay[channel] ?? "0.5"),
                     ]),
                   ),
                   saturationHalfSpend: Object.fromEntries(
-                    mmmChannels.map((channel) => [
+                    mmmConfiguration.mediaChannels.map((channel) => [
                       channel,
                       Number(mmmSaturationHalfSpend[channel] ?? "1"),
                     ]),
@@ -638,6 +633,11 @@ export function AnalysisConfigurationClient({
     preview !== null &&
     selectedEstimator !== null
   ) {
+    const mmmConfiguration = deriveMarketingMixConfiguration(
+      preview,
+      state.mapping,
+    );
+
     return (
       <AnalysisEstimatorSettingsStep
         preview={preview}
@@ -646,10 +646,12 @@ export function AnalysisConfigurationClient({
         controlGeoAssignments={controlGeoAssignments}
         geoCoordinates={geoCoordinates}
         geoOutcomeKind={geoOutcomeKind}
-        spendColumn={state.mapping.spend_column}
-        covariateColumns={state.mapping.covariate_columns}
+        mediaChannels={mmmConfiguration.mediaChannels}
+        controlColumns={mmmConfiguration.controlColumns}
+        aggregateSpendColumn={mmmConfiguration.aggregateSpendColumn}
+        mappedOutcomeColumn={state.mapping.outcome_column}
         mmmSeasonalityPeriod={mmmSeasonalityPeriod}
-        mmmOutcomeKind={mmmOutcomeKind}
+        mmmOutcomeKind={mmmConfiguration.outcomeKind}
         mmmAdstockDecay={mmmAdstockDecay}
         mmmSaturationHalfSpend={mmmSaturationHalfSpend}
         rewardColumn={rewardColumn}
@@ -676,7 +678,6 @@ export function AnalysisConfigurationClient({
           });
         }}
         onMmmSeasonalityPeriodChange={setMmmSeasonalityPeriod}
-        onMmmOutcomeKindChange={setMmmOutcomeKind}
         onMmmAdstockDecayChange={(channel, value) => {
           setMmmAdstockDecay((current) => ({
             ...current,

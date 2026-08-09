@@ -72,6 +72,7 @@ class MarketingMixObservation:
     observed_at: datetime
     outcome: float
     channel_spend: Mapping[str, float]
+    controls: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

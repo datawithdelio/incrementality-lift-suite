@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import TracebackType
 from uuid import UUID, uuid4
@@ -14,11 +15,17 @@ from incrementality_api.application.datasets.manage_semantic_mapping import (
     GetDatasetSemanticMapping,
     GetDatasetSemanticMappingQuery,
 )
+from incrementality_api.domain.analysis_runs.status import (
+    AnalysisEstimatorType,
+)
 from incrementality_api.domain.datasets.columns import (
     DatasetColumnProfile,
     DatasetColumnType,
 )
 from incrementality_api.domain.datasets.entities import Dataset
+from incrementality_api.domain.datasets.errors import (
+    InvalidDatasetSemanticMappingError,
+)
 from incrementality_api.domain.datasets.semantic_mapping import (
     DatasetSemanticMapping,
 )
@@ -397,6 +404,70 @@ async def test_creates_first_mapping_version_atomically() -> None:
         result,
     ]
     assert unit_of_work.commit_count == 1
+
+
+@pytest.mark.asyncio
+async def test_creates_mmm_mapping_without_treatment_roles() -> None:
+    dataset = build_ready_dataset()
+    unit_of_work = FakeSemanticMappingUnitOfWork(
+        dataset=dataset,
+        columns=build_columns(),
+    )
+    command = replace(
+        build_create_command(dataset),
+        treatment_column=None,
+        treatment_value=None,
+        control_value=None,
+        estimator=AnalysisEstimatorType.MARKETING_MIX_MODEL,
+    )
+
+    result = await CreateDatasetSemanticMapping(
+        unit_of_work=unit_of_work,
+        clock=FixedClock(),
+    ).execute(command)
+
+    assert result.treatment_column is None
+    assert result.treatment_value is None
+    assert result.control_value is None
+    assert unit_of_work.commit_count == 1
+
+
+@pytest.mark.parametrize(
+    "estimator",
+    [
+        AnalysisEstimatorType.DIFFERENCE_IN_DIFFERENCES,
+        AnalysisEstimatorType.SYNTHETIC_CONTROL,
+        AnalysisEstimatorType.GEO_HOLDOUT,
+    ],
+)
+@pytest.mark.asyncio
+async def test_requires_treatment_roles_for_causal_estimators(
+    estimator: AnalysisEstimatorType,
+) -> None:
+    dataset = build_ready_dataset()
+    unit_of_work = FakeSemanticMappingUnitOfWork(
+        dataset=dataset,
+        columns=build_columns(),
+    )
+    command = replace(
+        build_create_command(dataset),
+        treatment_column=None,
+        treatment_value=None,
+        control_value=None,
+        estimator=estimator,
+    )
+
+    with pytest.raises(
+        InvalidDatasetSemanticMappingError,
+        match="required for this estimator",
+    ):
+        await CreateDatasetSemanticMapping(
+            unit_of_work=unit_of_work,
+            clock=FixedClock(),
+        ).execute(command)
+
+    assert unit_of_work.enter_count == 0
+    assert unit_of_work.commit_count == 0
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,10 @@ import type {
 } from "./types";
 
 export class DataProductApiError extends Error {
-  constructor(public status: number) {
+  constructor(
+    public status: number,
+    public detail?: string,
+  ) {
     super("Data product is unavailable.");
   }
 }
@@ -28,7 +31,18 @@ async function request<T>(
       cache: "no-store",
     },
   );
-  if (!response.ok) throw new DataProductApiError(response.status);
+  if (!response.ok) {
+    let detail: string | undefined;
+
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      detail = typeof body.detail === "string" ? body.detail : undefined;
+    } catch {
+      // Error bodies are not guaranteed to be JSON.
+    }
+
+    throw new DataProductApiError(response.status, detail);
+  }
   return (await response.json()) as T;
 }
 export type ExplorerOptions = {
@@ -41,6 +55,7 @@ export type ExplorerOptions = {
   filterValue: string;
   outcomeColumn?: string;
   interventionDate?: string;
+  estimator?: string;
 };
 
 export function fetchPreview(
@@ -73,6 +88,9 @@ export function fetchPreview(
 
   if (options.interventionDate) {
     query.set("intervention_date", options.interventionDate);
+  }
+  if (options.estimator) {
+    query.set("estimator", options.estimator);
   }
   return request<DatasetPreview>(
     `/api/v1/workspaces/${workspace}/projects/${project}` +

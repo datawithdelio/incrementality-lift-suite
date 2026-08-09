@@ -83,7 +83,8 @@ class CreateDatasetSemanticMappingRequest(BaseModel):
         min_length=1,
         max_length=255,
     )
-    treatment_column: str = Field(
+    treatment_column: str | None = Field(
+        default=None,
         min_length=1,
         max_length=255,
     )
@@ -97,11 +98,13 @@ class CreateDatasetSemanticMappingRequest(BaseModel):
         max_length=255,
     )
     covariate_columns: tuple[str, ...] = ()
-    treatment_value: str = Field(
+    treatment_value: str | None = Field(
+        default=None,
         min_length=1,
         max_length=255,
     )
-    control_value: str = Field(
+    control_value: str | None = Field(
+        default=None,
         min_length=1,
         max_length=255,
     )
@@ -118,11 +121,11 @@ class DatasetSemanticMappingResponse(BaseModel):
     version: int
     time_column: str
     unit_column: str
-    treatment_column: str
+    treatment_column: str | None
     outcome_column: str
     spend_column: str | None
     covariate_columns: tuple[str, ...]
-    treatment_value: str
-    control_value: str
+    treatment_value: str | None
+    control_value: str | None
     created_at: datetime
     updated_at: datetime

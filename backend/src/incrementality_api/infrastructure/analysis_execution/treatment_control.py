@@ -31,6 +31,14 @@ class TreatmentControlRowExecutor:
             AnalysisEstimatorType.OFF_POLICY_EVALUATION,
         }:
             return rows
+        if (
+            mapping.treatment_column is None
+            or mapping.treatment_value is None
+            or mapping.control_value is None
+        ):
+            raise PermanentEstimationError(
+                "This estimator requires a treatment mapping."
+            )
         self._validate_mapping(mapping, snapshot)
         selected: list[dict[str, str]] = []
         seen_treated: set[str] = set()

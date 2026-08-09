@@ -217,9 +217,11 @@ class AnalysisInputMetadataValidator:
         required = {
             mapping.time_column: _TIME_TYPES,
             mapping.unit_column: _UNIT_TYPES,
-            mapping.treatment_column: _TREATMENT_TYPES,
             mapping.outcome_column: _NUMERIC_TYPES,
         }
+        if run.estimator_type is not AnalysisEstimatorType.MARKETING_MIX_MODEL:
+            treatment_column, _, _ = _required_treatment_mapping(mapping)
+            required[treatment_column] = _TREATMENT_TYPES
         for name, allowed_types in required.items():
             profile = columns.get(name)
             if profile is None:
@@ -306,6 +308,25 @@ class CsvAnalysisRowLoader:
         return tuple(rows)
 
 
+def _required_treatment_mapping(
+    mapping: SemanticMappingSnapshot,
+) -> tuple[str, str, str]:
+    if (
+        mapping.treatment_column is None
+        or mapping.treatment_value is None
+        or mapping.control_value is None
+    ):
+        raise PermanentEstimationError(
+            "This estimator requires a treatment mapping."
+        )
+
+    return (
+        mapping.treatment_column,
+        mapping.treatment_value,
+        mapping.control_value,
+    )
+
+
 class DifferenceInDifferencesInputBuilder:
     """Construct treated/post observations without statistical-library coupling."""
 
@@ -317,10 +338,11 @@ class DifferenceInDifferencesInputBuilder:
         configuration: DifferenceInDifferencesConfiguration,
     ) -> DifferenceInDifferencesInput:
         observations: list[DifferenceInDifferencesObservation] = []
+        treatment_column, treatment_value, control_value = _required_treatment_mapping(mapping)
         required = (
             mapping.time_column,
             mapping.unit_column,
-            mapping.treatment_column,
+            treatment_column,
             mapping.outcome_column,
         )
         for row_number, row in enumerate(rows, start=2):
@@ -336,10 +358,10 @@ class DifferenceInDifferencesInputBuilder:
                     )
                 values[column] = normalized
 
-            treatment = values[mapping.treatment_column].casefold()
-            if treatment == mapping.treatment_value.casefold():
+            treatment = values[treatment_column].casefold()
+            if treatment == treatment_value.casefold():
                 treated = True
-            elif treatment == mapping.control_value.casefold():
+            elif treatment == control_value.casefold():
                 treated = False
             else:
                 raise PermanentEstimationError(
@@ -411,10 +433,11 @@ class PanelObservationBuilder:
         intervention_time: datetime,
     ) -> tuple[PanelObservation, ...]:
         observations: list[PanelObservation] = []
+        treatment_column, treatment_value, control_value = _required_treatment_mapping(mapping)
         required = (
             mapping.time_column,
             mapping.unit_column,
-            mapping.treatment_column,
+            treatment_column,
             mapping.outcome_column,
         )
         for row_number, row in enumerate(rows, start=2):
@@ -424,10 +447,10 @@ class PanelObservationBuilder:
                 raise PermanentEstimationError(
                     f"CSV row {row_number} has a missing value for '{missing}'."
                 )
-            treatment = values[mapping.treatment_column].casefold()
-            if treatment == mapping.treatment_value.casefold():
+            treatment = values[treatment_column].casefold()
+            if treatment == treatment_value.casefold():
                 treated = True
-            elif treatment == mapping.control_value.casefold():
+            elif treatment == control_value.casefold():
                 treated = False
             else:
                 raise PermanentEstimationError(
@@ -533,6 +556,15 @@ class GeoHoldoutInputBuilder:
 class MarketingMixInputBuilder:
     """Aggregate mapped channel series before any PyMC-specific work."""
 
+    @staticmethod
+    def _derived_outcome_kind(outcome_column: str) -> str:
+        normalized = outcome_column.casefold()
+        if "conversion" in normalized:
+            return "conversions"
+        if "revenue" in normalized or "sales" in normalized:
+            return "revenue"
+        return "outcome"
+
     def build(
         self,
         *,
@@ -540,18 +572,67 @@ class MarketingMixInputBuilder:
         mapping: SemanticMappingSnapshot,
         run: AnalysisRun,
     ) -> MarketingMixInput:
-        if mapping.spend_column is None:
-            raise PermanentEstimationError("MMM requires a mapped spend column.")
-        channels = (mapping.spend_column, *mapping.covariate_columns)
+        configuration = _configuration(run)
+        configured_channels = configuration.get("media_channels")
+        configured_controls = configuration.get("control_columns", [])
+        aggregate_spend_column = configuration.get(
+            "aggregate_spend_column",
+            mapping.spend_column,
+        )
+        if configured_channels is None:
+            if mapping.spend_column is None:
+                raise PermanentEstimationError("MMM requires media channel columns.")
+            channels = (mapping.spend_column, *mapping.covariate_columns)
+            controls: tuple[str, ...] = ()
+        else:
+            if (
+                not isinstance(configured_channels, list)
+                or not configured_channels
+                or not all(
+                    isinstance(channel, str) and channel.strip()
+                    for channel in configured_channels
+                )
+            ):
+                raise PermanentEstimationError(
+                    "MMM media_channels must be a non-empty string list."
+                )
+            if (
+                not isinstance(configured_controls, list)
+                or not all(
+                    isinstance(control, str) and control.strip()
+                    for control in configured_controls
+                )
+            ):
+                raise PermanentEstimationError(
+                    "MMM control_columns must be a string list."
+                )
+            channels = tuple(str(channel) for channel in configured_channels)
+            controls = tuple(str(control) for control in configured_controls)
+            if len(set(channels)) != len(channels) or len(set(controls)) != len(controls):
+                raise PermanentEstimationError("MMM columns must be unique.")
+            if set(channels).intersection(controls):
+                raise PermanentEstimationError(
+                    "MMM media channels and controls must not overlap."
+                )
+            if aggregate_spend_column in channels:
+                raise PermanentEstimationError(
+                    "MMM aggregate spend must not be configured as a media channel."
+                )
         grouped_outcomes: defaultdict[datetime, float] = defaultdict(float)
         grouped_spend: defaultdict[datetime, dict[str, float]] = defaultdict(
             lambda: {channel: 0.0 for channel in channels}
+        )
+        grouped_controls: defaultdict[datetime, dict[str, float]] = defaultdict(
+            lambda: {control: 0.0 for control in controls}
         )
         for row_number, row in enumerate(rows, start=2):
             try:
                 observed_at = datetime.fromisoformat(str(row[mapping.time_column]).strip())
                 outcome = float(str(row[mapping.outcome_column]).strip())
                 spend = {channel: float(str(row[channel]).strip()) for channel in channels}
+                control_values = {
+                    control: float(str(row[control]).strip()) for control in controls
+                }
             except (KeyError, ValueError) as error:
                 raise PermanentEstimationError(
                     f"CSV row {row_number} has invalid MMM values."
@@ -559,7 +640,8 @@ class MarketingMixInputBuilder:
             grouped_outcomes[observed_at] += outcome
             for channel, value in spend.items():
                 grouped_spend[observed_at][channel] += value
-        configuration = _configuration(run)
+            for control, value in control_values.items():
+                grouped_controls[observed_at][control] += value
         adstock = configuration.get("adstock_decay", {})
         saturation = configuration.get("saturation_half_spend", {})
         seasonality_period = configuration.get("seasonality_period", 52)
@@ -570,9 +652,24 @@ class MarketingMixInputBuilder:
             raise PermanentEstimationError("MMM seasonality_period must be an integer.")
         if outcome_kind not in {"revenue", "conversions", "outcome"}:
             raise PermanentEstimationError("MMM outcome_kind is unsupported.")
+        if configured_channels is not None:
+            if set(adstock) != set(channels) or set(saturation) != set(channels):
+                raise PermanentEstimationError(
+                    "MMM response settings must match the configured media channels."
+                )
+            derived_outcome_kind = self._derived_outcome_kind(mapping.outcome_column)
+            if outcome_kind != derived_outcome_kind:
+                raise PermanentEstimationError(
+                    "MMM outcome_kind must match the mapped outcome column."
+                )
         return MarketingMixInput(
             observations=tuple(
-                MarketingMixObservation(period, grouped_outcomes[period], grouped_spend[period])
+                MarketingMixObservation(
+                    period,
+                    grouped_outcomes[period],
+                    grouped_spend[period],
+                    grouped_controls[period],
+                )
                 for period in sorted(grouped_outcomes)
             ),
             adstock_decay={str(key): float(value) for key, value in adstock.items()},

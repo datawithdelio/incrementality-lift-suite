@@ -621,10 +621,11 @@ def _known_columns(mapping: SemanticMappingSnapshot) -> set[str]:
     columns = {
         mapping.time_column,
         mapping.unit_column,
-        mapping.treatment_column,
         mapping.outcome_column,
         *mapping.covariate_columns,
     }
+    if mapping.treatment_column is not None:
+        columns.add(mapping.treatment_column)
     if mapping.spend_column is not None:
         columns.add(mapping.spend_column)
     return columns

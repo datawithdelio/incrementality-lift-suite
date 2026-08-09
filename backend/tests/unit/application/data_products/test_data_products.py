@@ -340,6 +340,64 @@ def test_pdf_preserves_geo_holdout_sections_for_geo_reports() -> None:
     assert "Treated geographies" in rendered
 
 
+def test_geo_holdout_report_aligns_design_copy_mapping_and_csv_diagnostics() -> None:
+    assignments = tuple(
+        {
+            "geo": f"Region {index + 1}",
+            "assignment": "treatment" if index < 4 else "holdout",
+            "latitude": 39.5 + index * 0.22,
+            "longitude": -75.4 + index * 0.18,
+        }
+        for index in range(12)
+    )
+    model = replace(
+        report_model(),
+        estimator="geo_holdout",
+        estimator_version="geo-v1",
+        configuration={
+            "analysis_start_date": "2026-01-05",
+            "analysis_end_date": "2026-07-27",
+            "intervention_date": "2026-05-25",
+            "outcome_column": "conversions",
+        },
+        diagnostics={
+            "causal_claim_allowed": False,
+            "design_assessment": "invalid",
+            "geographic_assignments": assignments,
+            "balance_diagnostics": {"standardized_mean_difference": 1.31},
+            "sample_size": 360,
+        },
+        warnings=("Balance exceeds policy.", "Causal evidence is blocked."),
+        quality_summary={"ready": True, "score": 92},
+        lineage={
+            "semantic_mapping_snapshot": {
+                "time_column": "date",
+                "unit_column": "region",
+                "outcome_column": "conversions",
+            },
+            "analysis_selection_snapshot": {
+                "geography_column": "region",
+            },
+        },
+    )
+
+    csv_payload = CsvReportRenderer().render(model).decode()
+    pdf_payload = pdf_text(PdfReportRenderer().render(model))
+
+    assert "diagnostics,design_quality,Invalid" in csv_payload
+    assert "diagnostics,pre_period_comparability,1.31" in csv_payload
+    assert "diagnostics,causal_evidence,Not supported" in csv_payload
+    assert "diagnostics,blocking_warnings,2" in csv_payload
+    assert "dataset_readiness,ready,True" in csv_payload
+    assert "dataset_readiness,score,92" in csv_payload
+    assert "quality,summary" not in csv_payload
+
+    assert "Does not meet current diagnostic policy" in pdf_payload
+    assert "Geography column region" in pdf_payload
+    assert "Assignment geography" in pdf_payload
+    assert "LOCAL ASSIGNMENT VIEW" in pdf_payload
+
+
 def test_report_renderers_are_reproducible_and_do_not_overstate_causality() -> None:
     model = report_model(causal_claim_allowed=False)
     csv_bytes = CsvReportRenderer().render(model)

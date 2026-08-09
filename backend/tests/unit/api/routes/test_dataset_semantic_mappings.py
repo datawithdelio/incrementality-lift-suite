@@ -26,6 +26,9 @@ from incrementality_api.application.datasets.manage_semantic_mapping import (
     CreateDatasetSemanticMappingCommand,
     GetDatasetSemanticMappingQuery,
 )
+from incrementality_api.domain.analysis_runs.status import (
+    AnalysisEstimatorType,
+)
 from incrementality_api.domain.authorization.permissions import (
     WorkspacePermission,
 )
@@ -291,6 +294,43 @@ def test_authorized_user_creates_semantic_mapping() -> None:
     assert authentication.received_permissions == [
         WorkspacePermission.MANAGE_DATASETS,
     ]
+
+
+def test_mmm_mapping_omits_treatment_roles() -> None:
+    workspace_id = uuid4()
+    project_id = uuid4()
+    dataset_id = uuid4()
+    user_id = uuid4()
+    mapping = build_mapping(dataset_id=dataset_id, user_id=user_id)
+    service = StubCreateDatasetSemanticMapping(result=mapping)
+    client, _ = build_client(
+        principal=build_principal(workspace_id=workspace_id, user_id=user_id),
+        create_service=service,
+    )
+    payload = request_payload()
+    payload.pop("treatment_column")
+    payload.pop("treatment_value")
+    payload.pop("control_value")
+
+    response = client.post(
+        (
+            f"/workspaces/{workspace_id}/projects/{project_id}"
+            f"/datasets/{dataset_id}/semantic-mappings"
+            "?estimator=marketing_mix_model"
+        ),
+        headers={"Authorization": "Bearer valid-token"},
+        json=payload,
+    )
+
+    assert response.status_code == 201
+    assert service.received_command is not None
+    assert service.received_command.treatment_column is None
+    assert service.received_command.treatment_value is None
+    assert service.received_command.control_value is None
+    assert (
+        service.received_command.estimator
+        is AnalysisEstimatorType.MARKETING_MIX_MODEL
+    )
 
 
 def test_reads_latest_semantic_mapping() -> None:

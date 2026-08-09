@@ -36,8 +36,10 @@ function renderGeoSettings(
       controlGeoAssignments={["Chicago"]}
       geoCoordinates={coordinates}
       geoOutcomeKind="outcome"
-      spendColumn="ad_spend"
-      covariateColumns={[]}
+      mediaChannels={[]}
+      controlColumns={[]}
+      aggregateSpendColumn="total_spend"
+      mappedOutcomeColumn="revenue"
       mmmSeasonalityPeriod="52"
       mmmOutcomeKind="revenue"
       mmmAdstockDecay={{}}
@@ -48,7 +50,6 @@ function renderGeoSettings(
       onGeoOutcomeKindChange={vi.fn()}
       onGeoCoordinateChange={onGeoCoordinateChange}
       onMmmSeasonalityPeriodChange={vi.fn()}
-      onMmmOutcomeKindChange={vi.fn()}
       onMmmAdstockDecayChange={vi.fn()}
       onMmmSaturationHalfSpendChange={vi.fn()}
       onRewardColumnChange={vi.fn()}

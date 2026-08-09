@@ -19,7 +19,10 @@ vi.mock(
 
 import { DataQualityClient } from "../src/components/data-products/data-quality-client";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 describe("DataQualityClient", () => {
   it("loads the scoped quality experience with the established default estimator", () => {
@@ -66,6 +69,28 @@ describe("DataQualityClient dataset navigation", () => {
     ).toHaveAttribute(
       "href",
       "/workspaces/workspace-1/projects/project-1/datasets/dataset-1/explore",
+    );
+  });
+
+  it("preserves the stored MMM method when opening Mapping", () => {
+    window.localStorage.setItem(
+      "incrementality_dataset_estimator_dataset-1",
+      "marketing_mix_model",
+    );
+
+    render(
+      <DataQualityClient
+        workspaceId="workspace-1"
+        projectId="project-1"
+        datasetId="dataset-1"
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Semantic Mapping" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/dataset-1/mapping?estimator=marketing_mix_model",
     );
   });
 });

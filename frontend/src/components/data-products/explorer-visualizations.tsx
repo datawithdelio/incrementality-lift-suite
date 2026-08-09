@@ -1,7 +1,7 @@
 "use client";
 
 import { DownloadSimpleIcon } from "@phosphor-icons/react/DownloadSimple";
-import { forwardRef, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import type {
@@ -83,13 +83,13 @@ function chartScale(values: number[]): {
 
 function linePath(
   points: TrendPoint[],
-  key: "treatment_value" | "control_value",
+  valueForPoint: (point: TrendPoint) => number | null,
   x: (index: number) => number,
   y: (value: number) => number,
 ): string {
   return points
     .map((point, index) => {
-      const value = point[key];
+      const value = valueForPoint(point);
       if (value === null) {
         return "";
       }
@@ -97,6 +97,49 @@ function linePath(
     })
     .filter(Boolean)
     .join(" ");
+}
+
+function combinedTrendObservations(point: TrendPoint): number {
+  return (
+    Math.max(0, point.treatment_observations) +
+    Math.max(0, point.control_observations)
+  );
+}
+
+function combinedTrendValue(point: TrendPoint): number | null {
+  const series = [
+    {
+      value: point.treatment_value,
+      observations: Math.max(0, point.treatment_observations),
+    },
+    {
+      value: point.control_value,
+      observations: Math.max(0, point.control_observations),
+    },
+  ].filter(
+    (item): item is { value: number; observations: number } =>
+      item.value !== null,
+  );
+
+  if (series.length === 0) {
+    return null;
+  }
+
+  const observations = series.reduce(
+    (total, item) => total + item.observations,
+    0,
+  );
+
+  if (observations > 0) {
+    return (
+      series.reduce(
+        (total, item) => total + item.value * item.observations,
+        0,
+      ) / observations
+    );
+  }
+
+  return series.reduce((total, item) => total + item.value, 0) / series.length;
 }
 
 function downloadChart(svg: SVGSVGElement | null, filename: string): void {
@@ -262,6 +305,8 @@ export function ExplorerVisualizations({
   columns,
   activeTab,
   onTabChange,
+  estimator = "difference_in_differences",
+  onEstimatorChange,
   selectedOutcome,
   selectedInterventionDate,
   onInterventionDateChange,
@@ -272,6 +317,8 @@ export function ExplorerVisualizations({
   columns: ColumnSummary[];
   activeTab: VisualizationTab;
   onTabChange: (tab: VisualizationTab) => void;
+  estimator?: string;
+  onEstimatorChange?: (value: string) => void;
   selectedOutcome?: string;
   selectedInterventionDate?: string;
   onInterventionDateChange?: (value: string) => void;
@@ -285,25 +332,73 @@ export function ExplorerVisualizations({
   const [frequency, setFrequency] = useState<TrendFrequency>("weekly");
   const [inspectedTrendPoint, setInspectedTrendPoint] =
     useState<TrendPoint | null>(null);
+  const usesInterventionDate = estimator !== "marketing_mix_model";
+  const usesSingleOutcomeSeries = estimator === "marketing_mix_model";
 
   const inferredInterventionDate =
     visualizations.trend.find((point) => point.phase === "post")?.period ?? "";
 
-  const resolvedInterventionDate =
-    selectedInterventionDate ||
-    visualizations.treatment_start_date ||
-    inferredInterventionDate;
+  const explicitInterventionDate = selectedInterventionDate ?? "";
 
-  const [interventionDateDraft, setInterventionDateDraft] = useState(
-    resolvedInterventionDate,
-  );
+  const detectedInterventionDate =
+    visualizations.treatment_start_date || inferredInterventionDate;
 
-  const commitInterventionDate = () => {
-    if (
-      interventionDateDraft === "" ||
-      /^\d{4}-\d{2}-\d{2}$/.test(interventionDateDraft)
-    ) {
-      onInterventionDateChange?.(interventionDateDraft);
+  const resolvedInterventionDate = usesInterventionDate
+    ? explicitInterventionDate || detectedInterventionDate
+    : "";
+
+  const interventionInputRef = useRef<HTMLInputElement>(null);
+  const interventionEditingRef = useRef(false);
+  const lastCommittedInterventionDateRef = useRef(explicitInterventionDate);
+  const [interventionDateError, setInterventionDateError] = useState<
+    string | null
+  >(null);
+
+  const minimumInterventionDate = visualizations.trend[0]?.period;
+  const maximumInterventionDate =
+    visualizations.trend[visualizations.trend.length - 1]?.period;
+
+  useEffect(() => {
+    lastCommittedInterventionDateRef.current = explicitInterventionDate;
+
+    if (!interventionEditingRef.current && interventionInputRef.current) {
+      interventionInputRef.current.value = explicitInterventionDate;
+      setInterventionDateError(null);
+    }
+  }, [explicitInterventionDate]);
+
+  const isCompleteValidInterventionDate = (
+    input: HTMLInputElement,
+  ): boolean =>
+    /^\d{4}-\d{2}-\d{2}$/.test(input.value) &&
+    input.valueAsDate !== null &&
+    input.validity.valid;
+
+  const interventionRangeMessage =
+    minimumInterventionDate && maximumInterventionDate
+      ? `Choose a date between ${date(minimumInterventionDate)} and ${date(maximumInterventionDate)}.`
+      : "Choose a complete valid date.";
+
+  const commitInterventionDate = (
+    input: HTMLInputElement,
+    allowEmpty: boolean,
+  ) => {
+    const value = input.value;
+
+    if (value === "") {
+      if (!allowEmpty || input.validity.badInput) {
+        return;
+      }
+    } else if (!isCompleteValidInterventionDate(input)) {
+      setInterventionDateError(interventionRangeMessage);
+      return;
+    }
+
+    setInterventionDateError(null);
+
+    if (value !== lastCommittedInterventionDateRef.current) {
+      lastCommittedInterventionDateRef.current = value;
+      onInterventionDateChange?.(value);
     }
   };
 
@@ -362,6 +457,27 @@ export function ExplorerVisualizations({
         </div>
 
         <div className="explorer-evidence-controls">
+          <label className="explorer-inline-select">
+            <span>Method</span>
+            <select
+              aria-label="Causal method"
+              value={estimator}
+              onChange={(event) => onEstimatorChange?.(event.target.value)}
+            >
+              <option value="difference_in_differences">
+                Difference in Differences
+              </option>
+              <option value="synthetic_control">Synthetic Control</option>
+              <option value="geo_holdout">Geo Holdout</option>
+              <option value="marketing_mix_model">
+                Marketing Mix Modeling
+              </option>
+              <option value="off_policy_evaluation">
+                Off-Policy Evaluation
+              </option>
+            </select>
+          </label>
+
           {numericColumns.length > 0 ? (
             <label className="explorer-inline-select">
               <span>Outcome</span>
@@ -384,26 +500,76 @@ export function ExplorerVisualizations({
             </label>
           ) : null}
 
-          <label className="explorer-inline-select">
-            <span>Intervention</span>
-            <input
-              aria-label="Intervention date"
-              type="date"
-              value={interventionDateDraft}
-              min={visualizations.trend[0]?.period}
-              max={
-                visualizations.trend[visualizations.trend.length - 1]?.period
-              }
-              onChange={(event) => setInterventionDateDraft(event.target.value)}
-              onBlur={commitInterventionDate}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  commitInterventionDate();
-                  event.currentTarget.blur();
+          {usesInterventionDate ? (
+            <div className="explorer-inline-select explorer-intervention-control">
+              <label htmlFor="explorer-intervention-date">Intervention</label>
+              <input
+                id="explorer-intervention-date"
+                ref={interventionInputRef}
+                aria-label="Intervention date"
+                aria-describedby={
+                  [
+                    interventionDateError ? "intervention-date-error" : "",
+                    !explicitInterventionDate && detectedInterventionDate
+                      ? "detected-intervention-date"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
                 }
-              }}
-            />
-          </label>
+                aria-invalid={Boolean(interventionDateError)}
+                type="date"
+                defaultValue={explicitInterventionDate}
+                min={minimumInterventionDate}
+                max={maximumInterventionDate}
+                onFocus={() => {
+                  interventionEditingRef.current = true;
+                }}
+                onChange={(event) => {
+                  if (event.currentTarget.value === "") {
+                    setInterventionDateError(null);
+                    return;
+                  }
+
+                  commitInterventionDate(event.currentTarget, false);
+                }}
+                onBlur={(event) => {
+                  interventionEditingRef.current = false;
+                  commitInterventionDate(event.currentTarget, true);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+              {interventionDateError ? (
+                <small id="intervention-date-error" role="alert">
+                  {interventionDateError}
+                </small>
+              ) : null}
+              {!explicitInterventionDate && detectedInterventionDate ? (
+                <div
+                  className="explorer-detected-intervention"
+                  id="detected-intervention-date"
+                >
+                  <span>
+                    Detected from dataset: {date(detectedInterventionDate)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      lastCommittedInterventionDateRef.current =
+                        detectedInterventionDate;
+                      onInterventionDateChange?.(detectedInterventionDate);
+                    }}
+                  >
+                    Use detected date
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <label className="explorer-inline-select">
             <span>Frequency</span>
@@ -437,37 +603,86 @@ export function ExplorerVisualizations({
           </small>
         </article>
 
-        <article>
-          <span>Intervention date</span>
-          <strong>
-            {visualizations.treatment_start_date
-              ? date(visualizations.treatment_start_date)
-              : "Not mapped"}
-          </strong>
-          <small>Beginning of the post-treatment period</small>
-        </article>
+        {usesInterventionDate ? (
+          <>
+            <article>
+              <span>
+                {explicitInterventionDate
+                  ? "Selected intervention date"
+                  : detectedInterventionDate
+                    ? "Detected intervention date"
+                    : "Intervention date"}
+              </span>
+              <strong>
+                {resolvedInterventionDate
+                  ? date(resolvedInterventionDate)
+                  : "Not detected"}
+              </strong>
+              <small>
+                {explicitInterventionDate
+                  ? "Explicit date applied to Explorer requests"
+                  : detectedInterventionDate
+                    ? "Detected from the treatment transition; not applied as an explicit filter"
+                    : "Enter the known beginning of the post-treatment period"}
+              </small>
+            </article>
 
-        <article>
-          <span>Pre-treatment</span>
-          <strong>
-            {preTreatmentAverage === null ? "—" : number(preTreatmentAverage)}
-          </strong>
-          <small>Average treatment-group outcome</small>
-        </article>
+            <article>
+              <span>Pre-treatment</span>
+              <strong>
+                {preTreatmentAverage === null
+                  ? "—"
+                  : number(preTreatmentAverage)}
+              </strong>
+              <small>Average treatment-group outcome</small>
+            </article>
 
-        <article>
-          <span>Post-treatment</span>
-          <strong>
-            {postTreatmentAverage === null ? "—" : number(postTreatmentAverage)}
-          </strong>
-          <small>Average treatment-group outcome</small>
-        </article>
+            <article>
+              <span>Post-treatment</span>
+              <strong>
+                {postTreatmentAverage === null
+                  ? "—"
+                  : number(postTreatmentAverage)}
+              </strong>
+              <small>Average treatment-group outcome</small>
+            </article>
+          </>
+        ) : (
+          <>
+            <article>
+              <span>Dataset start</span>
+              <strong>
+                {displayedTrend[0]?.period
+                  ? date(displayedTrend[0].period)
+                  : "Not available"}
+              </strong>
+              <small>First observed period in this dataset</small>
+            </article>
+
+            <article>
+              <span>Dataset end</span>
+              <strong>
+                {displayedTrend[displayedTrend.length - 1]?.period
+                  ? date(displayedTrend[displayedTrend.length - 1].period)
+                  : "Not available"}
+              </strong>
+              <small>Last observed period in this dataset</small>
+            </article>
+
+            <article>
+              <span>Observed periods</span>
+              <strong>{displayedTrend.length.toLocaleString("en-US")}</strong>
+              <small>Use analysis dates later during configuration</small>
+            </article>
+          </>
+        )}
       </section>
 
       {inspectedTrendPoint ? (
         <section
           className="explorer-inspection-kpis"
           aria-label="Selected chart period"
+          data-single-series={usesSingleOutcomeSeries || undefined}
         >
           <article>
             <span>Selected period</span>
@@ -475,41 +690,63 @@ export function ExplorerVisualizations({
             <small>Hovering or pinned chart period</small>
           </article>
 
-          <article>
-            <span>Treatment</span>
-            <strong>{number(inspectedTrendPoint.treatment_value)}</strong>
-            <small>
-              {new Intl.NumberFormat("en-US").format(
-                inspectedTrendPoint.treatment_observations,
-              )}{" "}
-              observations
-            </small>
-          </article>
+          {usesSingleOutcomeSeries ? (
+            <>
+              <article>
+                <span>Outcome</span>
+                <strong>{number(combinedTrendValue(inspectedTrendPoint))}</strong>
+                <small>Average across all observations</small>
+              </article>
 
-          <article>
-            <span>Control</span>
-            <strong>{number(inspectedTrendPoint.control_value)}</strong>
-            <small>
-              {new Intl.NumberFormat("en-US").format(
-                inspectedTrendPoint.control_observations,
-              )}{" "}
-              observations
-            </small>
-          </article>
+              <article>
+                <span>Observations</span>
+                <strong>
+                  {new Intl.NumberFormat("en-US").format(
+                    combinedTrendObservations(inspectedTrendPoint),
+                  )}
+                </strong>
+                <small>Rows represented in this period</small>
+              </article>
+            </>
+          ) : (
+            <>
+              <article>
+                <span>Treatment</span>
+                <strong>{number(inspectedTrendPoint.treatment_value)}</strong>
+                <small>
+                  {new Intl.NumberFormat("en-US").format(
+                    inspectedTrendPoint.treatment_observations,
+                  )}{" "}
+                  observations
+                </small>
+              </article>
 
-          <article>
-            <span>Difference</span>
-            <strong>
-              {signedNumber(
-                inspectedTrendPoint.treatment_value !== null &&
-                  inspectedTrendPoint.control_value !== null
-                  ? inspectedTrendPoint.treatment_value -
-                      inspectedTrendPoint.control_value
-                  : null,
-              )}
-            </strong>
-            <small>Treatment minus control</small>
-          </article>
+              <article>
+                <span>Control</span>
+                <strong>{number(inspectedTrendPoint.control_value)}</strong>
+                <small>
+                  {new Intl.NumberFormat("en-US").format(
+                    inspectedTrendPoint.control_observations,
+                  )}{" "}
+                  observations
+                </small>
+              </article>
+
+              <article>
+                <span>Difference</span>
+                <strong>
+                  {signedNumber(
+                    inspectedTrendPoint.treatment_value !== null &&
+                      inspectedTrendPoint.control_value !== null
+                      ? inspectedTrendPoint.treatment_value -
+                          inspectedTrendPoint.control_value
+                      : null,
+                  )}
+                </strong>
+                <small>Treatment minus control</small>
+              </article>
+            </>
+          )}
         </section>
       ) : null}
 
@@ -564,6 +801,7 @@ export function ExplorerVisualizations({
             data={displayedTrend}
             outcome={outcomeValue || visualizations.outcome_column}
             treatmentStart={resolvedInterventionDate || null}
+            singleOutcomeSeries={usesSingleOutcomeSeries}
             onInspect={setInspectedTrendPoint}
           />
         ) : null}
@@ -597,7 +835,7 @@ export function ExplorerVisualizations({
         ) : null}
       </div>
 
-      {visualizations.balance ? (
+      {visualizations.balance && !usesSingleOutcomeSeries ? (
         <BalanceSummary balance={visualizations.balance} />
       ) : null}
     </section>
@@ -610,24 +848,33 @@ const TrendChart = forwardRef<
     data: TrendPoint[];
     outcome: string | null;
     treatmentStart: string | null;
+    singleOutcomeSeries?: boolean;
     onInspect?: (point: TrendPoint | null) => void;
   }
->(function TrendChart({ data, outcome, treatmentStart, onInspect }, ref) {
+>(function TrendChart(
+  { data, outcome, treatmentStart, singleOutcomeSeries = false, onInspect },
+  ref,
+) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
 
-  const values = data.flatMap((point) =>
-    [point.treatment_value, point.control_value].filter(
-      (value): value is number => value !== null,
-    ),
-  );
+  const values = singleOutcomeSeries
+    ? data
+        .map(combinedTrendValue)
+        .filter((value): value is number => value !== null)
+    : data.flatMap((point) =>
+        [point.treatment_value, point.control_value].filter(
+          (value): value is number => value !== null,
+        ),
+      );
 
   if (data.length === 0 || values.length === 0) {
     return (
       <ChartEmpty>
-        Map a time, treatment, and numeric outcome column to see the group
-        trend.
+        {singleOutcomeSeries
+          ? "Map a time and numeric outcome column to see the outcome trend."
+          : "Map a time, treatment, and numeric outcome column to see the group trend."}
       </ChartEmpty>
     );
   }
@@ -666,8 +913,12 @@ const TrendChart = forwardRef<
       : null;
 
   const selectedObservations = selectedPoint
-    ? selectedPoint.treatment_observations + selectedPoint.control_observations
+    ? combinedTrendObservations(selectedPoint)
     : 0;
+
+  const selectedOutcome = selectedPoint
+    ? combinedTrendValue(selectedPoint)
+    : null;
 
   const tooltipAlignment =
     selectedIndex === null
@@ -725,11 +976,13 @@ const TrendChart = forwardRef<
           <span>Hover to inspect. Click a period to pin its values.</span>
         </div>
 
-        <div className="explorer-chart-legend">
-          <span data-series="treatment">Treatment</span>
+        {!singleOutcomeSeries ? (
+          <div className="explorer-chart-legend">
+            <span data-series="treatment">Treatment</span>
 
-          <span data-series="control">Control</span>
-        </div>
+            <span data-series="control">Control</span>
+          </div>
+        ) : null}
       </div>
 
       {treatmentStart ? (
@@ -818,29 +1071,54 @@ const TrendChart = forwardRef<
           />
         ) : null}
 
-        <path
-          className="explorer-series-treatment"
-          d={linePath(data, "treatment_value", x, scale.y)}
-        />
+        {singleOutcomeSeries ? (
+          <path
+            className="explorer-series-outcome"
+            d={linePath(data, combinedTrendValue, x, scale.y)}
+          />
+        ) : (
+          <>
+            <path
+              className="explorer-series-treatment"
+              d={linePath(
+                data,
+                (point) => point.treatment_value,
+                x,
+                scale.y,
+              )}
+            />
 
-        <path
-          className="explorer-series-control"
-          d={linePath(data, "control_value", x, scale.y)}
-        />
+            <path
+              className="explorer-series-control"
+              d={linePath(data, (point) => point.control_value, x, scale.y)}
+            />
+          </>
+        )}
 
         {data.flatMap((point, index) => {
-          const series = [
-            {
-              key: "treatment",
-              value: point.treatment_value,
-              observations: point.treatment_observations,
-            },
-            {
-              key: "control",
-              value: point.control_value,
-              observations: point.control_observations,
-            },
-          ];
+          const series = singleOutcomeSeries
+            ? [
+                {
+                  key: "outcome",
+                  label: "Outcome",
+                  value: combinedTrendValue(point),
+                  observations: combinedTrendObservations(point),
+                },
+              ]
+            : [
+                {
+                  key: "treatment",
+                  label: "Treatment",
+                  value: point.treatment_value,
+                  observations: point.treatment_observations,
+                },
+                {
+                  key: "control",
+                  label: "Control",
+                  value: point.control_value,
+                  observations: point.control_observations,
+                },
+              ];
 
           return series.flatMap((item) =>
             item.value === null
@@ -855,7 +1133,7 @@ const TrendChart = forwardRef<
                   >
                     <title>
                       {date(point.period)},{" "}
-                      {item.key === "treatment" ? "Treatment" : "Control"}:{" "}
+                      {item.label}:{" "}
                       {number(item.value)} from {item.observations} observations
                     </title>
                   </circle>,
@@ -884,12 +1162,20 @@ const TrendChart = forwardRef<
               aria-pressed={pinnedIndex === index}
               aria-label={[
                 `Inspect ${date(point.period)}`,
-                point.treatment_value === null
-                  ? "Treatment unavailable"
-                  : `Treatment ${number(point.treatment_value)}`,
-                point.control_value === null
-                  ? "Control unavailable"
-                  : `Control ${number(point.control_value)}`,
+                ...(singleOutcomeSeries
+                  ? [
+                      combinedTrendValue(point) === null
+                        ? "Outcome unavailable"
+                        : `Outcome ${number(combinedTrendValue(point))}`,
+                    ]
+                  : [
+                      point.treatment_value === null
+                        ? "Treatment unavailable"
+                        : `Treatment ${number(point.treatment_value)}`,
+                      point.control_value === null
+                        ? "Control unavailable"
+                        : `Control ${number(point.control_value)}`,
+                    ]),
               ].join(". ")}
               x={left}
               y={PLOT.top}
@@ -927,22 +1213,35 @@ const TrendChart = forwardRef<
               y2={CHART_HEIGHT - PLOT.bottom}
             />
 
-            {selectedPoint.treatment_value !== null ? (
+            {singleOutcomeSeries && selectedOutcome !== null ? (
               <circle
-                className="explorer-chart-selected-ring explorer-chart-selected-treatment"
+                className="explorer-chart-selected-ring explorer-chart-selected-outcome"
                 cx={x(selectedIndex)}
-                cy={scale.y(selectedPoint.treatment_value)}
+                cy={scale.y(selectedOutcome)}
                 r={7}
               />
             ) : null}
 
-            {selectedPoint.control_value !== null ? (
-              <circle
-                className="explorer-chart-selected-ring explorer-chart-selected-control"
-                cx={x(selectedIndex)}
-                cy={scale.y(selectedPoint.control_value)}
-                r={7}
-              />
+            {!singleOutcomeSeries ? (
+              <>
+                {selectedPoint.treatment_value !== null ? (
+                  <circle
+                    className="explorer-chart-selected-ring explorer-chart-selected-treatment"
+                    cx={x(selectedIndex)}
+                    cy={scale.y(selectedPoint.treatment_value)}
+                    r={7}
+                  />
+                ) : null}
+
+                {selectedPoint.control_value !== null ? (
+                  <circle
+                    className="explorer-chart-selected-ring explorer-chart-selected-control"
+                    cx={x(selectedIndex)}
+                    cy={scale.y(selectedPoint.control_value)}
+                    r={7}
+                  />
+                ) : null}
+              </>
             ) : null}
           </>
         ) : null}
@@ -991,20 +1290,29 @@ const TrendChart = forwardRef<
           </header>
 
           <dl>
-            <div>
-              <dt>Treatment</dt>
-              <dd>{number(selectedPoint.treatment_value)}</dd>
-            </div>
+            {singleOutcomeSeries ? (
+              <div>
+                <dt>Outcome</dt>
+                <dd>{number(selectedOutcome)}</dd>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <dt>Treatment</dt>
+                  <dd>{number(selectedPoint.treatment_value)}</dd>
+                </div>
 
-            <div>
-              <dt>Control</dt>
-              <dd>{number(selectedPoint.control_value)}</dd>
-            </div>
+                <div>
+                  <dt>Control</dt>
+                  <dd>{number(selectedPoint.control_value)}</dd>
+                </div>
 
-            <div>
-              <dt>Difference</dt>
-              <dd>{signedNumber(selectedDifference)}</dd>
-            </div>
+                <div>
+                  <dt>Difference</dt>
+                  <dd>{signedNumber(selectedDifference)}</dd>
+                </div>
+              </>
+            )}
 
             <div>
               <dt>Observations</dt>

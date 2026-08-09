@@ -2,11 +2,15 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 from starlette.responses import StreamingResponse
 
-from incrementality_api.api.v1.routes.data_products import download_report, router
+from incrementality_api.api.v1.routes.data_products import (
+    download_report,
+    preview_dataset,
+    router,
+)
 from incrementality_api.application.data_products.report_jobs import ReportJob
 
 
@@ -18,6 +22,38 @@ async def test_dataset_preview_requires_authentication() -> None:
             f"/api/v1/workspaces/{uuid4()}/projects/{uuid4()}/datasets/{uuid4()}/preview"
         )
     assert response.status_code == 401
+
+
+class InvalidInterventionPreviewService:
+    async def preview(self, *args, **kwargs):
+        del args, kwargs
+        from incrementality_api.application.data_products.explorer import (
+            InvalidInterventionDateError,
+        )
+
+        raise InvalidInterventionDateError(
+            "Intervention date must fall inside the dataset date range."
+        )
+
+
+async def test_dataset_preview_returns_422_for_invalid_intervention_date() -> None:
+    try:
+        await preview_dataset(
+            workspace_id=uuid4(),
+            project_id=uuid4(),
+            dataset_id=uuid4(),
+            principal=object(),  # type: ignore[arg-type]
+            service=InvalidInterventionPreviewService(),  # type: ignore[arg-type]
+            page_size=50,
+            intervention_date="2026-01-01",
+        )
+    except HTTPException as error:
+        assert error.status_code == 422
+        assert error.detail == (
+            "Intervention date must fall inside the dataset date range."
+        )
+    else:
+        raise AssertionError("Expected HTTP 422 for invalid intervention date.")
 
 
 class FakeDownloadReportRepository:
