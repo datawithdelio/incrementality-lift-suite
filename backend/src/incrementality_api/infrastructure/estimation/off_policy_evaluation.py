@@ -41,11 +41,23 @@ class StatsmodelsOffPolicyEstimator:
         rewards = np.asarray([item.reward for item in estimator_input.observations])
         behavior = np.asarray([item.behavior_probability for item in estimator_input.observations])
         target = np.asarray([item.target_probability for item in estimator_input.observations])
-        predictions = np.asarray([item.expected_reward for item in estimator_input.observations])
+        observed_action_predictions = np.asarray(
+            [
+                item.observed_action_expected_reward
+                for item in estimator_input.observations
+            ]
+        )
+        target_policy_predictions = np.asarray(
+            [
+                item.target_policy_expected_reward
+                for item in estimator_input.observations
+            ]
+        )
         if (
             rewards.size < 2
             or not np.all(np.isfinite(rewards))
-            or not np.all(np.isfinite(predictions))
+            or not np.all(np.isfinite(observed_action_predictions))
+        or not np.all(np.isfinite(target_policy_predictions))
             or np.any(behavior <= 0)
             or np.any(behavior > 1)
             or np.any(target < 0)
@@ -60,7 +72,10 @@ class StatsmodelsOffPolicyEstimator:
         influence = {
             "importance_sampling": weights * rewards,
             "self_normalized_importance_sampling": (weights * rewards * rewards.size / weight_sum),
-            "doubly_robust": predictions + weights * (rewards - predictions),
+            "doubly_robust": (
+                target_policy_predictions
+                + weights * (rewards - observed_action_predictions)
+            ),
         }
         estimates = {name: float(values.mean()) for name, values in influence.items()}
         selected = influence[estimator_input.primary_method]
@@ -107,7 +122,8 @@ class StatsmodelsOffPolicyEstimator:
                 "extreme_weight_count": extreme_count,
                 "reliability": "weak" if weak else "strong",
                 "design_assessment": "weak" if weak else "valid",
-                "causal_claim_allowed": not weak,
+                "causal_claim_allowed": False,
+                "recommendations_allowed": not weak,
                 "plain_language_warning": warning,
                 "policy_comparison": [
                     {"method": name, "estimated_policy_value": value}

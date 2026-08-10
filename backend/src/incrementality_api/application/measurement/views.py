@@ -173,6 +173,8 @@ class ChannelPerformanceItem:
     confidence_high: float | None
     contribution: float | None
     marginal_response: float | None
+    efficiency: float | None
+    efficiency_metric: str | None
     reliability: str
     recommended_movement: str
     warning: str
@@ -195,12 +197,27 @@ class GetChannelPerformance:
         channels: list[ChannelPerformanceItem] = []
         for item in records:
             contributions = item.diagnostics.get("channel_contributions")
-            roas = item.diagnostics.get("channel_roas")
+            efficiencies = item.diagnostics.get(
+                "channel_efficiency",
+                item.diagnostics.get("channel_roas"),
+            )
+            efficiency_metric_value = item.diagnostics.get(
+                "channel_efficiency_metric"
+            )
+            efficiency_metric = (
+                str(efficiency_metric_value)
+                if isinstance(efficiency_metric_value, str)
+                else (
+                    "incremental_revenue_per_dollar"
+                    if isinstance(item.diagnostics.get("channel_roas"), Mapping)
+                    else None
+                )
+            )
             spends = item.diagnostics.get("channel_spend")
             intervals = item.diagnostics.get("posterior_intervals")
             if (
                 isinstance(contributions, Mapping)
-                and isinstance(roas, Mapping)
+                and isinstance(efficiencies, Mapping)
                 and isinstance(spends, Mapping)
             ):
                 for channel_name, contribution_value in contributions.items():
@@ -208,15 +225,22 @@ class GetChannelPerformance:
                         contribution_value, int | float
                     ):
                         continue
-                    roas_value = roas.get(channel_name)
+                    efficiency_value = efficiencies.get(channel_name)
                     spend_value = spends.get(channel_name)
                     interval = (
                         intervals.get(channel_name) if isinstance(intervals, Mapping) else None
                     )
                     low_value = interval.get("low") if isinstance(interval, Mapping) else None
                     high_value = interval.get("high") if isinstance(interval, Mapping) else None
+                    efficiency = (
+                        float(efficiency_value)
+                        if isinstance(efficiency_value, int | float)
+                        else None
+                    )
                     incremental_roas = (
-                        float(roas_value) if isinstance(roas_value, int | float) else None
+                        efficiency
+                        if efficiency_metric == "incremental_revenue_per_dollar"
+                        else None
                     )
                     spend = float(spend_value) if isinstance(spend_value, int | float) else None
                     confidence_low = (
@@ -227,8 +251,8 @@ class GetChannelPerformance:
                     )
                     reliability = _reliability(item.diagnostics)
                     recommendation = self._policy.recommend(
-                        incremental_roas=incremental_roas,
-                        marginal_response=incremental_roas,
+                        incremental_roas=efficiency,
+                        marginal_response=efficiency,
                         reliability=reliability,
                         confidence_low=confidence_low,
                         observed_roas=None,
@@ -237,15 +261,26 @@ class GetChannelPerformance:
                         ChannelPerformanceItem(
                             channel=channel_name,
                             spend=spend,
-                            incremental_revenue=float(contribution_value),
-                            incremental_conversions=None,
+                            incremental_revenue=(
+                                float(contribution_value)
+                                if efficiency_metric == "incremental_revenue_per_dollar"
+                                else None
+                            ),
+                            incremental_conversions=(
+                                float(contribution_value)
+                                if efficiency_metric
+                                == "incremental_conversions_per_dollar"
+                                else None
+                            ),
                             lift=item.relative_lift,
                             incremental_roas=incremental_roas,
                             observed_roas=None,
                             confidence_low=confidence_low,
                             confidence_high=confidence_high,
                             contribution=float(contribution_value),
-                            marginal_response=incremental_roas,
+                            marginal_response=efficiency,
+                            efficiency=efficiency,
+                            efficiency_metric=efficiency_metric,
                             reliability=reliability,
                             recommended_movement=recommendation.movement,
                             warning=recommendation.warning,
@@ -295,6 +330,12 @@ class GetChannelPerformance:
                     confidence_high=item.confidence_high,
                     contribution=contribution,
                     marginal_response=marginal,
+                    efficiency=incremental_roas,
+                    efficiency_metric=(
+                        "incremental_revenue_per_dollar"
+                        if incremental_roas is not None
+                        else None
+                    ),
                     reliability=reliability,
                     recommended_movement=recommendation.movement,
                     warning=recommendation.warning,

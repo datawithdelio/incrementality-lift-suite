@@ -127,7 +127,8 @@ export type AnalysisEstimatorSettings =
   | {
       kind: "off_policy_evaluation";
       rewardColumn: string;
-      expectedRewardColumn: string;
+      observedActionExpectedRewardColumn: string;
+      targetPolicyExpectedRewardColumn: string;
       primaryMethod: OffPolicyMethod;
     };
 
@@ -206,6 +207,20 @@ function mapSelection(
 
   return configuration;
 }
+
+export function mapAnalysisContextConfiguration(
+  period: AnalysisPeriodDraft,
+  selection: AnalysisSelectionDraft,
+): Record<string, unknown> {
+  return {
+    analysis_start_date:
+      period.analysisStartDate,
+    analysis_end_date:
+      period.analysisEndDate,
+    ...mapSelection(selection),
+  };
+}
+
 
 function mapTreatmentControl(
   treatmentControl:
@@ -294,9 +309,10 @@ function mapEstimatorSettings(
       return {
         reward_column:
           settings.rewardColumn,
-        expected_reward_column:
-          settings
-            .expectedRewardColumn,
+        observed_action_expected_reward_column:
+          settings.observedActionExpectedRewardColumn,
+        target_policy_expected_reward_column:
+          settings.targetPolicyExpectedRewardColumn,
         primary_method:
           settings.primaryMethod,
       };
@@ -310,13 +326,8 @@ export function mapAnalysisConfigurationRequest(
 ): QueueAnalysisRunRequest {
   const configuration:
     Record<string, unknown> = {
-      analysis_start_date:
-        draft.period
-          .analysisStartDate,
-      analysis_end_date:
-        draft.period
-          .analysisEndDate,
-      ...mapSelection(
+      ...mapAnalysisContextConfiguration(
+        draft.period,
         draft.selection,
       ),
       ...mapTreatmentControl(

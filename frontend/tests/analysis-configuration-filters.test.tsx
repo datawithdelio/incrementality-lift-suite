@@ -629,6 +629,77 @@ describe("Analysis Configuration filters and selections", () => {
     expect(screen.getByText("geo · Is null")).toBeInTheDocument();
   });
 
+  it("does not treat logged decision units as geographies for Off-policy Evaluation", async () => {
+    render(
+      <AnalysisConfigurationClient
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /Off-policy Evaluation/i,
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Continue",
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Analysis start date"), {
+      target: {
+        value: "2025-01-01",
+      },
+    });
+
+    fireEvent.change(screen.getByLabelText("Analysis end date"), {
+      target: {
+        value: "2025-03-31",
+      },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Continue",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Filter and select population",
+      }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByLabelText("Filter column")).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("heading", {
+        name: "Geography selection",
+      }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("region", {
+        name: "Geography selection cards",
+      }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Continue",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Treatment and control setup",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("selects geographies and segments from observed dataset values without overlap", async () => {
     render(
       <AnalysisConfigurationClient

@@ -13,6 +13,10 @@ from incrementality_api.application.data_products.geography_summary import (
     GeographySummaryBuilder,
     GeographySummaryResult,
 )
+from incrementality_api.application.data_products.mmm_design_summary import (
+    MarketingMixDesignSummary,
+    MarketingMixDesignSummaryPlanner,
+)
 from incrementality_api.application.data_products.quality import (
     DataQualityAssessor,
     DataQualityInput,
@@ -20,6 +24,9 @@ from incrementality_api.application.data_products.quality import (
 )
 from incrementality_api.application.datasets.errors import DatasetUnavailableError
 from incrementality_api.application.datasets.ports import DatasetObjectStorage
+from incrementality_api.domain.analysis_runs.semantic_mapping_snapshot import (
+    SemanticMappingSnapshot,
+)
 from incrementality_api.domain.datasets.entities import Dataset
 from incrementality_api.domain.datasets.semantic_mapping import DatasetSemanticMapping
 from incrementality_api.domain.datasets.status import DatasetStatus
@@ -83,6 +90,7 @@ class ProductionDataProducts:
         object_storage: DatasetObjectStorage,
         quality_writer: QualityAssessmentWriter,
         row_loader: CsvAnalysisRowLoader | None = None,
+        mmm_design_summary_planner: MarketingMixDesignSummaryPlanner | None = None,
     ) -> None:
         self._unit_of_work = unit_of_work
         self._storage = object_storage
@@ -91,6 +99,7 @@ class ProductionDataProducts:
         self._explorer = DatasetExplorer()
         self._geography_summary = GeographySummaryBuilder()
         self._quality = DataQualityAssessor()
+        self._mmm_design_summary_planner = mmm_design_summary_planner
 
     async def preview(
         self, scope: DatasetProductQuery, query: DatasetExplorerQuery
@@ -120,6 +129,42 @@ class ProductionDataProducts:
         return self._geography_summary.build(
             rows,
             mapping,
+        )
+
+    async def marketing_mix_design_summary(
+        self,
+        scope: DatasetProductQuery,
+        *,
+        configuration: dict[str, object],
+    ) -> MarketingMixDesignSummary:
+        rows, mapping = await self._load(scope)
+
+        if mapping is None:
+            raise DatasetUnavailableError(
+                "A semantic mapping is required for MMM design summaries."
+            )
+
+        planner = self._mmm_design_summary_planner
+        if planner is None:
+            raise RuntimeError(
+                "MMM design-summary planner is not configured."
+            )
+
+        mapping_snapshot = SemanticMappingSnapshot.create(
+            time_column=mapping.time_column,
+            unit_column=mapping.unit_column,
+            treatment_column=mapping.treatment_column,
+            outcome_column=mapping.outcome_column,
+            spend_column=mapping.spend_column,
+            covariate_columns=mapping.covariate_columns,
+            treatment_value=mapping.treatment_value,
+            control_value=mapping.control_value,
+        )
+
+        return planner.build_from_configuration(
+            rows=rows,
+            mapping=mapping_snapshot,
+            configuration=configuration,
         )
 
     async def assess_quality(

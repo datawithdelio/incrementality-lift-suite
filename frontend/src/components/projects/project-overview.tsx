@@ -425,9 +425,7 @@ export function ProjectOverview({
                 href={`${datasetUploadPath(
                   workspaceId,
                   projectId,
-                )}?replace=1&dataset=${encodeURIComponent(
-                  project.latest_dataset_id,
-                )}`}
+                )}?replace=1`}
               >
                 Replace Dataset
                 <ArrowRightIcon size={16} aria-hidden="true" />

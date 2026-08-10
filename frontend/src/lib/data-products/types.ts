@@ -124,6 +124,12 @@ export type GeographySummary = {
   geographies: GeographySummaryItem[];
 };
 
+export type MarketingMixDesignSummary = {
+  contract_version: "mmm-design-summary-v1";
+  period_count: number;
+  saturation_half_spend_defaults: Record<string, number>;
+};
+
 export type QualityFinding = {
   rule_id: string;
   severity: string;

@@ -332,7 +332,8 @@ def test_derives_off_policy_evaluation_estimand_from_validated_snapshots() -> No
         "behavior_propensity_column": "behavior_probability",
         "target_propensity_column": "target_probability",
         "reward_column": "reward",
-        "expected_reward_column": "expected_reward",
+        "observed_action_expected_reward_column": "observed_expected_reward",
+        "target_policy_expected_reward_column": "target_expected_reward",
         "primary_method": "doubly_robust"
     }
     """

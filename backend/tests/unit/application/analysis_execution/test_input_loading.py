@@ -224,6 +224,53 @@ async def test_loads_tenant_scoped_csv_and_constructs_did_input() -> None:
 
 
 @pytest.mark.asyncio
+async def test_loader_parses_boolean_outcome_tokens_as_zero_and_one() -> None:
+    job, metadata = build_metadata()
+
+    boolean_outcome = replace(
+        metadata.columns[3],
+        inferred_type=DatasetColumnType.BOOLEAN,
+    )
+    metadata = replace(
+        metadata,
+        columns=(
+            *metadata.columns[:3],
+            boolean_outcome,
+        ),
+    )
+
+    storage = FakeObjectStorage(
+        b"Date,Market,Treated,Revenue\n"
+        b"2026-01-01,north,no,false\n"
+        b"2026-01-02,north,no,true\n"
+        b"2026-01-01,south,yes,yes\n"
+        b"2026-01-02,south,yes,no\n"
+    )
+
+    loaded = await ProductionAnalysisInputLoader(
+        metadata_reader=FakeMetadataReader(metadata),
+        object_storage=storage,
+        metadata_validator=AnalysisInputMetadataValidator(),
+        row_loader=CsvAnalysisRowLoader(),
+        configuration_parser=DifferenceInDifferencesConfigurationParser(),
+        input_builder=DifferenceInDifferencesInputBuilder(),
+        period_filter=AnalysisPeriodRowFilter(),
+        selection_executor=AnalysisSelectionRowExecutor(),
+        treatment_control_executor=TreatmentControlRowExecutor(),
+    ).load(job)
+
+    assert isinstance(loaded.payload, DifferenceInDifferencesInput)
+    assert [
+        row.outcome for row in loaded.payload.observations
+    ] == [
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+    ]
+
+
+@pytest.mark.asyncio
 async def test_worker_filters_rows_with_the_persisted_selection_snapshot() -> None:
     job, metadata = build_metadata(
         configuration_json='{"selected_geographies":["north"]}'
@@ -250,6 +297,27 @@ async def test_worker_filters_rows_with_the_persisted_selection_snapshot() -> No
 
     assert isinstance(loaded.payload, DifferenceInDifferencesInput)
     assert [row.unit for row in loaded.payload.observations] == ["north", "north"]
+
+
+def test_metadata_validator_accepts_boolean_binary_outcome_profile() -> None:
+    job, metadata = build_metadata()
+
+    boolean_outcome = replace(
+        metadata.columns[3],
+        inferred_type=DatasetColumnType.BOOLEAN,
+    )
+    metadata = replace(
+        metadata,
+        columns=(
+            *metadata.columns[:3],
+            boolean_outcome,
+        ),
+    )
+
+    AnalysisInputMetadataValidator().validate(
+        job=job,
+        metadata=metadata,
+    )
 
 
 def test_rejects_nullable_required_column_profile() -> None:

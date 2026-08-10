@@ -11,6 +11,7 @@ import { SESSION_TOKEN_KEY } from "../src/lib/auth/api";
 
 const {
   fetchPreviewMock,
+  fetchMarketingMixDesignSummaryMock,
   fetchGeographySummaryMock,
   getProjectOverviewMock,
   getDatasetMock,
@@ -19,6 +20,7 @@ const {
   pushMock,
 } = vi.hoisted(() => ({
   fetchPreviewMock: vi.fn(),
+  fetchMarketingMixDesignSummaryMock: vi.fn(),
   fetchGeographySummaryMock: vi.fn(),
   getProjectOverviewMock: vi.fn(),
   getDatasetMock: vi.fn(),
@@ -41,6 +43,8 @@ vi.mock("../src/lib/data-products/api", async () => {
   return {
     ...actual,
     fetchPreview: fetchPreviewMock,
+    fetchMarketingMixDesignSummary:
+      fetchMarketingMixDesignSummaryMock,
     fetchGeographySummary: fetchGeographySummaryMock,
   };
 });
@@ -275,6 +279,16 @@ describe("Analysis Configuration treatment and control", () => {
           maximum: 20,
           mean: 19,
           median: 19,
+        },
+        {
+          name: "conversion",
+          inferred_type: "boolean",
+          missing_percentage: 0,
+          unique_count: 2,
+          minimum: null,
+          maximum: null,
+          mean: null,
+          median: null,
         },
         {
           name: "segment",
@@ -517,6 +531,21 @@ describe("Analysis Configuration treatment and control", () => {
   });
 
   it("shows backend-compatible MMM settings", async () => {
+    const serverHalfSpendDefaults = {
+      paid_search_spend: 41000,
+      social_spend: 30000,
+      tv_spend: 38000,
+      display_spend: 18000,
+      email_spend: 7600,
+    };
+
+    fetchMarketingMixDesignSummaryMock.mockResolvedValue({
+      contract_version: "mmm-design-summary-v1",
+      period_count: 13,
+      saturation_half_spend_defaults:
+        serverHalfSpendDefaults,
+    });
+
     getLatestSemanticMappingMock.mockResolvedValue({
       id: "mapping-mmm",
       dataset_id: "dataset-1",
@@ -540,7 +569,7 @@ describe("Analysis Configuration treatment and control", () => {
       "display_spend",
       "email_spend",
     ];
-    const numericColumn = (name: string) => ({
+    const numericColumn = (name: string, median = 10) => ({
       name,
       inferred_type: "float",
       missing_percentage: 0,
@@ -548,7 +577,7 @@ describe("Analysis Configuration treatment and control", () => {
       minimum: 0,
       maximum: 100,
       mean: 10,
-      median: 10,
+      median,
     });
     fetchPreviewMock.mockResolvedValue({
       rows: [],
@@ -564,7 +593,11 @@ describe("Analysis Configuration treatment and control", () => {
           inferred_type: "string",
         },
         numericColumn("conversions"),
-        ...channelNames.map(numericColumn),
+        numericColumn("paid_search_spend", 10589),
+        numericColumn("social_spend", 7518),
+        numericColumn("tv_spend", 9474),
+        numericColumn("display_spend", 4627),
+        numericColumn("email_spend", 1934),
         numericColumn("total_spend"),
         numericColumn("sessions"),
         numericColumn("holiday"),
@@ -637,6 +670,302 @@ describe("Analysis Configuration treatment and control", () => {
     }
 
     expect(screen.getByText("sessions, holiday, promotion")).toBeInTheDocument();
+
+    expect(
+      screen.getByLabelText("Saturation half-spend paid_search_spend"),
+    ).toHaveValue(41000);
+    expect(
+      screen.getByLabelText("Saturation half-spend social_spend"),
+    ).toHaveValue(30000);
+    expect(
+      screen.getByLabelText("Saturation half-spend tv_spend"),
+    ).toHaveValue(38000);
+    expect(
+      screen.getByLabelText("Saturation half-spend display_spend"),
+    ).toHaveValue(18000);
+    expect(
+      screen.getByLabelText("Saturation half-spend email_spend"),
+    ).toHaveValue(7600);
+
+    queueAnalysisRunMock.mockResolvedValue({
+      id: "run-mmm",
+      workspace_id: "workspace-1",
+      project_id: "project-1",
+      estimator_type: "marketing_mix_model",
+      estimator_version: "mmm-v1",
+      status: "queued",
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Continue",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Review analysis configuration",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Queue analysis",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(queueAnalysisRunMock).toHaveBeenCalledWith(
+        "session-token",
+        "workspace-1",
+        "project-1",
+        expect.objectContaining({
+          dataset_id: "dataset-1",
+          semantic_mapping_version: 4,
+          estimator_type: "marketing_mix_model",
+          configuration: expect.objectContaining({
+            outcome_kind: "conversions",
+            media_channels: channelNames,
+            control_columns: ["sessions", "holiday", "promotion"],
+            aggregate_spend_column: "total_spend",
+            saturation_half_spend: {
+              paid_search_spend: 41000,
+              social_spend: 30000,
+              tv_spend: 38000,
+              display_spend: 18000,
+              email_spend: 7600,
+            },
+          }),
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        fetchMarketingMixDesignSummaryMock,
+      ).toHaveBeenCalledWith(
+        "workspace-1",
+        "project-1",
+        "dataset-1",
+        4,
+        expect.objectContaining({
+          analysis_start_date: "2025-01-01",
+          analysis_end_date: "2025-03-31",
+          row_filters: [],
+          selected_geographies: [],
+          excluded_geographies: [],
+          media_channels: channelNames,
+          control_columns: [
+            "sessions",
+            "holiday",
+            "promotion",
+          ],
+          aggregate_spend_column: "total_spend",
+        }),
+        "session-token",
+        expect.anything(),
+      );
+    });
+
+
+  });
+
+  it("ignores a stale MMM design-summary response after the configuration changes", async () => {
+    let resolveFirst:
+      | ((value: {
+          contract_version: "mmm-design-summary-v1";
+          period_count: number;
+          saturation_half_spend_defaults: Record<string, number>;
+        }) => void)
+      | undefined;
+
+    let resolveSecond:
+      | ((value: {
+          contract_version: "mmm-design-summary-v1";
+          period_count: number;
+          saturation_half_spend_defaults: Record<string, number>;
+        }) => void)
+      | undefined;
+
+    const firstResponse = new Promise<{
+      contract_version: "mmm-design-summary-v1";
+      period_count: number;
+      saturation_half_spend_defaults: Record<string, number>;
+    }>((resolve) => {
+      resolveFirst = resolve;
+    });
+
+    const secondResponse = new Promise<{
+      contract_version: "mmm-design-summary-v1";
+      period_count: number;
+      saturation_half_spend_defaults: Record<string, number>;
+    }>((resolve) => {
+      resolveSecond = resolve;
+    });
+
+    fetchMarketingMixDesignSummaryMock
+      .mockReturnValueOnce(firstResponse)
+      .mockReturnValueOnce(secondResponse);
+
+    getLatestSemanticMappingMock.mockResolvedValue({
+      id: "mapping-mmm-race",
+      dataset_id: "dataset-1",
+      created_by_user_id: "user-1",
+      version: 4,
+      time_column: "date",
+      unit_column: "geo",
+      treatment_column: null,
+      outcome_column: "conversions",
+      spend_column: "total_spend",
+      covariate_columns: ["sessions"],
+      treatment_value: null,
+      control_value: null,
+      created_at: "2026-08-08T00:00:00Z",
+      updated_at: "2026-08-08T00:00:00Z",
+    });
+
+    const numericColumn = (name: string) => ({
+      name,
+      inferred_type: "float",
+      missing_percentage: 0,
+      unique_count: 3,
+      minimum: 0,
+      maximum: 100,
+      mean: 10,
+      median: 10,
+    });
+
+    fetchPreviewMock.mockResolvedValue({
+      rows: [],
+      columns: [
+        {
+          ...numericColumn("date"),
+          inferred_type: "date",
+          minimum: "2025-01-01",
+          maximum: "2025-12-31",
+        },
+        {
+          ...numericColumn("geo"),
+          inferred_type: "string",
+        },
+        numericColumn("conversions"),
+        numericColumn("paid_search_spend"),
+        numericColumn("social_spend"),
+        numericColumn("total_spend"),
+        numericColumn("sessions"),
+      ],
+      total_rows: 3,
+      page: 1,
+      page_size: 50,
+      total_pages: 1,
+      date_range: {
+        column: "date",
+        minimum: "2025-01-01",
+        maximum: "2025-12-31",
+      },
+      treatment_distribution: {},
+      outcome_distribution: {},
+    });
+
+    await moveToFilters(/Marketing Mix Modeling/i);
+
+    await waitFor(() => {
+      expect(
+        fetchMarketingMixDesignSummaryMock,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    const firstSignal =
+      fetchMarketingMixDesignSummaryMock.mock.calls[0][6];
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Continue",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Treatment and control setup",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Continue",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Estimator settings",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByLabelText("Seasonality period"),
+      {
+        target: {
+          value: "26",
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(
+        fetchMarketingMixDesignSummaryMock,
+      ).toHaveBeenCalledTimes(2);
+    });
+
+    expect(firstSignal.aborted).toBe(true);
+
+    resolveSecond?.({
+      contract_version: "mmm-design-summary-v1",
+      period_count: 13,
+      saturation_half_spend_defaults: {
+        paid_search_spend: 42000,
+        social_spend: 31000,
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText(
+          "Saturation half-spend paid_search_spend",
+        ),
+      ).toHaveValue(42000);
+
+      expect(
+        screen.getByLabelText(
+          "Saturation half-spend social_spend",
+        ),
+      ).toHaveValue(31000);
+    });
+
+    // The older request resolves after the newer request.
+    // Its stale values must never replace the current defaults.
+    resolveFirst?.({
+      contract_version: "mmm-design-summary-v1",
+      period_count: 13,
+      saturation_half_spend_defaults: {
+        paid_search_spend: 111,
+        social_spend: 222,
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText(
+          "Saturation half-spend paid_search_spend",
+        ),
+      ).toHaveValue(42000);
+
+      expect(
+        screen.getByLabelText(
+          "Saturation half-spend social_spend",
+        ),
+      ).toHaveValue(31000);
+    });
   });
 
   it("collects Off-policy assignment and supported estimator settings", async () => {
@@ -696,11 +1025,27 @@ describe("Analysis Configuration treatment and control", () => {
 
     const rewardColumn = screen.getByLabelText("Reward column");
 
-    const expectedRewardColumn = screen.getByLabelText(
-      "Expected reward column",
+    const observedActionExpectedRewardColumn = screen.getByLabelText(
+      "Observed-action expected reward column",
+    );
+
+    const targetPolicyExpectedRewardColumn = screen.getByLabelText(
+      "Target-policy expected reward column",
     );
 
     const primaryMethod = screen.getByLabelText("Primary method");
+
+expect(rewardColumn).toContainHTML(
+  '<option value="conversion">conversion</option>',
+);
+
+expect(observedActionExpectedRewardColumn).not.toContainHTML(
+  '<option value="conversion">conversion</option>',
+);
+
+expect(targetPolicyExpectedRewardColumn).not.toContainHTML(
+  '<option value="conversion">conversion</option>',
+);
 
     expect(primaryMethod).toHaveValue("doubly_robust");
 
@@ -717,22 +1062,45 @@ describe("Analysis Configuration treatment and control", () => {
     );
 
     fireEvent.change(rewardColumn, {
-      target: {
-        value: "revenue",
-      },
-    });
+  target: {
+    value: "conversion",
+  },
+});
 
-    fireEvent.change(expectedRewardColumn, {
+    fireEvent.change(observedActionExpectedRewardColumn, {
       target: {
         value: "spend",
       },
     });
 
+    fireEvent.change(targetPolicyExpectedRewardColumn, {
+      target: {
+        value: "revenue",
+      },
+    });
+
+    const settingsContinue = screen.getByRole("button", {
+      name: "Continue",
+    });
+
+    expect(settingsContinue).toBeEnabled();
+
+    fireEvent.click(settingsContinue);
+
     expect(
-      screen.getByRole("button", {
-        name: "Continue",
+      await screen.findByRole("heading", {
+        name: "Review analysis configuration",
       }),
-    ).toBeEnabled();
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Policy assignment",
+      }),
+    ).toBeInTheDocument();
+
+    expect(screen.queryByText("Included geographies")).not.toBeInTheDocument();
+    expect(screen.queryByText("Excluded geographies")).not.toBeInTheDocument();
   });
 
   it("builds the analysis draft and shows a human-readable review before queueing", async () => {

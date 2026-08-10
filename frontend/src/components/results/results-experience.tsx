@@ -277,12 +277,29 @@ export function ResultsExperience({
   const assumption = methodAssumption(data.estimator_type);
   const relativeLift = result.business_impact.relative_lift;
   const isMarketingMix = data.estimator_type === "marketing_mix_model";
+  const isOffPolicy = data.estimator_type === "off_policy_evaluation";
+  const isOffPolicyProbability =
+    isOffPolicy && targetOutcome?.toLowerCase() === "conversion";
+
+  const policyValue = isOffPolicyProbability
+    ? `${number(result.effect_estimate * 100, 1)}%`
+    : number(result.effect_estimate, 3);
+
+  const policyIntervalLow = isOffPolicyProbability
+    ? `${number(result.confidence_interval.low * 100, 1)}%`
+    : number(result.confidence_interval.low, 3);
+
+  const policyIntervalHigh = isOffPolicyProbability
+    ? `${number(result.confidence_interval.high * 100, 1)}%`
+    : number(result.confidence_interval.high, 3);
 
   const headline = isMarketingMix
     ? number(result.effect_estimate)
-    : relativeLift === null
-      ? number(result.effect_estimate)
-      : percent(relativeLift);
+    : isOffPolicy
+      ? policyValue
+      : relativeLift === null
+        ? number(result.effect_estimate)
+        : percent(relativeLift);
 
   const headlineLabel = isMarketingMix
     ? "Average media contribution"
@@ -304,7 +321,9 @@ export function ResultsExperience({
   );
 
   const uncertaintyCopy =
-    data.estimator_type === "marketing_mix_model"
+    isOffPolicy
+      ? `${confidenceLevel}% confidence interval ${policyIntervalLow} to ${policyIntervalHigh}.`
+      : data.estimator_type === "marketing_mix_model"
       ? `${confidenceLevel}% posterior interval ${number(
           result.confidence_interval.low,
         )} to ${number(result.confidence_interval.high)}`
@@ -333,28 +352,39 @@ export function ResultsExperience({
               Object.keys(objectValue(diagnostics.donor_weights)).length,
             ),
           }
-        : {
-            label: "Treated / control units",
-            value: `${String(samples.treated_units ?? "—")} / ${String(samples.control_units ?? "—")}`,
-          };
+        : isOffPolicy
+          ? {
+              label: "Primary method",
+              value: humanize(diagnostics.primary_method, "Not available"),
+            }
+          : {
+              label: "Treated / control units",
+              value: `${String(samples.treated_units ?? "—")} / ${String(samples.control_units ?? "—")}`,
+            };
   const designAssessment = humanize(
     diagnostics.design_assessment,
     decisionReady ? "Decision ready" : "Needs review",
   );
-  const evidenceStrength =
-    diagnostics.causal_claim_allowed === true
+  const evidenceStrength = isOffPolicy
+    ? decisionReady
+      ? "Policy evaluation evidence"
+      : "Directional policy evidence"
+    : diagnostics.causal_claim_allowed === true
       ? "Causal evidence"
       : diagnostics.recommendations_allowed === true
         ? "Planning-ready evidence"
         : "Directional evidence";
-  const incrementalImpact =
-    result.business_impact.incremental_revenue === null
+  const incrementalImpact = isOffPolicy
+    ? "Not estimated"
+    : result.business_impact.incremental_revenue === null
       ? result.business_impact.incremental_outcome === null
         ? "Not available"
         : number(result.business_impact.incremental_outcome, 0)
       : currency(result.business_impact.incremental_revenue);
-  const impactLabel =
-    result.business_impact.incremental_revenue === null
+
+  const impactLabel = isOffPolicy
+    ? "Policy improvement vs behavior policy"
+    : result.business_impact.incremental_revenue === null
       ? "Incremental outcome"
       : "Incremental revenue";
   const recommendation = decisionReady
@@ -457,7 +487,13 @@ export function ResultsExperience({
             </span>
             <span>{impactLabel}</span>
             <strong>{incrementalImpact}</strong>
-            <small>Across treated observations</small>
+            <small>
+              {data.estimator_type === "marketing_mix_model"
+                ? "Across modeled periods"
+                : isOffPolicy
+                  ? "This run estimates the target-policy value only."
+                  : "Across treated observations"}
+            </small>
           </div>
           <div className="hero-metric">
             <span
@@ -493,18 +529,24 @@ export function ResultsExperience({
                 <WarningCircleIcon size={22} weight="fill" />
               )}
             </span>
-            <span>Design quality</span>
+            <span>{isOffPolicy ? "Overlap quality" : "Design quality"}</span>
             <strong
               className={`hero-metric-text design-${String(
                 diagnostics.design_assessment ?? "review",
               )}`}
             >
-              {designAssessment}
+              {isOffPolicy
+                ? humanize(diagnostics.reliability, "Needs review")
+                : designAssessment}
             </strong>
             <small>
-              {warnings.length
-                ? "Review the diagnostic findings below"
-                : "Review assumptions before acting"}
+              {isOffPolicy
+                ? diagnostics.reliability === "strong"
+                  ? "Historical policy support is sufficient for estimation."
+                  : "Review propensity overlap before acting."
+                : warnings.length
+                  ? "Review the diagnostic findings below"
+                  : "Review assumptions before acting"}
             </small>
           </div>
         </div>
@@ -540,16 +582,26 @@ export function ResultsExperience({
           label={
             data.estimator_type === "marketing_mix_model"
               ? "Average media contribution"
-              : "Effect per treated observation"
+              : isOffPolicy
+                ? "Estimated policy value"
+                : "Effect per treated observation"
           }
-          value={number(result.effect_estimate)}
-          detail="Average estimated change"
+          value={isOffPolicy ? policyValue : number(result.effect_estimate)}
+          detail={
+            isOffPolicy
+              ? "Expected outcome under the target policy"
+              : "Average estimated change"
+          }
         />
         <EvidenceMetric
           icon={<CheckCircleIcon aria-hidden="true" size={22} weight="bold" />}
           label={groupMetric.label}
           value={groupMetric.value}
-          detail="Units represented in the design"
+          detail={
+            isOffPolicy
+              ? "Estimator used for the reported policy value."
+              : "Units represented in the design"
+          }
         />
         <EvidenceMetric
           icon={<FileTextIcon aria-hidden="true" size={22} weight="bold" />}
@@ -574,7 +626,10 @@ export function ResultsExperience({
         <MarketingMixPanels diagnostics={diagnostics} />
       ) : null}
       {data.estimator_type === "off_policy_evaluation" ? (
-        <OffPolicyEvaluationPanels diagnostics={diagnostics} />
+        <OffPolicyEvaluationPanels
+          diagnostics={diagnostics}
+          probabilityScale={isOffPolicyProbability}
+        />
       ) : null}
 
       {data.estimator_type === "difference_in_differences" ? (

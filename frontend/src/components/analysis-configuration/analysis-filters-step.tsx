@@ -471,7 +471,8 @@ export function AnalysisFiltersStep({
           </div>
         )}
 
-        <section
+        {estimator !== "off_policy_evaluation" && (
+    <section
           className="analysis-geography-section"
           aria-labelledby={"geography-selection-heading"}
         >
@@ -644,6 +645,7 @@ export function AnalysisFiltersStep({
             })}
           </div>
         </section>
+    )}
 
         <section
           className="analysis-segment-section"

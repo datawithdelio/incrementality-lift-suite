@@ -89,7 +89,8 @@ class PolicyEvaluationObservation:
     reward: float
     behavior_probability: float
     target_probability: float
-    expected_reward: float
+    observed_action_expected_reward: float
+    target_policy_expected_reward: float
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 import numpy as np
@@ -18,6 +19,7 @@ from incrementality_api.infrastructure.estimation.package_versions import (
 class MarketingMixDesign:
     channel_names: tuple[str, ...]
     control_names: tuple[str, ...]
+    observed_at: tuple[datetime, ...]
     outcomes: np.ndarray
     raw_spend: np.ndarray
     controls: np.ndarray
@@ -35,6 +37,7 @@ class MarketingMixPosterior:
     divergences: int
     library_name: str
     library_version: str
+    fitted_outcome: tuple[tuple[float, float, float], ...] = ()
 
 
 class MarketingMixModelRunner(Protocol):
@@ -109,6 +112,7 @@ class MarketingMixTransformer:
         return MarketingMixDesign(
             channel_names=channel_names,
             control_names=control_names,
+            observed_at=tuple(item.observed_at for item in observations),
             outcomes=outcomes,
             raw_spend=raw_spend,
             controls=controls,
@@ -145,7 +149,12 @@ class PyMCMarketingMixModelRunner:
             ) from error
 
         outcome_scale = max(float(np.std(design.outcomes)), 1.0)
-        with pm.Model(coords={"channel": design.channel_names}):
+        with pm.Model(
+            coords={
+                "channel": design.channel_names,
+                "period": tuple(range(len(design.outcomes))),
+            }
+        ):
             intercept = pm.Normal(
                 "intercept",
                 mu=float(np.mean(design.outcomes)),
@@ -167,7 +176,18 @@ class PyMCMarketingMixModelRunner:
                     shape=len(design.control_names),
                 )
                 mu = mu + pm.math.dot(design.controls, control_beta)
-            pm.Normal("outcome", mu=mu, sigma=sigma, observed=design.outcomes)
+            fitted_mean = pm.Deterministic(
+                "fitted_mean",
+                mu,
+                dims="period",
+            )
+            pm.Normal(
+                "outcome",
+                mu=fitted_mean,
+                sigma=sigma,
+                observed=design.outcomes,
+                dims="period",
+            )
             inference = pm.sample(
                 draws=self._draws,
                 tune=self._tune,
@@ -189,6 +209,18 @@ class PyMCMarketingMixModelRunner:
             )
             for index, channel in enumerate(design.channel_names)
         }
+        fitted_samples = np.asarray(
+            inference.posterior["fitted_mean"]
+        ).reshape(-1, len(design.outcomes))
+        fitted_outcome = tuple(
+            (
+                float(np.mean(fitted_samples[:, index])),
+                float(np.quantile(fitted_samples[:, index], 0.025)),
+                float(np.quantile(fitted_samples[:, index], 0.975)),
+            )
+            for index in range(len(design.outcomes))
+        )
+
         r_hat = np.asarray(pm.rhat(inference, var_names=["beta"])["beta"])
         ess = np.asarray(pm.ess(inference, var_names=["beta"])["beta"])
         divergences = int(np.asarray(inference.sample_stats["diverging"]).sum())
@@ -201,6 +233,7 @@ class PyMCMarketingMixModelRunner:
             divergences=divergences,
             library_name="pymc",
             library_version=installed_distribution_version("pymc"),
+            fitted_outcome=fitted_outcome,
         )
 
 
@@ -219,6 +252,18 @@ class MarketingMixDiagnosticPolicy:
             warnings.append("Fewer than 24 periods limits separation of media and seasonality.")
         if periods < channels * 8:
             warnings.append("The history is short relative to the number of channels.")
+
+        wide_channel_posteriors = [
+            channel
+            for channel, (mean, low, high) in posterior.channel_coefficients.items()
+            if (high - low) / max(abs(mean), 1e-9) > 2.0
+        ]
+        if wide_channel_posteriors:
+            warnings.append(
+                "Posterior uncertainty is too wide for stable channel-level "
+                "budget recommendations."
+            )
+
         convergence_failed = (
             posterior.max_r_hat > 1.05
             or posterior.min_effective_sample_size < 400
@@ -231,6 +276,15 @@ class MarketingMixDiagnosticPolicy:
                 warnings,
                 "The model did not converge, so budget recommendations are withheld.",
             )
+        if wide_channel_posteriors:
+            return (
+                "weak",
+                False,
+                warnings,
+                "Posterior uncertainty is too wide for stable channel-level "
+                "interpretation, so budget recommendations are withheld.",
+            )
+
         if warnings:
             return (
                 "weak",
@@ -282,7 +336,7 @@ class BayesianMarketingMixEstimator:
         )
         contribution: dict[str, float] = {}
         intervals: dict[str, dict[str, float]] = {}
-        roas: dict[str, float | None] = {}
+        efficiency: dict[str, float | None] = {}
         curves: dict[str, list[dict[str, float]]] = {}
         for channel_index, channel in enumerate(design.channel_names):
             mean, low, high = posterior.channel_coefficients[channel]
@@ -291,12 +345,42 @@ class BayesianMarketingMixEstimator:
             contribution[channel] = channel_contribution
             intervals[channel] = {"low": low * exposure, "high": high * exposure}
             spend = float(np.sum(design.raw_spend[:, channel_index]))
-            roas[channel] = channel_contribution / spend if spend > 0 else None
+            efficiency[channel] = (
+                channel_contribution / spend if spend > 0 else None
+            )
             curves[channel] = self._response_curve(
                 coefficient=mean,
                 average_spend=float(np.mean(design.raw_spend[:, channel_index])),
                 half_spend=float(estimator_input.saturation_half_spend.get(channel, 1.0)),
             )
+        efficiency_metric = {
+            "revenue": "incremental_revenue_per_dollar",
+            "conversions": "incremental_conversions_per_dollar",
+            "outcome": "incremental_outcome_units_per_dollar",
+        }[estimator_input.outcome_kind]
+
+        fitted_outcome = tuple(getattr(posterior, "fitted_outcome", ()))
+        model_fit_series: list[dict[str, object]] = []
+
+        if len(fitted_outcome) == len(design.outcomes):
+            for period, observed, fitted in zip(
+                design.observed_at,
+                design.outcomes,
+                fitted_outcome,
+                strict=True,
+            ):
+                fitted_mean, fitted_low, fitted_high = fitted
+                model_fit_series.append(
+                    {
+                        "period": period.isoformat(),
+                        "observed": float(observed),
+                        "fitted_mean": float(fitted_mean),
+                        "fitted_low": float(fitted_low),
+                        "fitted_high": float(fitted_high),
+                        "residual": float(observed) - float(fitted_mean),
+                    }
+                )
+
         total = float(sum(contribution.values()))
         total_low = float(sum(item["low"] for item in intervals.values()))
         total_high = float(sum(item["high"] for item in intervals.values()))
@@ -314,10 +398,14 @@ class BayesianMarketingMixEstimator:
                 for index, channel in enumerate(design.channel_names)
             },
             "posterior_intervals": intervals,
-            "channel_roas": roas,
+            "model_fit_series": model_fit_series,
+            "channel_efficiency": efficiency,
+            "channel_efficiency_metric": efficiency_metric,
             "budget_response_curves": curves,
             "scenario_plan": (
-                self._scenario_plan(design=design, roas=roas) if recommendations_allowed else []
+                self._scenario_plan(design=design, roas=efficiency)
+                if recommendations_allowed
+                else []
             ),
             "convergence": {
                 "max_r_hat": posterior.max_r_hat,
@@ -341,6 +429,9 @@ class BayesianMarketingMixEstimator:
                 "channels": len(design.channel_names),
             },
         }
+        if estimator_input.outcome_kind == "revenue":
+            diagnostics["channel_roas"] = efficiency
+
         return AnalysisEstimationResult(
             effect=effect,
             standard_error=standard_error,

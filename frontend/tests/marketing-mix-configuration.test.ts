@@ -11,7 +11,11 @@ describe("Marketing Mix configuration derivation", () => {
       "display_spend",
       "email_spend",
     ];
-    const column = (name: string, inferred_type = "float") => ({
+    const column = (
+      name: string,
+      inferred_type = "float",
+      median = 10,
+    ) => ({
       name,
       inferred_type,
       missing_percentage: 0,
@@ -19,7 +23,7 @@ describe("Marketing Mix configuration derivation", () => {
       minimum: 0,
       maximum: 100,
       mean: 10,
-      median: 10,
+      median,
     });
 
     const result = deriveMarketingMixConfiguration(
@@ -29,11 +33,15 @@ describe("Marketing Mix configuration derivation", () => {
           column("date", "date"),
           column("region", "string"),
           column("conversions"),
-          ...channelNames.map((name) => column(name)),
+          column("paid_search_spend", "float", 10589),
+          column("social_spend", "float", 7518),
+          column("tv_spend", "float", 9474),
+          column("display_spend", "float", 4627),
+          column("email_spend", "float", 1934),
           column("total_spend"),
           column("sessions"),
-          column("holiday", "integer"),
-          column("promotion", "integer"),
+          column("holiday", "boolean"),
+          column("promotion", "boolean"),
         ],
         total_rows: 0,
         page: 1,
@@ -66,6 +74,13 @@ describe("Marketing Mix configuration derivation", () => {
       controlColumns: ["sessions", "holiday", "promotion"],
       aggregateSpendColumn: "total_spend",
       outcomeKind: "conversions",
+      saturationHalfSpendDefaults: {
+        paid_search_spend: 10589,
+        social_spend: 7518,
+        tv_spend: 9474,
+        display_spend: 4627,
+        email_spend: 1934,
+      },
     });
   });
 });

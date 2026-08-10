@@ -344,8 +344,10 @@ describe(
           kind:
             "off_policy_evaluation",
           rewardColumn: "reward",
-          expectedRewardColumn:
-            "prediction",
+          observedActionExpectedRewardColumn:
+            "observed_prediction",
+          targetPolicyExpectedRewardColumn:
+            "target_prediction",
           primaryMethod:
             "doubly_robust",
         },
@@ -371,8 +373,10 @@ describe(
         target_propensity_column:
           "target",
         reward_column: "reward",
-        expected_reward_column:
-          "prediction",
+        observed_action_expected_reward_column:
+          "observed_prediction",
+        target_policy_expected_reward_column:
+          "target_prediction",
         primary_method:
           "doubly_robust",
       });

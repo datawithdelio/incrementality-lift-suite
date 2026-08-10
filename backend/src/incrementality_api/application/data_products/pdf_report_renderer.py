@@ -838,6 +838,7 @@ class PdfReportRenderer:
         treated = [item for item in assignments if item.get("assignment") == "treatment"]
         holdout = [item for item in assignments if item.get("assignment") == "holdout"]
         is_geo = model.estimator == "geo_holdout"
+        is_ope = model.estimator == "off_policy_evaluation"
         relative_lift = deep_number(impact, "relative_lift")
         incremental = deep_number(
             impact,
@@ -892,6 +893,25 @@ class PdfReportRenderer:
         )
         causal = diagnostics.get("causal_claim_allowed") is True
         outcome = human(deep({"c": config, "l": lineage}, {"target_outcome", "outcome_column"}))
+        is_ope_probability = is_ope and outcome.lower() == "conversion"
+        policy_ready = diagnostics.get("recommendations_allowed") is True or (
+            diagnostics.get("recommendations_allowed") is None
+            and str(diagnostics.get("reliability") or "").lower() == "strong"
+        )
+        reliability = human(diagnostics.get("reliability"))
+        primary_method = human(
+            diagnostics.get("primary_method") or deep(config, {"primary_method"})
+        )
+        policy_value = (
+            f"{fmt(model.estimate * 100, 1)}%"
+            if is_ope_probability
+            else fmt(model.estimate, 3)
+        )
+        policy_interval = (
+            f"{fmt(model.confidence_low * 100, 1)}% to {fmt(model.confidence_high * 100, 1)}%"
+            if is_ope_probability
+            else f"{fmt(model.confidence_low, 3)} to {fmt(model.confidence_high, 3)}"
+        )
         analysis_start, analysis_end, intervention = (
             deep(config, {"analysis_start_date"}),
             deep(config, {"analysis_end_date"}),
@@ -903,71 +923,129 @@ class PdfReportRenderer:
             else (f"p = {p_value:.3f}" if p_value is not None else "p unavailable")
         )
         inference_summary = (
-            f"95% normal-approximation interval {fmt(model.confidence_low, 1)} to "
-            f"{fmt(model.confidence_high, 1)} (using the placebo-effect standard error). "
-            f"In-space placebo inference: {p_text}."
-            if model.estimator == "synthetic_control"
-            else f"95% confidence interval {fmt(model.confidence_low, 1)} to "
-            f"{fmt(model.confidence_high, 1)}. {p_text}"
+            f"95% confidence interval {policy_interval}."
+            if is_ope
+            else (
+                f"95% normal-approximation interval {fmt(model.confidence_low, 1)} to "
+                f"{fmt(model.confidence_high, 1)} (using the placebo-effect standard error). "
+                f"In-space placebo inference: {p_text}."
+                if model.estimator == "synthetic_control"
+                else f"95% confidence interval {fmt(model.confidence_low, 1)} to "
+                f"{fmt(model.confidence_high, 1)}. {p_text}"
+            )
         )
         story: list[Flowable] = []
 
         story += title_block(
             model.title,
             "Executive summary",
-            f"This report summarizes the incremental effect on {outcome.lower()} using a {human(model.estimator).lower()} design.",
+            (
+                f"This report summarizes the estimated target-policy value for {outcome.lower()} using off-policy evaluation."
+                if is_ope
+                else f"This report summarizes the incremental effect on {outcome.lower()} using a {human(model.estimator).lower()} design."
+            ),
         )
         story += [
             callout(
                 "Analysis conclusion",
-                "The saved diagnostics support a credible incremental effect."
-                if causal
-                else "The estimate is directional and requires cautious interpretation.",
-                "The estimate is supported by the saved diagnostic evidence."
-                if causal
-                else "Review the diagnostics before using this result for a decision.",
+                (
+                    "The saved overlap and weight diagnostics support this policy-value estimate for decision support."
+                    if policy_ready
+                    else "The policy-value estimate requires cautious interpretation because the saved overlap diagnostics need review."
+                )
+                if is_ope
+                else (
+                    "The saved diagnostics support a credible incremental effect."
+                    if causal
+                    else "The estimate is directional and requires cautious interpretation."
+                ),
+                (
+                    "This run estimates target-policy value, not improvement versus the behavior policy."
+                    if is_ope
+                    else (
+                        "The estimate is supported by the saved diagnostic evidence."
+                        if causal
+                        else "Review the diagnostics before using this result for a decision."
+                    )
+                ),
             ),
             Spacer(1, 10),
         ]
+        summary_cards = (
+            [
+                card(
+                    "Estimated policy value",
+                    policy_value,
+                    "Expected outcome under the target policy",
+                ),
+                card(
+                    "Policy improvement vs behavior policy",
+                    "Not estimated",
+                    "This run estimates target-policy value only.",
+                ),
+                card(
+                    "Overlap quality",
+                    reliability,
+                    "Historical policy support is sufficient for estimation."
+                    if policy_ready
+                    else "Review propensity overlap before acting.",
+                    green=policy_ready,
+                ),
+                card(
+                    "Effective sample size",
+                    fmt(effective_sample_size, 0),
+                    "Weighted policy evidence",
+                ),
+            ]
+            if is_ope
+            else [
+                card(
+                    "Estimated lift", percent(relative_lift), "Relative to expected outcome"
+                ),
+                card(
+                    "Incremental outcome",
+                    fmt(incremental, 0),
+                    "Across treated observations",
+                ),
+                card(
+                    "Design quality",
+                    design,
+                    "Meets current diagnostic policy"
+                    if design.lower() == "valid"
+                    else "Does not meet current diagnostic policy",
+                    green=design.lower() == "valid",
+                ),
+                card(
+                    comparability_label,
+                    comparability_value,
+                    comparability_note,
+                ),
+            ]
+        )
         story += [
-            Table(
-                [
-                    [
-                        card(
-                            "Estimated lift", percent(relative_lift), "Relative to expected outcome"
-                        ),
-                        card(
-                            "Incremental outcome",
-                            fmt(incremental, 0),
-                            "Across treated observations",
-                        ),
-                        card(
-                            "Design quality",
-                            design,
-                            "Meets current diagnostic policy"
-                            if design.lower() == "valid"
-                            else "Does not meet current diagnostic policy",
-                            green=design.lower() == "valid",
-                        ),
-                        card(
-                            comparability_label,
-                            comparability_value,
-                            comparability_note,
-                        ),
-                    ]
-                ],
-                colWidths=[CONTENT / 4] * 4,
-            ),
+            Table([summary_cards], colWidths=[CONTENT / 4] * 4),
             Spacer(1, 10),
         ]
         story += [
             callout(
                 "Business recommendation",
-                "Use this result with the documented assumptions and diagnostic evidence.",
-                "The diagnostic policy allows this estimate to support a decision."
-                if causal
-                else "The current evidence supports exploration, not a definitive causal decision.",
-                green=causal,
+                (
+                    "Use this target-policy value with the documented assumptions and overlap evidence."
+                    if is_ope
+                    else "Use this result with the documented assumptions and diagnostic evidence."
+                ),
+                (
+                    "The saved policy diagnostics allow this estimate to support a decision."
+                    if policy_ready
+                    else "The current policy diagnostics support exploration rather than deployment."
+                )
+                if is_ope
+                else (
+                    "The diagnostic policy allows this estimate to support a decision."
+                    if causal
+                    else "The current evidence supports exploration, not a definitive causal decision."
+                ),
+                green=policy_ready if is_ope else causal,
             ),
             Spacer(1, 10),
             para("STUDY OVERVIEW", "eyebrow"),
@@ -975,15 +1053,26 @@ class PdfReportRenderer:
         story += [
             properties(
                 (
-                    ("Method", human(model.estimator)),
-                    ("Analysis period", f"{date(analysis_start)} to {date(analysis_end)}"),
-                    ("Intervention date", date(intervention)),
-                    ("Outcome", outcome),
                     (
-                        "Treated / control geographies" if is_geo else "Treated / control units",
-                        f"{fmt(treated_units, 0)} / {fmt(control_units, 0)}",
-                    ),
-                    ("Observations", fmt(sample_size, 0)),
+                        ("Method", human(model.estimator)),
+                        ("Analysis period", f"{date(analysis_start)} to {date(analysis_end)}"),
+                        ("Outcome", outcome),
+                        ("Primary method", primary_method),
+                        ("Observations", fmt(sample_size, 0)),
+                        ("Effective sample size", fmt(effective_sample_size, 0)),
+                    )
+                    if is_ope
+                    else (
+                        ("Method", human(model.estimator)),
+                        ("Analysis period", f"{date(analysis_start)} to {date(analysis_end)}"),
+                        ("Intervention date", date(intervention)),
+                        ("Outcome", outcome),
+                        (
+                            "Treated / control geographies" if is_geo else "Treated / control units",
+                            f"{fmt(treated_units, 0)} / {fmt(control_units, 0)}",
+                        ),
+                        ("Observations", fmt(sample_size, 0)),
+                    )
                 ),
                 CONTENT,
             ),
@@ -1019,32 +1108,51 @@ class PdfReportRenderer:
             "Key findings and diagnostics",
             "Detailed results from the saved estimator output and supporting diagnostic evidence.",
         )
+        page_two_cards = (
+            [
+                card(
+                    "Estimated policy value",
+                    policy_value,
+                    "Expected outcome under the target policy",
+                    width=CONTENT / 3 - 7,
+                ),
+                card(
+                    "Policy improvement vs behavior policy",
+                    "Not estimated",
+                    "Target-policy value only",
+                    width=CONTENT / 3 - 7,
+                ),
+                card(
+                    "Primary method",
+                    primary_method,
+                    "Estimator used for the reported policy value",
+                    width=CONTENT / 3 - 7,
+                ),
+            ]
+            if is_ope
+            else [
+                card(
+                    "Estimated lift",
+                    percent(relative_lift),
+                    "Relative to expected outcome",
+                    width=CONTENT / 3 - 7,
+                ),
+                card(
+                    "Incremental outcome",
+                    fmt(incremental, 0),
+                    "Across treated observations",
+                    width=CONTENT / 3 - 7,
+                ),
+                card(
+                    "Effect per treated observation",
+                    signed(model.estimate),
+                    "Average estimated change",
+                    width=CONTENT / 3 - 7,
+                ),
+            ]
+        )
         story += [
-            Table(
-                [
-                    [
-                        card(
-                            "Estimated lift",
-                            percent(relative_lift),
-                            "Relative to expected outcome",
-                            width=CONTENT / 3 - 7,
-                        ),
-                        card(
-                            "Incremental outcome",
-                            fmt(incremental, 0),
-                            "Across treated observations",
-                            width=CONTENT / 3 - 7,
-                        ),
-                        card(
-                            "Effect per treated observation",
-                            signed(model.estimate),
-                            "Average estimated change",
-                            width=CONTENT / 3 - 7,
-                        ),
-                    ]
-                ],
-                colWidths=[CONTENT / 3] * 3,
-            ),
+            Table([page_two_cards], colWidths=[CONTENT / 3] * 3),
             Spacer(1, 10),
         ]
         if is_geo:
@@ -1096,6 +1204,48 @@ class PdfReportRenderer:
                                 effect_series,
                                 width=CONTENT * 0.5 - 6,
                                 height=220,
+                            ),
+                        ]
+                    ],
+                    colWidths=[CONTENT * 0.5] * 2,
+                    style=TableStyle(
+                        [
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ]
+                    ),
+                ),
+                Spacer(1, 10),
+            ]
+        elif is_ope:
+            overlap = mapping(diagnostics.get("propensity_overlap"))
+            evidence_visuals = [
+                Table(
+                    [
+                        [
+                            properties(
+                                (
+                                    ("Evidence type", "Historical policy evaluation"),
+                                    ("Primary method", primary_method),
+                                    ("Effective sample size", fmt(effective_sample_size, 0)),
+                                    ("Reliability", reliability),
+                                ),
+                                CONTENT * 0.48,
+                            ),
+                            properties(
+                                (
+                                    (
+                                        "Maximum importance weight",
+                                        fmt(overlap.get("maximum_importance_weight"), 2),
+                                    ),
+                                    (
+                                        "Extreme weights",
+                                        fmt(diagnostics.get("extreme_weight_count"), 0),
+                                    ),
+                                    ("Policy improvement", "Not estimated"),
+                                ),
+                                CONTENT * 0.48,
                             ),
                         ]
                     ],
@@ -1181,31 +1331,56 @@ class PdfReportRenderer:
                     [
                         properties(
                             (
-                                ("Design quality", design),
                                 (
-                                    "Blocking warnings",
-                                    "None" if not model.warnings else len(model.warnings),
-                                ),
-                                ("Causal evidence", "Supported" if causal else "Not supported"),
-                                (comparability_label, comparability_value),
+                                    ("Overlap quality", reliability),
+                                    (
+                                        "Blocking warnings",
+                                        "None" if not model.warnings else len(model.warnings),
+                                    ),
+                                    (
+                                        "Policy evidence",
+                                        "Decision support" if policy_ready else "Needs review",
+                                    ),
+                                    ("Effective sample size", fmt(effective_sample_size, 0)),
+                                )
+                                if is_ope
+                                else (
+                                    ("Design quality", design),
+                                    (
+                                        "Blocking warnings",
+                                        "None" if not model.warnings else len(model.warnings),
+                                    ),
+                                    ("Causal evidence", "Supported" if causal else "Not supported"),
+                                    (comparability_label, comparability_value),
+                                )
                             ),
                             CONTENT * 0.48,
                         ),
                         properties(
                             (
-                                ("Method", human(model.estimator)),
                                 (
-                                    "Treated / control geographies"
-                                    if is_geo
-                                    else "Treated / control units",
-                                    f"{fmt(treated_units, 0)} / {fmt(control_units, 0)}",
-                                ),
-                                ("Observations", fmt(sample_size, 0)),
-                                ("Standard error", fmt(standard_error, 3)),
-                                (
-                                    "Confidence interval",
-                                    f"{fmt(model.confidence_low, 1)} to {fmt(model.confidence_high, 1)}",
-                                ),
+                                    ("Method", human(model.estimator)),
+                                    ("Primary method", primary_method),
+                                    ("Observations", fmt(sample_size, 0)),
+                                    ("Standard error", fmt(standard_error, 3)),
+                                    ("Confidence interval", policy_interval),
+                                )
+                                if is_ope
+                                else (
+                                    ("Method", human(model.estimator)),
+                                    (
+                                        "Treated / control geographies"
+                                        if is_geo
+                                        else "Treated / control units",
+                                        f"{fmt(treated_units, 0)} / {fmt(control_units, 0)}",
+                                    ),
+                                    ("Observations", fmt(sample_size, 0)),
+                                    ("Standard error", fmt(standard_error, 3)),
+                                    (
+                                        "Confidence interval",
+                                        f"{fmt(model.confidence_low, 1)} to {fmt(model.confidence_high, 1)}",
+                                    ),
+                                )
                             ),
                             CONTENT * 0.48,
                         ),
@@ -1225,10 +1400,22 @@ class PdfReportRenderer:
         story += [
             callout(
                 "Decision takeaway",
-                "The result is directionally strong and supported by the documented diagnostics."
-                if causal
-                else "The result is directional and should be interpreted cautiously.",
-                "Use the estimate only within the saved population, period, and assignment assumptions.",
+                (
+                    "The target-policy value is supported by the saved overlap and weight diagnostics."
+                    if policy_ready
+                    else "The target-policy value should be interpreted cautiously until overlap diagnostics improve."
+                )
+                if is_ope
+                else (
+                    "The result is directionally strong and supported by the documented diagnostics."
+                    if causal
+                    else "The result is directional and should be interpreted cautiously."
+                ),
+                (
+                    "Use the estimate only within the saved population, period, and policy-assignment assumptions; it is not an estimate of policy improvement."
+                    if is_ope
+                    else "Use the estimate only within the saved population, period, and assignment assumptions."
+                ),
             ),
             PageBreak(),
         ]
@@ -1281,11 +1468,30 @@ class PdfReportRenderer:
             )
             story += [assignment, Spacer(1, 10)]
 
-        interpretation = (
-            "The intervention is associated with an increase in the mapped outcome."
-            if model.estimate > 0
-            else "The intervention is associated with a reduction in the mapped outcome."
-        )
+        if is_ope:
+            interpretation = f"The estimated target-policy value is {policy_value}."
+            interpretation_evidence = (
+                "Overlap and weight diagnostics support policy evaluation for the saved target policy."
+                if policy_ready
+                else "Overlap and weight diagnostics require review before relying on the saved target policy."
+            )
+            interpretation_scope = (
+                "This run does not estimate improvement versus the behavior policy."
+            )
+        else:
+            interpretation = (
+                "The intervention is associated with an increase in the mapped outcome."
+                if model.estimate > 0
+                else "The intervention is associated with a reduction in the mapped outcome."
+            )
+            interpretation_evidence = (
+                "The saved diagnostics support causal interpretation."
+                if causal
+                else "The saved diagnostics do not support a definitive causal interpretation."
+            )
+            interpretation_scope = (
+                "Apply the estimate only to the documented population, period, and assignment."
+            )
         interpretation_box = Table(
             [
                 [
@@ -1294,8 +1500,8 @@ class PdfReportRenderer:
                         Spacer(1, 6),
                         Paragraph(
                             f"- {escape(interpretation)}<br/>"
-                            f"- {'The saved diagnostics support causal interpretation.' if causal else 'The saved diagnostics do not support a definitive causal interpretation.'}<br/>"
-                            "- Apply the estimate only to the documented population, period, and assignment.",
+                            f"- {escape(interpretation_evidence)}<br/>"
+                            f"- {escape(interpretation_scope)}",
                             STYLES["dark"],
                         ),
                     ]
@@ -1326,6 +1532,14 @@ class PdfReportRenderer:
                     "None" if not excluded else short(excluded, 60),
                 ),
                 ("Geography column", text(geography_column)),
+                ("Outcome", outcome),
+            )
+        elif is_ope:
+            design_rows = (
+                ("Method", human(model.estimator)),
+                ("Primary method", primary_method),
+                ("Overlap quality", reliability),
+                ("Effective sample size", fmt(effective_sample_size, 0)),
                 ("Outcome", outcome),
             )
         else:
@@ -1374,7 +1588,7 @@ class PdfReportRenderer:
             "off_policy_evaluation": (
                 "Logged behavior propensities are valid and strictly positive.",
                 "The target policy has adequate overlap with historical decisions.",
-                "The reward model and propensity model are correctly specified for doubly robust use.",
+                "For doubly robust estimation, consistency can hold when either the behavior-propensity specification or the reward model is correct, provided the policy-evaluation identifying assumptions hold.",
             ),
         }
         assumptions = list(model.limitations) or list(
@@ -1417,11 +1631,23 @@ class PdfReportRenderer:
             Spacer(1, 10),
             callout(
                 "Decision takeaway",
-                "The analysis can inform whether to scale, continue, or refine the intervention."
-                if causal
-                else "The analysis can guide further validation and refinement of the intervention.",
-                "Apply the result only to the documented population and time window.",
-                green=causal,
+                (
+                    "The analysis can inform whether to deploy, refine, or reject the target policy."
+                    if policy_ready
+                    else "The analysis can guide further validation and refinement of the target policy."
+                )
+                if is_ope
+                else (
+                    "The analysis can inform whether to scale, continue, or refine the intervention."
+                    if causal
+                    else "The analysis can guide further validation and refinement of the intervention."
+                ),
+                (
+                    "Apply the result only to the documented population, time window, and saved policy assumptions."
+                    if is_ope
+                    else "Apply the result only to the documented population and time window."
+                ),
+                green=policy_ready if is_ope else causal,
             ),
             PageBreak(),
         ]
@@ -1779,31 +2005,70 @@ class PdfReportRenderer:
                     properties(
                         (
                             (
-                                "Row filters",
-                                filter_summary,
-                            ),
-                            (
-                                "Geography column",
-                                text(
-                                    geography_column,
-                                    "Not available",
-                                ),
-                            ),
-                            (
-                                "Selected geographies",
-                                selected_summary,
-                            ),
-                            (
-                                "Excluded geographies",
-                                excluded_summary,
-                            ),
-                            (
-                                "Treated / control",
                                 (
-                                f"{len(treated_names) if treated_names else int(treated_units or 0)} / "
-                                f"{len(control_names) if control_names else int(control_units or 0)}"
-                            ),
-                            ),
+                                    "Row filters",
+                                    filter_summary,
+                                ),
+                                (
+                                    "Behavior propensity column",
+                                    text(
+                                        deep(config, {"behavior_propensity_column"}),
+                                        "Not available",
+                                    ),
+                                ),
+                                (
+                                    "Target propensity column",
+                                    text(
+                                        deep(config, {"target_propensity_column"}),
+                                        "Not available",
+                                    ),
+                                ),
+                                (
+                                    "Reward column",
+                                    text(
+                                        deep(config, {"reward_column"}),
+                                        "Not available",
+                                    ),
+                                ),
+                                (
+                                    "Observed-action expected reward",
+                                    text(
+                                        deep(
+                                            config,
+                                            {"observed_action_expected_reward_column"},
+                                        ),
+                                        "Not available",
+                                    ),
+                                ),
+                                (
+                                    "Target-policy expected reward",
+                                    text(
+                                        deep(
+                                            config,
+                                            {"target_policy_expected_reward_column"},
+                                        ),
+                                        "Not available",
+                                    ),
+                                ),
+                                ("Primary method", primary_method),
+                            )
+                            if is_ope
+                            else (
+                                ("Row filters", filter_summary),
+                                (
+                                    "Geography column",
+                                    text(geography_column, "Not available"),
+                                ),
+                                ("Selected geographies", selected_summary),
+                                ("Excluded geographies", excluded_summary),
+                                (
+                                    "Treated / control",
+                                    (
+                                        f"{len(treated_names) if treated_names else int(treated_units or 0)} / "
+                                        f"{len(control_names) if control_names else int(control_units or 0)}"
+                                    ),
+                                ),
+                            )
                         ),
                         CONTENT * 0.48,
                     ),

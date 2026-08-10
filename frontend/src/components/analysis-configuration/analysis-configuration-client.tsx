@@ -20,11 +20,16 @@ import type {
   FilterOperator,
 } from "@/lib/analysis-configuration/request";
 import { deriveMarketingMixConfiguration } from "@/lib/analysis-configuration/marketing-mix";
+import { mapAnalysisContextConfiguration } from "@/lib/analysis-configuration/request";
 
 import { useEffect, useState } from "react";
 
 import { SESSION_TOKEN_KEY } from "@/lib/auth/api";
-import { fetchGeographySummary, fetchPreview } from "@/lib/data-products/api";
+import {
+  fetchGeographySummary,
+  fetchMarketingMixDesignSummary,
+  fetchPreview,
+} from "@/lib/data-products/api";
 import type {
   DatasetPreview,
   GeographySummary,
@@ -226,6 +231,11 @@ export function AnalysisConfigurationClient({
     Record<string, string>
   >({});
 
+  const [
+    mmmSaturationHalfSpendDefaults,
+    setMmmSaturationHalfSpendDefaults,
+  ] = useState<Record<string, number>>({});
+
   const [policyName, setPolicyName] = useState("");
 
   const [behaviorPropensityColumn, setBehaviorPropensityColumn] = useState("");
@@ -234,7 +244,15 @@ export function AnalysisConfigurationClient({
 
   const [rewardColumn, setRewardColumn] = useState("");
 
-  const [expectedRewardColumn, setExpectedRewardColumn] = useState("");
+  const [
+    observedActionExpectedRewardColumn,
+    setObservedActionExpectedRewardColumn,
+  ] = useState("");
+
+  const [
+    targetPolicyExpectedRewardColumn,
+    setTargetPolicyExpectedRewardColumn,
+  ] = useState("");
 
   const [primaryMethod, setPrimaryMethod] =
     useState<OffPolicyMethod>("doubly_robust");
@@ -452,6 +470,135 @@ export function AnalysisConfigurationClient({
     }
   }
 
+  useEffect(() => {
+    let active = true;
+
+    const clearDefaults = () => {
+      queueMicrotask(() => {
+        if (active) {
+          setMmmSaturationHalfSpendDefaults({});
+        }
+      });
+    };
+
+    if (
+      state.kind !== "ready"
+      || selectedEstimator !== "marketing_mix_model"
+      || preview === null
+      || analysisStartDate.length === 0
+      || analysisEndDate.length === 0
+    ) {
+      return;
+    }
+
+    const token = window.localStorage.getItem(SESSION_TOKEN_KEY);
+
+    if (!token) {
+      clearDefaults();
+
+      return () => {
+        active = false;
+      };
+    }
+
+    const mmmConfiguration = deriveMarketingMixConfiguration(
+      preview,
+      state.mapping,
+    );
+
+    if (mmmConfiguration.mediaChannels.length === 0) {
+      clearDefaults();
+
+      return () => {
+        active = false;
+      };
+    }
+
+    const configuration: Record<string, unknown> = {
+      ...mapAnalysisContextConfiguration(
+        {
+          analysisStartDate,
+          analysisEndDate,
+          interventionDate: null,
+        },
+        {
+          rowFilters: filterRules.map((rule) => ({
+            column: rule.column,
+            operator: rule.operator,
+            ...(rule.value === undefined
+              ? {}
+              : {
+                  value: rule.value,
+                }),
+          })),
+          selectedGeographies: [...selectedGeographies],
+          excludedGeographies: [...excludedGeographies],
+          segmentColumn,
+          selectedSegments: [...selectedSegments],
+          excludedSegments: [...excludedSegments],
+        },
+      ),
+      outcome_kind: mmmConfiguration.outcomeKind,
+      media_channels: [...mmmConfiguration.mediaChannels],
+      control_columns: [...mmmConfiguration.controlColumns],
+      aggregate_spend_column:
+        mmmConfiguration.aggregateSpendColumn,
+      seasonality_period: Number(mmmSeasonalityPeriod),
+    };
+
+    const controller = new AbortController();
+
+    // Never display defaults derived for an obsolete analysis population
+    // while the replacement design summary is loading.
+    clearDefaults();
+
+    void fetchMarketingMixDesignSummary(
+      workspaceId,
+      projectId,
+      state.dataset.id,
+      state.mapping.version,
+      configuration,
+      token,
+      controller.signal,
+    )
+      .then((summary) => {
+        if (!active || controller.signal.aborted) {
+          return;
+        }
+
+        setMmmSaturationHalfSpendDefaults({
+          ...summary.saturation_half_spend_defaults,
+        });
+      })
+      .catch(() => {
+        if (!active || controller.signal.aborted) {
+          return;
+        }
+
+        setMmmSaturationHalfSpendDefaults({});
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [
+    state,
+    selectedEstimator,
+    preview,
+    analysisStartDate,
+    analysisEndDate,
+    filterRules,
+    selectedGeographies,
+    excludedGeographies,
+    segmentColumn,
+    selectedSegments,
+    excludedSegments,
+    mmmSeasonalityPeriod,
+    workspaceId,
+    projectId,
+  ]);
+
   if (state.kind === "loading") {
     return (
       <main>
@@ -561,14 +708,18 @@ export function AnalysisConfigurationClient({
                   saturationHalfSpend: Object.fromEntries(
                     mmmConfiguration.mediaChannels.map((channel) => [
                       channel,
-                      Number(mmmSaturationHalfSpend[channel] ?? "1"),
+                      Number(
+                        mmmSaturationHalfSpend[channel]
+                        ?? mmmSaturationHalfSpendDefaults[channel],
+                      ),
                     ]),
                   ),
                 }
               : {
                   kind: "off_policy_evaluation",
                   rewardColumn,
-                  expectedRewardColumn,
+                  observedActionExpectedRewardColumn,
+                  targetPolicyExpectedRewardColumn,
                   primaryMethod,
                 };
 
@@ -654,8 +805,16 @@ export function AnalysisConfigurationClient({
         mmmOutcomeKind={mmmConfiguration.outcomeKind}
         mmmAdstockDecay={mmmAdstockDecay}
         mmmSaturationHalfSpend={mmmSaturationHalfSpend}
+        mmmSaturationHalfSpendDefaults={
+          mmmSaturationHalfSpendDefaults
+        }
         rewardColumn={rewardColumn}
-        expectedRewardColumn={expectedRewardColumn}
+        observedActionExpectedRewardColumn={
+          observedActionExpectedRewardColumn
+        }
+        targetPolicyExpectedRewardColumn={
+          targetPolicyExpectedRewardColumn
+        }
         primaryMethod={primaryMethod}
         onGeoOutcomeKindChange={setGeoOutcomeKind}
         onGeoCoordinateChange={(geography, field, value) => {
@@ -693,7 +852,12 @@ export function AnalysisConfigurationClient({
           }));
         }}
         onRewardColumnChange={setRewardColumn}
-        onExpectedRewardColumnChange={setExpectedRewardColumn}
+        onObservedActionExpectedRewardColumnChange={
+          setObservedActionExpectedRewardColumn
+        }
+        onTargetPolicyExpectedRewardColumnChange={
+          setTargetPolicyExpectedRewardColumn
+        }
         onPrimaryMethodChange={setPrimaryMethod}
         onContinue={() => {
           setWizardStep("review");

@@ -179,6 +179,16 @@ describe("semantic mapping ready dataset experience", () => {
           median: null,
         },
         {
+          name: "conversion",
+          inferred_type: "boolean",
+          missing_percentage: 0,
+          unique_count: 2,
+          minimum: null,
+          maximum: null,
+          mean: null,
+          median: null,
+        },
+        {
           name: "revenue",
           inferred_type: "float",
           missing_percentage: 0,
@@ -324,6 +334,68 @@ describe("semantic mapping ready dataset experience", () => {
     expect(screen.getByText("Step 3 of 5")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByText("Step 2 of 5")).toBeInTheDocument();
+  });
+
+  it("accepts a boolean binary outcome and advances semantic mapping", async () => {
+    render(
+      <SemanticMappingClient
+        workspaceId="workspace-1"
+        projectId="project-1"
+        datasetId="dataset-1"
+      />,
+    );
+
+    await screen.findByText("Step 1 of 6");
+
+    fireEvent.change(screen.getByLabelText("Time column"), {
+      target: { value: "event_date" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Unit column"), {
+      target: { value: "region" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(screen.getByLabelText("Treatment column"), {
+      target: { value: "treated" },
+    });
+    fireEvent.change(screen.getByLabelText("Treatment value"), {
+      target: { value: "1" },
+    });
+    fireEvent.change(screen.getByLabelText("Control value"), {
+      target: { value: "0" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Step 4 of 6")).toBeInTheDocument();
+
+    const booleanOutcome = screen.getByRole("option", {
+      name: "conversion — boolean",
+    });
+
+    expect(booleanOutcome).not.toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Outcome column"), {
+      target: { value: "conversion" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Step 5 of 6")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Spend and Covariates",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Step 6 of 6")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Review and Save",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("does not advance without a valid time-column selection", async () => {

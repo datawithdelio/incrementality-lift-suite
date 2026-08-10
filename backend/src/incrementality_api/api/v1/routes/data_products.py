@@ -14,6 +14,8 @@ from incrementality_api.api.dependencies.data_products import (
 )
 from incrementality_api.api.v1.schemas.data_products import (
     DataQualityResponse,
+    MarketingMixDesignSummaryRequest,
+    MarketingMixDesignSummaryResponse,
     DatasetPreviewResponse,
     DatasetVersionResponse,
     GeographySummaryResponse,
@@ -32,6 +34,10 @@ from incrementality_api.application.data_products.services import (
     DatasetProductQuery,
     ProductionDataProducts,
 )
+from incrementality_api.application.analysis_execution.estimation import (
+    PermanentEstimationError,
+)
+from incrementality_api.domain.analysis_runs.errors import InvalidAnalysisRunError
 from incrementality_api.application.datasets.errors import DatasetUnavailableError
 from incrementality_api.domain.authorization.permissions import WorkspacePermission
 from incrementality_api.infrastructure.database.repositories.data_products import (
@@ -216,6 +222,57 @@ async def export_dataset_preview(
         payload,
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="dataset-{dataset_id}.csv"'},
+    )
+
+
+@router.post(
+    "/datasets/{dataset_id}/marketing-mix-design-summary",
+    response_model=MarketingMixDesignSummaryResponse,
+)
+async def summarize_marketing_mix_design(
+    workspace_id: UUID,
+    project_id: UUID,
+    dataset_id: UUID,
+    request: MarketingMixDesignSummaryRequest,
+    principal: Annotated[
+        AuthorizedWorkspacePrincipal,
+        Depends(_view),
+    ],
+    service: Annotated[
+        ProductionDataProducts,
+        Depends(get_data_products_service),
+    ],
+) -> MarketingMixDesignSummaryResponse:
+    del principal
+
+    try:
+        result = await service.marketing_mix_design_summary(
+            DatasetProductQuery(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+                mapping_version=request.semantic_mapping_version,
+            ),
+            configuration=request.configuration,
+        )
+    except DatasetUnavailableError as error:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            str(error),
+        ) from error
+    except (
+        InvalidAnalysisRunError,
+        PermanentEstimationError,
+        ValueError,
+    ) as error:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            str(error),
+        ) from error
+
+    return MarketingMixDesignSummaryResponse.model_validate(
+        result,
+        from_attributes=True,
     )
 
 

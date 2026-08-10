@@ -3,6 +3,7 @@ import type {
   DatasetPreview,
   DatasetVersion,
   GeographySummary,
+  MarketingMixDesignSummary,
   ReportJob,
 } from "./types";
 
@@ -116,6 +117,30 @@ export function fetchGeographySummary(
       `/datasets/${dataset}/geography-summary?${query}`,
     token,
     { signal },
+  );
+}
+
+export function fetchMarketingMixDesignSummary(
+  workspace: string,
+  project: string,
+  dataset: string,
+  mappingVersion: number,
+  configuration: Record<string, unknown>,
+  token: string,
+  signal: AbortSignal,
+) {
+  return request<MarketingMixDesignSummary>(
+    `/api/v1/workspaces/${workspace}/projects/${project}` +
+      `/datasets/${dataset}/marketing-mix-design-summary`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        semantic_mapping_version: mappingVersion,
+        configuration,
+      }),
+      signal,
+    },
   );
 }
 

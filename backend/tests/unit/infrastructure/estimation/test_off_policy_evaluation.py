@@ -16,7 +16,8 @@ def policy_input(*, weak_overlap: bool = False) -> OffPolicyEvaluationInput:
             reward=float(2 + index % 3),
             behavior_probability=(0.001 if weak_overlap and index == 0 else 0.5),
             target_probability=(0.9 if weak_overlap and index == 0 else 0.6),
-            expected_reward=float(2.2 + index % 3),
+            observed_action_expected_reward=float(2.2 + index % 3),
+            target_policy_expected_reward=float(2.2 + index % 3),
         )
         for index in range(40)
     )
@@ -38,6 +39,8 @@ def test_strong_overlap_reports_all_estimators_and_effective_sample_size() -> No
     }
     assert result.diagnostics["reliability"] == "strong"
     assert result.diagnostics["effective_sample_size"] == pytest.approx(40.0)
+    assert result.diagnostics["causal_claim_allowed"] is False
+    assert result.diagnostics["recommendations_allowed"] is True
     assert result.confidence_interval_low < result.effect < result.confidence_interval_high
 
 
@@ -58,7 +61,7 @@ def test_weak_overlap_warns_about_extreme_weights() -> None:
 )
 def test_invalid_propensities_are_rejected(behavior: float, target: float) -> None:
     estimator_input = OffPolicyEvaluationInput(
-        observations=(PolicyEvaluationObservation(1.0, behavior, target, 1.0),),
+        observations=(PolicyEvaluationObservation(1.0, behavior, target, 1.0, 1.0),),
         policy_name="invalid",
     )
 
@@ -90,3 +93,38 @@ def test_identical_off_policy_inputs_produce_identical_results() -> None:
     )
 
     assert first == second
+
+
+def test_doubly_robust_uses_distinct_logged_action_and_target_policy_reward_predictions() -> None:
+    estimator_input = OffPolicyEvaluationInput(
+        observations=(
+            PolicyEvaluationObservation(
+                reward=1.0,
+                behavior_probability=0.5,
+                target_probability=0.75,
+                observed_action_expected_reward=0.4,
+                target_policy_expected_reward=0.7,
+            ),
+            PolicyEvaluationObservation(
+                reward=0.0,
+                behavior_probability=0.5,
+                target_probability=0.25,
+                observed_action_expected_reward=0.2,
+                target_policy_expected_reward=0.6,
+            ),
+        ),
+        policy_name="growth_policy",
+        primary_method="doubly_robust",
+    )
+
+    result = StatsmodelsOffPolicyEstimator().estimate(
+        estimator_input,
+        random_seed=1_729,
+    )
+
+    expected = (
+        (0.7 + (0.75 / 0.5) * (1.0 - 0.4))
+        + (0.6 + (0.25 / 0.5) * (0.0 - 0.2))
+    ) / 2
+
+    assert result.effect == pytest.approx(expected)

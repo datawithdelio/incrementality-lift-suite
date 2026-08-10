@@ -1,7 +1,14 @@
 from datetime import UTC, datetime
 from typing import cast
 
-from incrementality_api.application.analysis_execution.input_loading import CsvAnalysisRowLoader
+from incrementality_api.application.analysis_execution.input_loading import (
+    AnalysisPeriodRowFilter,
+    CsvAnalysisRowLoader,
+)
+from incrementality_api.application.data_products.mmm_design_summary import (
+    MarketingMixDesignSummaryBuilder,
+    MarketingMixDesignSummaryPlanner,
+)
 from incrementality_api.application.data_products.services import (
     DatasetProductUnitOfWork,
     ProductionDataProducts,
@@ -15,6 +22,9 @@ from incrementality_api.infrastructure.database.repositories.data_products impor
 from incrementality_api.infrastructure.database.session import get_session_factory
 from incrementality_api.infrastructure.database.unit_of_work.datasets import (
     SqlAlchemyDatasetUnitOfWork,
+)
+from incrementality_api.infrastructure.analysis_execution.selection import (
+    AnalysisSelectionRowExecutor,
 )
 from incrementality_api.infrastructure.storage.s3_clients import create_s3_compatible_client
 from incrementality_api.infrastructure.storage.s3_dataset_objects import S3DatasetObjectStorage
@@ -50,6 +60,11 @@ def get_data_products_service() -> ProductionDataProducts:
         object_storage=get_data_product_storage(),
         quality_writer=SqlAlchemyQualityAssessmentWriter(sessions, SystemDataProductClock()),
         row_loader=CsvAnalysisRowLoader(),
+        mmm_design_summary_planner=MarketingMixDesignSummaryPlanner(
+            period_filter=AnalysisPeriodRowFilter(),
+            selection_executor=AnalysisSelectionRowExecutor(),
+            summary_builder=MarketingMixDesignSummaryBuilder(),
+        ),
     )
 
 

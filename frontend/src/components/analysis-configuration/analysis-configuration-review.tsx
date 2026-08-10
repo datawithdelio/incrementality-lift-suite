@@ -346,17 +346,32 @@ export function AnalysisConfigurationReview({
                 )}
 
                 <dl className="analysis-review-details">
-                  <div>
-                    <dt>Included geographies</dt>
+                  {draft.treatmentControl.kind !== "off_policy_evaluation" && (
 
-                    <dd>{displayList(draft.selection.selectedGeographies)}</dd>
-                  </div>
+                    <>
 
-                  <div>
-                    <dt>Excluded geographies</dt>
+                      <div>
 
-                    <dd>{displayList(draft.selection.excludedGeographies)}</dd>
-                  </div>
+                        <dt>Included geographies</dt>
+
+
+                        <dd>{displayList(draft.selection.selectedGeographies)}</dd>
+
+                      </div>
+
+
+                      <div>
+
+                        <dt>Excluded geographies</dt>
+
+
+                        <dd>{displayList(draft.selection.excludedGeographies)}</dd>
+
+                      </div>
+
+                    </>
+
+                  )}
 
                   {draft.selection.segmentColumn.trim().length > 0 && (
                     <>
@@ -596,9 +611,19 @@ export function AnalysisConfigurationReview({
                     </div>
 
                     <div>
-                      <dt>Expected reward column</dt>
+                      <dt>Observed-action expected reward column</dt>
 
-                      <dd>{draft.settings.expectedRewardColumn}</dd>
+                      <dd>
+                        {draft.settings.observedActionExpectedRewardColumn}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>Target-policy expected reward column</dt>
+
+                      <dd>
+                        {draft.settings.targetPolicyExpectedRewardColumn}
+                      </dd>
                     </div>
 
                     <div>

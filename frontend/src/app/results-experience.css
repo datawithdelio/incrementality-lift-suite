@@ -1927,3 +1927,153 @@
 }
 
 /* ANALYSIS RESULT REAL MAP — END */
+
+
+/* Marketing mix model diagnostic evidence */
+
+.mmm-diagnostic-chart {
+  min-width: 0;
+}
+
+.mmm-diagnostic-chart > h2 {
+  margin: 0;
+}
+
+.mmm-chart-description {
+  max-width: 760px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mmm-chart-frame {
+  overflow-x: auto;
+  margin-top: 16px;
+  padding: 12px 12px 8px;
+  border: 1px solid var(--result-border);
+  border-radius: 12px;
+  background: #fbfaff;
+}
+
+.mmm-chart-frame svg {
+  display: block;
+  width: 100%;
+  min-width: 620px;
+  height: auto;
+}
+
+.mmm-chart-axis,
+.mmm-zero-line {
+  stroke: var(--result-border);
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.mmm-zero-line {
+  stroke-dasharray: 5 5;
+}
+
+.mmm-fit-band {
+  fill: var(--result-purple-soft);
+  opacity: 0.8;
+}
+
+.mmm-observed-line,
+.mmm-fitted-line,
+.mmm-residual-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.mmm-observed-line {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.mmm-fitted-line,
+.mmm-residual-line {
+  stroke: var(--result-purple);
+  stroke-width: 2;
+}
+
+.mmm-interval-line,
+.mmm-interval-cap {
+  stroke: var(--result-purple);
+  vector-effect: non-scaling-stroke;
+}
+
+.mmm-interval-line {
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.mmm-interval-cap {
+  stroke-width: 1.5;
+}
+
+.mmm-interval-point {
+  fill: var(--result-purple);
+  stroke: #ffffff;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.mmm-channel-label {
+  fill: var(--ink-subtle);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mmm-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mmm-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mmm-chart-legend i {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.mmm-legend-observed {
+  background: var(--ink);
+}
+
+.mmm-legend-fitted {
+  background: var(--result-purple);
+}
+
+.mmm-chart-legend .mmm-legend-band {
+  height: 9px;
+  border: 1px solid var(--result-border);
+  background: var(--result-purple-soft);
+}
+
+.mmm-chart-axis-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mmm-chart-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}

@@ -181,3 +181,19 @@ class ReportJobResponse(BaseModel):
             "Report generation failed. "
             "Please regenerate the report."
         )
+
+
+
+class MarketingMixDesignSummaryRequest(BaseModel):
+    """Canonical queued-run configuration used to derive MMM defaults."""
+
+    semantic_mapping_version: int
+    configuration: dict[str, object]
+
+
+class MarketingMixDesignSummaryResponse(BaseModel):
+    """Versioned estimator-grain MMM design defaults."""
+
+    contract_version: str = "mmm-design-summary-v1"
+    period_count: int
+    saturation_half_spend_defaults: dict[str, float]

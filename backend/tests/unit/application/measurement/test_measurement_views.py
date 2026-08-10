@@ -115,6 +115,61 @@ def test_channel_policy_handles_strong_weak_missing_and_conflicting_evidence() -
     assert "observed ROAS" in conflicting.warning
 
 
+async def test_mmm_conversion_channel_performance_preserves_efficiency_semantics() -> None:
+    workspace_id = uuid4()
+    repository = FakeRepository(
+        (
+            record(
+                workspace_id=workspace_id,
+                estimator_type="marketing_mix_model",
+                incremental_revenue=None,
+                incremental_conversions=120.0,
+                configuration={"outcome_kind": "conversions"},
+                diagnostics={
+                    "design_assessment": "valid",
+                    "warnings": [],
+                    "channel_contributions": {
+                        "paid_search_spend": 120.0,
+                    },
+                    "channel_spend": {
+                        "paid_search_spend": 600.0,
+                    },
+                    "posterior_intervals": {
+                        "paid_search_spend": {
+                            "low": 80.0,
+                            "high": 160.0,
+                        },
+                    },
+                    "channel_efficiency": {
+                        "paid_search_spend": 0.2,
+                    },
+                    "channel_efficiency_metric": (
+                        "incremental_conversions_per_dollar"
+                    ),
+                },
+            ),
+        )
+    )
+
+    view = await GetChannelPerformance(repository).execute(
+        MeasurementFilters(workspace_id=workspace_id)
+    )
+
+    assert len(view.channels) == 1
+    channel = view.channels[0]
+
+    assert channel.channel == "paid_search_spend"
+    assert channel.incremental_revenue is None
+    assert channel.incremental_conversions == 120.0
+    assert channel.incremental_roas is None
+
+    assert channel.efficiency == 0.2
+    assert (
+        channel.efficiency_metric
+        == "incremental_conversions_per_dollar"
+    )
+
+
 async def test_channel_performance_uses_incremental_not_observed_roas_for_ranking() -> None:
     workspace_id = uuid4()
     repository = FakeRepository(

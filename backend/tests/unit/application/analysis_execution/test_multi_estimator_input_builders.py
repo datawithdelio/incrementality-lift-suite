@@ -182,8 +182,20 @@ def test_rejects_mmm_outcome_kind_that_disagrees_with_mapped_outcome() -> None:
 def test_builds_off_policy_input_from_custom_policy_columns() -> None:
     _job, metadata = build_metadata()
     rows = (
-        {"reward": "4", "behavior": "0.5", "target": "0.75", "prediction": "3.5"},
-        {"reward": "2", "behavior": "0.4", "target": "0.25", "prediction": "2.1"},
+        {
+            "reward": "4",
+            "behavior": "0.5",
+            "target": "0.75",
+            "observed_prediction": "3.5",
+            "target_prediction": "3.8",
+        },
+        {
+            "reward": "2",
+            "behavior": "0.4",
+            "target": "0.25",
+            "observed_prediction": "2.1",
+            "target_prediction": "2.4",
+        },
     )
     period = AnalysisPeriodSnapshot.from_configuration(
         AnalysisEstimatorType.OFF_POLICY_EVALUATION,
@@ -217,7 +229,8 @@ def test_builds_off_policy_input_from_custom_policy_columns() -> None:
                 "reward_column": "reward",
                 "behavior_propensity_column": "wrong_behavior",
                 "target_propensity_column": "wrong_target",
-                "expected_reward_column": "prediction",
+                "observed_action_expected_reward_column": "observed_prediction",
+                "target_policy_expected_reward_column": "target_prediction",
                 "primary_method": "doubly_robust",
             }
         ),
@@ -228,3 +241,5 @@ def test_builds_off_policy_input_from_custom_policy_columns() -> None:
     assert isinstance(result, OffPolicyEvaluationInput)
     assert result.policy_name == "growth_policy"
     assert result.observations[0].target_probability == 0.75
+    assert result.observations[0].observed_action_expected_reward == 3.5
+    assert result.observations[0].target_policy_expected_reward == 3.8

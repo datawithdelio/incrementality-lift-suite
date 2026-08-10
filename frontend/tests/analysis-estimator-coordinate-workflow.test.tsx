@@ -45,7 +45,8 @@ function renderGeoSettings(
       mmmAdstockDecay={{}}
       mmmSaturationHalfSpend={{}}
       rewardColumn=""
-      expectedRewardColumn=""
+      observedActionExpectedRewardColumn=""
+      targetPolicyExpectedRewardColumn=""
       primaryMethod="doubly_robust"
       onGeoOutcomeKindChange={vi.fn()}
       onGeoCoordinateChange={onGeoCoordinateChange}
@@ -53,7 +54,8 @@ function renderGeoSettings(
       onMmmAdstockDecayChange={vi.fn()}
       onMmmSaturationHalfSpendChange={vi.fn()}
       onRewardColumnChange={vi.fn()}
-      onExpectedRewardColumnChange={vi.fn()}
+      onObservedActionExpectedRewardColumnChange={vi.fn()}
+      onTargetPolicyExpectedRewardColumnChange={vi.fn()}
       onPrimaryMethodChange={vi.fn()}
       onContinue={vi.fn()}
     />,

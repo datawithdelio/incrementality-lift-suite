@@ -80,8 +80,10 @@ function createProps(): SettingsProps {
     mmmOutcomeKind: "revenue",
     mmmAdstockDecay: {},
     mmmSaturationHalfSpend: {},
+    mmmSaturationHalfSpendDefaults: {},
     rewardColumn: "",
-    expectedRewardColumn: "",
+    observedActionExpectedRewardColumn: "",
+    targetPolicyExpectedRewardColumn: "",
     primaryMethod: "doubly_robust",
     onGeoOutcomeKindChange: vi.fn(),
     onGeoCoordinateChange: vi.fn(),
@@ -89,7 +91,8 @@ function createProps(): SettingsProps {
     onMmmAdstockDecayChange: vi.fn(),
     onMmmSaturationHalfSpendChange: vi.fn(),
     onRewardColumnChange: vi.fn(),
-    onExpectedRewardColumnChange: vi.fn(),
+    onObservedActionExpectedRewardColumnChange: vi.fn(),
+    onTargetPolicyExpectedRewardColumnChange: vi.fn(),
     onPrimaryMethodChange: vi.fn(),
     onContinue: vi.fn(),
   };
@@ -163,6 +166,10 @@ describe("premium estimator settings", () => {
       aggregateSpendColumn: "total_spend",
       mappedOutcomeColumn: "conversions",
       mmmOutcomeKind: "conversions",
+      mmmSaturationHalfSpendDefaults: {
+        paid_search_spend: 10589,
+        social_spend: 7518,
+      },
     });
 
     expect(screen.getByLabelText("Seasonality period")).toHaveValue(52);
@@ -175,9 +182,17 @@ describe("premium estimator settings", () => {
     );
     expect(screen.getByLabelText("Adstock decay paid_search_spend")).toHaveValue(0.5);
 
-    expect(screen.getByLabelText("Saturation half-spend social_spend")).toHaveValue(
-      1,
-    );
+    expect(
+      screen.getByLabelText("Saturation half-spend paid_search_spend"),
+    ).toHaveValue(10589);
+
+    expect(
+      screen.getByLabelText("Saturation half-spend social_spend"),
+    ).toHaveValue(7518);
+
+    expect(
+      screen.getByText("sessions, holiday, promotion"),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Adstock decay paid_search_spend"), {
       target: {
@@ -191,11 +206,118 @@ describe("premium estimator settings", () => {
     );
   });
 
+  it("requires every MMM adstock decay to be finite and between zero and one", () => {
+    const baseProps = {
+      ...createProps(),
+      estimator: "marketing_mix_model" as const,
+      mediaChannels: ["paid_search_spend", "social_spend"],
+      controlColumns: ["sessions"],
+      mappedOutcomeColumn: "conversions",
+      mmmOutcomeKind: "conversions" as const,
+      mmmSaturationHalfSpendDefaults: {
+        paid_search_spend: 10589,
+        social_spend: 7518,
+      },
+    };
+
+    const { rerender } = render(
+      <AnalysisEstimatorSettingsStep
+        {...baseProps}
+        mmmAdstockDecay={{
+          paid_search_spend: "0",
+          social_spend: "-0.1",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Continue" }),
+    ).toBeDisabled();
+
+    rerender(
+      <AnalysisEstimatorSettingsStep
+        {...baseProps}
+        mmmAdstockDecay={{
+          paid_search_spend: "0",
+          social_spend: "1",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Continue" }),
+    ).toBeDisabled();
+
+    rerender(
+      <AnalysisEstimatorSettingsStep
+        {...baseProps}
+        mmmAdstockDecay={{
+          paid_search_spend: "0",
+          social_spend: "0.5",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Continue" }),
+    ).toBeEnabled();
+  });
+
+  it("requires a valid positive half-spend for every MMM media channel", () => {
+    const { rerender } = render(
+      <AnalysisEstimatorSettingsStep
+        {...createProps()}
+        estimator="marketing_mix_model"
+        mediaChannels={["paid_search_spend", "social_spend"]}
+        controlColumns={["sessions"]}
+        mappedOutcomeColumn="conversions"
+        mmmOutcomeKind="conversions"
+        mmmSaturationHalfSpendDefaults={{
+          paid_search_spend: 10589,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText("Saturation half-spend paid_search_spend"),
+    ).toHaveValue(10589);
+
+    expect(
+      screen.getByLabelText("Saturation half-spend social_spend"),
+    ).toHaveValue(null);
+
+    expect(
+      screen.getByRole("button", { name: "Continue" }),
+    ).toBeDisabled();
+
+    rerender(
+      <AnalysisEstimatorSettingsStep
+        {...createProps()}
+        estimator="marketing_mix_model"
+        mediaChannels={["paid_search_spend", "social_spend"]}
+        controlColumns={["sessions"]}
+        mappedOutcomeColumn="conversions"
+        mmmOutcomeKind="conversions"
+        mmmSaturationHalfSpend={{
+          social_spend: "7518",
+        }}
+        mmmSaturationHalfSpendDefaults={{
+          paid_search_spend: 10589,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Continue" }),
+    ).toBeEnabled();
+  });
+
   it("shows Off-policy readiness from the configured reward columns", () => {
     renderSettings({
       estimator: "off_policy_evaluation",
       rewardColumn: "revenue",
-      expectedRewardColumn: "spend",
+      observedActionExpectedRewardColumn: "spend",
+      targetPolicyExpectedRewardColumn: "revenue",
       primaryMethod: "doubly_robust",
     });
 

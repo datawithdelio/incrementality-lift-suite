@@ -216,7 +216,8 @@ function isValidOutcomeColumn(
   column: ColumnSummary,
 ): boolean {
   return (
-    column.inferred_type === "integer"
+    column.inferred_type === "boolean"
+    || column.inferred_type === "integer"
     || column.inferred_type === "float"
   );
 }
@@ -289,7 +290,7 @@ function validateSemanticMappingDraft(
 
   if (
     !outcomeColumn
-    || !["integer", "float"].includes(
+    || !["boolean", "integer", "float"].includes(
       outcomeColumn.inferred_type,
     )
   ) {
@@ -1524,7 +1525,7 @@ export function SemanticMappingClient({
             </h2>
 
             <p>
-              Choose the numeric column that represents the outcome being measured.
+              Choose the numeric or boolean column that represents the outcome being measured.
             </p>
 
             <label htmlFor="semantic-outcome-column">

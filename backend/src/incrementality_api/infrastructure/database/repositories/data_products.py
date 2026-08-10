@@ -168,6 +168,15 @@ class SqlAlchemyAnalysisQualityGate:
             return assessment is None or assessment.ready
 
 
+def _report_diagnostics_snapshot(
+    diagnostics: dict[str, object],
+    sample_size: int,
+) -> dict[str, object]:
+    snapshot = dict(diagnostics)
+    snapshot.setdefault("sample_size", sample_size)
+    return snapshot
+
+
 class SqlAlchemyReportRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = session_factory
@@ -213,7 +222,10 @@ class SqlAlchemyReportRepository:
                 )
                 + 1
             )
-            diagnostics = result.diagnostics
+            diagnostics = _report_diagnostics_snapshot(
+                result.diagnostics,
+                result.sample_size,
+            )
             snapshot: dict[str, object] = {
                 "title": f"{project_name} analysis report",
                 "generated_at": now.isoformat(),

@@ -33,9 +33,11 @@ type AnalysisEstimatorSettingsStepProps = {
   mmmAdstockDecay: Record<string, string>;
 
   mmmSaturationHalfSpend: Record<string, string>;
+  mmmSaturationHalfSpendDefaults: Record<string, number>;
 
   rewardColumn: string;
-  expectedRewardColumn: string;
+  observedActionExpectedRewardColumn: string;
+  targetPolicyExpectedRewardColumn: string;
   primaryMethod: OffPolicyMethod;
 
   onGeoOutcomeKindChange: (value: string) => void;
@@ -54,7 +56,8 @@ type AnalysisEstimatorSettingsStepProps = {
 
   onRewardColumnChange: (value: string) => void;
 
-  onExpectedRewardColumnChange: (value: string) => void;
+  onObservedActionExpectedRewardColumnChange: (value: string) => void;
+  onTargetPolicyExpectedRewardColumnChange: (value: string) => void;
 
   onPrimaryMethodChange: (value: OffPolicyMethod) => void;
 
@@ -129,8 +132,10 @@ export function AnalysisEstimatorSettingsStep({
   mmmOutcomeKind,
   mmmAdstockDecay,
   mmmSaturationHalfSpend,
+  mmmSaturationHalfSpendDefaults,
   rewardColumn,
-  expectedRewardColumn,
+  observedActionExpectedRewardColumn,
+  targetPolicyExpectedRewardColumn,
   primaryMethod,
   onGeoOutcomeKindChange,
   onGeoCoordinateChange,
@@ -138,13 +143,21 @@ export function AnalysisEstimatorSettingsStep({
   onMmmAdstockDecayChange,
   onMmmSaturationHalfSpendChange,
   onRewardColumnChange,
-  onExpectedRewardColumnChange,
+  onObservedActionExpectedRewardColumnChange,
+  onTargetPolicyExpectedRewardColumnChange,
   onPrimaryMethodChange,
   onContinue,
 }: AnalysisEstimatorSettingsStepProps) {
   const numericColumns = preview.columns.filter(
     (column) =>
       column.inferred_type === "integer" || column.inferred_type === "float",
+  );
+
+  const rewardColumns = preview.columns.filter(
+    (column) =>
+      column.inferred_type === "integer" ||
+      column.inferred_type === "float" ||
+      column.inferred_type === "boolean",
   );
 
   const assignedGeoValues = Array.from(
@@ -173,13 +186,51 @@ export function AnalysisEstimatorSettingsStep({
 
   const seasonalityPeriod = Number(mmmSeasonalityPeriod);
 
+  const mmmHalfSpendReady =
+    mediaChannels.length > 0
+    && mediaChannels.every((channel) => {
+      const configuredValue =
+        mmmSaturationHalfSpend[channel]
+        ?? mmmSaturationHalfSpendDefaults[channel];
+
+      if (configuredValue === undefined || configuredValue === "") {
+        return false;
+      }
+
+      const halfSpend = Number(configuredValue);
+
+      return Number.isFinite(halfSpend) && halfSpend > 0;
+    });
+
+  const mmmAdstockReady =
+    mediaChannels.length > 0
+    && mediaChannels.every((channel) => {
+      const configuredValue = mmmAdstockDecay[channel] ?? "0.5";
+
+      if (configuredValue.trim().length === 0) {
+        return false;
+      }
+
+      const adstockDecay = Number(configuredValue);
+
+      return (
+        Number.isFinite(adstockDecay)
+        && adstockDecay >= 0
+        && adstockDecay < 1
+      );
+    });
+
   const mmmReady =
     mediaChannels.length > 0
     && Number.isInteger(seasonalityPeriod)
-    && seasonalityPeriod > 1;
+    && seasonalityPeriod > 1
+    && mmmHalfSpendReady
+    && mmmAdstockReady;
 
   const offPolicySettingsReady =
-    rewardColumn.length > 0 && expectedRewardColumn.length > 0;
+    rewardColumn.length > 0 &&
+    observedActionExpectedRewardColumn.length > 0 &&
+    targetPolicyExpectedRewardColumn.length > 0;
 
   const canContinue =
     estimator === "difference_in_differences" ||
@@ -209,7 +260,7 @@ export function AnalysisEstimatorSettingsStep({
                 : "Enter a seasonality period greater than one."
             : offPolicySettingsReady
               ? "Reward columns and evaluation method are ready."
-              : "Select both reward columns before continuing.";
+              : "Select the observed reward and both reward-model columns before continuing.";
 
   return (
     <main className="analysis-settings-shell">
@@ -607,7 +658,10 @@ export function AnalysisEstimatorSettingsStep({
                       type="number"
                       step="any"
                       aria-label={`Saturation half-spend ${channel}`}
-                      value={mmmSaturationHalfSpend[channel] ?? "1"}
+                      value={
+                        mmmSaturationHalfSpend[channel]
+                        ?? String(mmmSaturationHalfSpendDefaults[channel] ?? "")
+                      }
                       onChange={(event) => {
                         onMmmSaturationHalfSpendChange(
                           channel,
@@ -654,6 +708,36 @@ export function AnalysisEstimatorSettingsStep({
                 >
                   <option value="">Choose reward column</option>
 
+                  {rewardColumns.map((column) => (
+                    <option key={column.name} value={column.name}>
+                      {column.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="analysis-settings-primary-field">
+                <span>
+                  <strong>Observed-action expected reward column</strong>
+
+                  <small>
+                    Reward-model prediction for the action actually logged.
+                  </small>
+                </span>
+
+                <select
+                  aria-label="Observed-action expected reward column"
+                  value={observedActionExpectedRewardColumn}
+                  onChange={(event) => {
+                    onObservedActionExpectedRewardColumnChange(
+                      event.target.value,
+                    );
+                  }}
+                >
+                  <option value="">
+                    Choose observed-action expected reward column
+                  </option>
+
                   {numericColumns.map((column) => (
                     <option key={column.name} value={column.name}>
                       {column.name}
@@ -664,21 +748,25 @@ export function AnalysisEstimatorSettingsStep({
 
               <label className="analysis-settings-primary-field">
                 <span>
-                  <strong>Expected reward column</strong>
+                  <strong>Target-policy expected reward column</strong>
 
                   <small>
-                    Modeled reward used by doubly robust estimation.
+                    Reward-model expectation under the target policy.
                   </small>
                 </span>
 
                 <select
-                  aria-label="Expected reward column"
-                  value={expectedRewardColumn}
+                  aria-label="Target-policy expected reward column"
+                  value={targetPolicyExpectedRewardColumn}
                   onChange={(event) => {
-                    onExpectedRewardColumnChange(event.target.value);
+                    onTargetPolicyExpectedRewardColumnChange(
+                      event.target.value,
+                    );
                   }}
                 >
-                  <option value="">Choose expected reward column</option>
+                  <option value="">
+                    Choose target-policy expected reward column
+                  </option>
 
                   {numericColumns.map((column) => (
                     <option key={column.name} value={column.name}>

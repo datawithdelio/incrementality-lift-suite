@@ -55,6 +55,7 @@ from incrementality_api.domain.datasets.entities import Dataset
 from incrementality_api.domain.datasets.status import DatasetStatus
 
 _NUMERIC_TYPES = {DatasetColumnType.INTEGER, DatasetColumnType.FLOAT}
+_OUTCOME_TYPES = _NUMERIC_TYPES | {DatasetColumnType.BOOLEAN}
 _TIME_TYPES = {DatasetColumnType.DATE, DatasetColumnType.DATETIME}
 _UNIT_TYPES = {DatasetColumnType.INTEGER, DatasetColumnType.STRING}
 _TREATMENT_TYPES = {
@@ -62,6 +63,18 @@ _TREATMENT_TYPES = {
     DatasetColumnType.INTEGER,
     DatasetColumnType.STRING,
 }
+
+_BOOLEAN_TRUE_OUTCOMES = {"true", "yes", "1"}
+_BOOLEAN_FALSE_OUTCOMES = {"false", "no", "0"}
+
+
+def _parse_outcome_value(value: object) -> float:
+    normalized = str(value).strip().casefold()
+    if normalized in _BOOLEAN_TRUE_OUTCOMES:
+        return 1.0
+    if normalized in _BOOLEAN_FALSE_OUTCOMES:
+        return 0.0
+    return float(normalized)
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +230,7 @@ class AnalysisInputMetadataValidator:
         required = {
             mapping.time_column: _TIME_TYPES,
             mapping.unit_column: _UNIT_TYPES,
-            mapping.outcome_column: _NUMERIC_TYPES,
+            mapping.outcome_column: _OUTCOME_TYPES,
         }
         if run.estimator_type is not AnalysisEstimatorType.MARKETING_MIX_MODEL:
             treatment_column, _, _ = _required_treatment_mapping(mapping)
@@ -368,7 +381,7 @@ class DifferenceInDifferencesInputBuilder:
                     f"CSV row {row_number} has an unknown treatment/control value."
                 )
             try:
-                outcome = float(values[mapping.outcome_column])
+                outcome = _parse_outcome_value(values[mapping.outcome_column])
             except ValueError as error:
                 raise PermanentEstimationError(
                     f"CSV row {row_number} has a non-numeric outcome."
@@ -458,7 +471,7 @@ class PanelObservationBuilder:
                 )
             try:
                 observed_at = datetime.fromisoformat(values[mapping.time_column])
-                outcome = float(values[mapping.outcome_column])
+                outcome = _parse_outcome_value(values[mapping.outcome_column])
             except ValueError as error:
                 raise PermanentEstimationError(
                     f"CSV row {row_number} has invalid time or outcome data."
@@ -628,7 +641,7 @@ class MarketingMixInputBuilder:
         for row_number, row in enumerate(rows, start=2):
             try:
                 observed_at = datetime.fromisoformat(str(row[mapping.time_column]).strip())
-                outcome = float(str(row[mapping.outcome_column]).strip())
+                outcome = _parse_outcome_value(row[mapping.outcome_column])
                 spend = {channel: float(str(row[channel]).strip()) for channel in channels}
                 control_values = {
                     control: float(str(row[control]).strip()) for control in controls
@@ -708,7 +721,12 @@ class OffPolicyEvaluationInputBuilder:
             "reward_column": configuration.get("reward_column"),
             "behavior_propensity_column": assignment.behavior_propensity_column,
             "target_propensity_column": assignment.target_propensity_column,
-            "expected_reward_column": configuration.get("expected_reward_column"),
+            "observed_action_expected_reward_column": configuration.get(
+            "observed_action_expected_reward_column"
+        ),
+        "target_policy_expected_reward_column": configuration.get(
+            "target_policy_expected_reward_column"
+        ),
         }
         if not isinstance(primary_method, str) or not all(
             isinstance(column, str) and column for column in columns.values()
@@ -719,10 +737,15 @@ class OffPolicyEvaluationInputBuilder:
             try:
                 observations.append(
                     PolicyEvaluationObservation(
-                        reward=float(row[str(columns["reward_column"])]),
+                        reward=_parse_outcome_value(row[str(columns["reward_column"])]),
                         behavior_probability=float(row[str(columns["behavior_propensity_column"])]),
                         target_probability=float(row[str(columns["target_propensity_column"])]),
-                        expected_reward=float(row[str(columns["expected_reward_column"])]),
+                        observed_action_expected_reward=float(
+                        row[str(columns["observed_action_expected_reward_column"])]
+                    ),
+                    target_policy_expected_reward=float(
+                        row[str(columns["target_policy_expected_reward_column"])]
+                    ),
                     )
                 )
             except (KeyError, ValueError) as error:

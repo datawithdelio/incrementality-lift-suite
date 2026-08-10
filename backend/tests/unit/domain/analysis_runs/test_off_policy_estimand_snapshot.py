@@ -76,7 +76,8 @@ def test_off_policy_estimand_targets_configured_reward_column() -> None:
             serialized=(
                 "{"
                 '"reward_column":"reward",'
-                '"expected_reward_column":"expected_reward",'
+                '"observed_action_expected_reward_column":"observed_expected_reward",'
+            '"target_policy_expected_reward_column":"target_expected_reward",'
                 '"primary_method":"doubly_robust"'
                 "}"
             ),

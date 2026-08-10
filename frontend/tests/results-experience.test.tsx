@@ -252,10 +252,242 @@ describe("ResultsExperience", () => {
     render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: mmm }} />);
     expect(screen.getByText("Channel contribution")).toBeInTheDocument();
     expect(screen.getByText("Budget scenario")).toBeInTheDocument();
-    expect(screen.getAllByText("search")).toHaveLength(2);
+    expect(screen.getAllByText("search")).toHaveLength(3);
   });
 
-  it("renders off-policy comparison and reliability evidence", () => {
+  it("labels MMM conversion efficiency as conversions per dollar instead of ROAS", () => {
+  const mmm = structuredClone(base);
+
+  mmm.estimator_type = "marketing_mix_model";
+
+  mmm.result!.business_impact = {
+    incremental_outcome: 120,
+    relative_lift: 0.1,
+    incremental_revenue: null,
+    incremental_conversions: 120,
+  };
+
+  mmm.result!.technical_diagnostics = {
+    ...mmm.result!.technical_diagnostics,
+    causal_claim_allowed: false,
+    recommendations_allowed: true,
+    channel_contributions: {
+      paid_search_spend: 120,
+    },
+    channel_efficiency: {
+      paid_search_spend: 0.0032,
+    },
+    channel_efficiency_metric:
+      "incremental_conversions_per_dollar",
+    scenario_plan: [],
+    convergence: {
+      max_r_hat: 1.01,
+      min_effective_sample_size: 800,
+      divergences: 0,
+    },
+  };
+
+  render(
+    <ResultsExperience
+      state={{
+        kind: "ready",
+        refreshError: false,
+        data: mmm,
+      }}
+    />,
+  );
+
+  expect(
+    screen.getByText("Conversions / $ 0.0032"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText(/^ROAS\b/),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.getByText("Across modeled periods"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText("Across treated observations"),
+  ).not.toBeInTheDocument();
+
+});
+
+
+
+it("renders MMM observed versus fitted outcome diagnostics", () => {
+  const mmm = structuredClone(base);
+
+  mmm.estimator_type = "marketing_mix_model";
+
+  mmm.result!.technical_diagnostics = {
+    ...mmm.result!.technical_diagnostics,
+    channel_contributions: {
+      search: 120,
+      social: 80,
+    },
+    posterior_intervals: {
+      search: { low: 60, high: 180 },
+      social: { low: 30, high: 130 },
+    },
+    model_fit_series: [
+      {
+        period: "2026-01-05T00:00:00+00:00",
+        observed: 100,
+        fitted_mean: 96,
+        fitted_low: 90,
+        fitted_high: 103,
+        residual: 4,
+      },
+      {
+        period: "2026-01-12T00:00:00+00:00",
+        observed: 108,
+        fitted_mean: 105,
+        fitted_low: 98,
+        fitted_high: 112,
+        residual: 3,
+      },
+      {
+        period: "2026-01-19T00:00:00+00:00",
+        observed: 101,
+        fitted_mean: 104,
+        fitted_low: 97,
+        fitted_high: 111,
+        residual: -3,
+      },
+    ],
+  };
+
+  render(
+    <ResultsExperience
+      state={{
+        kind: "ready",
+        refreshError: false,
+        data: mmm,
+      }}
+    />,
+  );
+
+  expect(
+    screen.getByRole("heading", {
+      name: "Observed vs fitted outcome",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByRole("img", {
+      name: "Observed versus fitted outcome over time",
+    }),
+  ).toBeInTheDocument();
+});
+
+it("renders MMM channel contribution uncertainty as an interval chart", () => {
+  const mmm = structuredClone(base);
+
+  mmm.estimator_type = "marketing_mix_model";
+
+  mmm.result!.technical_diagnostics = {
+    ...mmm.result!.technical_diagnostics,
+    channel_contributions: {
+      search: 120,
+      social: 80,
+    },
+    posterior_intervals: {
+      search: { low: 60, high: 180 },
+      social: { low: 30, high: 130 },
+    },
+  };
+
+  render(
+    <ResultsExperience
+      state={{
+        kind: "ready",
+        refreshError: false,
+        data: mmm,
+      }}
+    />,
+  );
+
+  expect(
+    screen.getByRole("heading", {
+      name: "Channel contribution uncertainty",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByRole("img", {
+      name: "Channel contribution posterior intervals",
+    }),
+  ).toBeInTheDocument();
+});
+
+it("renders MMM residual diagnostics from the persisted fit series", () => {
+  const mmm = structuredClone(base);
+
+  mmm.estimator_type = "marketing_mix_model";
+
+  mmm.result!.technical_diagnostics = {
+    ...mmm.result!.technical_diagnostics,
+    channel_contributions: {
+      search: 120,
+    },
+    posterior_intervals: {
+      search: { low: 60, high: 180 },
+    },
+    model_fit_series: [
+      {
+        period: "2026-01-05T00:00:00+00:00",
+        observed: 100,
+        fitted_mean: 96,
+        fitted_low: 90,
+        fitted_high: 103,
+        residual: 4,
+      },
+      {
+        period: "2026-01-12T00:00:00+00:00",
+        observed: 108,
+        fitted_mean: 105,
+        fitted_low: 98,
+        fitted_high: 112,
+        residual: 3,
+      },
+      {
+        period: "2026-01-19T00:00:00+00:00",
+        observed: 101,
+        fitted_mean: 104,
+        fitted_low: 97,
+        fitted_high: 111,
+        residual: -3,
+      },
+    ],
+  };
+
+  render(
+    <ResultsExperience
+      state={{
+        kind: "ready",
+        refreshError: false,
+        data: mmm,
+      }}
+    />,
+  );
+
+  expect(
+    screen.getByRole("heading", {
+      name: "Residuals over time",
+    }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByRole("img", {
+      name: "Model residuals over time",
+    }),
+  ).toBeInTheDocument();
+});
+
+it("renders off-policy comparison and reliability evidence", () => {
     const ope = structuredClone(base);
     ope.estimator_type = "off_policy_evaluation";
     ope.result!.technical_diagnostics = {
@@ -268,7 +500,7 @@ describe("ResultsExperience", () => {
       propensity_overlap: { maximum_importance_weight: 2.4 },
     };
     render(<ResultsExperience state={{ kind: "ready", refreshError: false, data: ope }} />);
-    expect(screen.getByText("Policy comparison")).toBeInTheDocument();
+    expect(screen.getByText("Estimator comparison")).toBeInTheDocument();
     expect(screen.getByText("Effective sample size")).toBeInTheDocument();
     expect(screen.getByText("growth_policy")).toBeInTheDocument();
   });
@@ -356,62 +588,159 @@ describe("ResultsExperience", () => {
   });
 
 
-  it("labels the off-policy primary effect as estimated policy value", () => {
-    const ope = structuredClone(base);
+  it("presents off-policy policy value as a probability rather than a treatment effect", () => {
+  const ope = structuredClone(base);
 
-    ope.estimator_type =
-      "off_policy_evaluation";
+  ope.estimator_type = "off_policy_evaluation";
+  ope.target_outcome = "conversion";
 
-    ope.result!.business_impact = {
-      incremental_outcome: null,
-      relative_lift: null,
-      incremental_revenue: null,
-      incremental_conversions: null,
-    };
+  ope.result!.business_impact = {
+    incremental_outcome: null,
+    relative_lift: null,
+    incremental_revenue: null,
+    incremental_conversions: null,
+  };
 
-    ope.result!.effect_estimate = 4.2;
+  ope.result!.effect_estimate = 0.277;
+  ope.result!.standard_error = 0.006;
+  ope.result!.confidence_interval = {
+    low: 0.265,
+    high: 0.289,
+    confidence_level: 0.95,
+  };
+  ope.result!.p_value = 0.0001;
 
-    ope.result!.technical_diagnostics = {
-      ...ope.result!.technical_diagnostics,
-      policy_name: "growth_policy",
-      primary_method: "doubly_robust",
-      policy_estimates: {
-        importance_sampling: 4.1,
-        self_normalized_importance_sampling: 3.9,
-        doubly_robust: 4.2,
-      },
-      effective_sample_size: 180,
-      reliability: "strong",
-      propensity_overlap: {
-        maximum_importance_weight: 2.4,
-      },
-    };
+  ope.result!.technical_diagnostics = {
+    ...ope.result!.technical_diagnostics,
+    policy_name: "growth_policy",
+    primary_method: "doubly_robust",
+    policy_estimates: {
+      importance_sampling: 0.278,
+      self_normalized_importance_sampling: 0.277,
+      doubly_robust: 0.277,
+    },
+    effective_sample_size: 4929,
+    reliability: "strong",
+    propensity_overlap: {
+      maximum_importance_weight: 1.34,
+    },
+  };
 
-    render(
-      <ResultsExperience
-        state={{
-          kind: "ready",
-          refreshError: false,
-          data: ope,
-        }}
-      />,
-    );
+  render(
+    <ResultsExperience
+      state={{
+        kind: "ready",
+        refreshError: false,
+        data: ope,
+      }}
+    />,
+  );
 
-    expect(
-      screen.getByText(
-        "Estimated policy value",
-      ),
-    ).toBeInTheDocument();
+  expect(
+    screen.getAllByText("Estimated policy value").length,
+  ).toBeGreaterThanOrEqual(1);
 
-    expect(
-      screen.queryByText(
-        "treatment effect",
-      ),
-    ).not.toBeInTheDocument();
-  });
+  expect(
+    screen.getAllByText("27.7%").length,
+  ).toBeGreaterThanOrEqual(1);
+
+  expect(
+    screen.getByText(
+      "95% confidence interval 26.5% to 28.9%.",
+    ),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText("Effect per treated observation"),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByText(/p\s*[<=]/i),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByText("treatment effect"),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.getAllByText("Policy evaluation evidence").length,
+  ).toBeGreaterThanOrEqual(1);
+
+  expect(
+    screen.queryByText("Causal evidence"),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.getByText("Primary method"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByText("Doubly robust"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByText("Estimator used for the reported policy value."),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText("Units represented in the design"),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.getByText("Overlap quality"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByText("Strong"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByText("Historical policy support is sufficient for estimation."),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText("Design quality"),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByText("Treated / control units"),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.getByText("Policy improvement vs behavior policy"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByText("Not estimated"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByText("This run estimates the target-policy value only."),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByText("Estimator comparison"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText("Policy comparison"),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.getByText("27.8%"),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.queryByText("0.278"),
+  ).not.toBeInTheDocument();
+
+  expect(
+    screen.queryByText("Across treated observations"),
+  ).not.toBeInTheDocument();
+});
 
 
-  it("does not expose raw result JSON in technical details", () => {
+it("does not expose raw result JSON in technical details", () => {
     const { container } = render(
       <ResultsExperience
         state={{

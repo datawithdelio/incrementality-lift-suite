@@ -398,6 +398,99 @@ def test_geo_holdout_report_aligns_design_copy_mapping_and_csv_diagnostics() -> 
     assert "LOCAL ASSIGNMENT VIEW" in pdf_payload
 
 
+def test_off_policy_pdf_reports_policy_value_without_incremental_or_causal_claims() -> None:
+    model = replace(
+        report_model(),
+        estimator="off_policy_evaluation",
+        estimator_version="off-policy-v1",
+        estimate=0.277,
+        standard_error=0.006,
+        p_value=0.0001,
+        confidence_low=0.265,
+        confidence_high=0.289,
+        configuration={
+            "analysis_start_date": "2025-01-06",
+            "analysis_end_date": "2026-01-05",
+            "outcome_column": "conversion",
+            "behavior_propensity_column": "behavior_propensity",
+            "target_propensity_column": "target_propensity",
+            "reward_column": "conversion",
+            "observed_action_expected_reward_column": "observed_action_expected_reward",
+            "target_policy_expected_reward_column": "target_policy_expected_reward",
+            "primary_method": "doubly_robust",
+        },
+        diagnostics={
+            # Old persisted runs may still contain this flag.  OPE reporting must
+            # nevertheless avoid converting overlap evidence into a causal claim.
+            "causal_claim_allowed": True,
+            "recommendations_allowed": True,
+            "design_assessment": "valid",
+            "reliability": "strong",
+            "primary_method": "doubly_robust",
+            "sample_size": 5000,
+            "effective_sample_size": 4929,
+            "extreme_weight_count": 0,
+            "propensity_overlap": {
+                "maximum_importance_weight": 1.34,
+            },
+        },
+        business_impact={},
+        warnings=(),
+        limitations=(),
+        lineage={
+            "semantic_mapping_snapshot": {
+                "time_column": "date",
+                "unit_column": "decision_id",
+                "treatment_column": "action",
+                "outcome_column": "conversion",
+                "covariate_columns": [
+                    "age",
+                    "prior_purchases",
+                    "engagement_score",
+                    "is_mobile",
+                ],
+            },
+            # Deliberately stale generic geography metadata: OPE PDF must ignore it.
+            "analysis_selection_snapshot": {
+                "geography_column": "decision_id",
+            },
+        },
+    )
+
+    rendered = pdf_text(PdfReportRenderer().render(model))
+
+    assert "Estimated policy value" in rendered
+    assert "27.7%" in rendered
+    assert "26.5% to 28.9%" in rendered
+    assert "Policy improvement vs behavior policy" in rendered
+    assert "Not estimated" in rendered
+    assert "Primary method" in rendered
+    assert "Doubly robust" in rendered
+    assert "Overlap quality" in rendered
+    assert "Strong" in rendered
+    assert "Effective sample size" in rendered
+    assert "4,929" in rendered
+    assert "Maximum importance weight" in rendered
+    assert "1.34" in rendered
+    assert "Extreme weights" in rendered
+    assert "either the behavior-propensity specification or the reward model" in rendered
+
+    lowered = rendered.lower()
+    assert "incremental effect" not in lowered
+    assert "credible incremental" not in lowered
+    assert "estimated lift" not in lowered
+    assert "incremental outcome" not in lowered
+    assert "effect per treated observation" not in lowered
+    assert "causal evidence" not in lowered
+    assert "treated / control" not in lowered
+    assert "maximum r-hat" not in lowered
+    assert "channels" not in lowered
+    assert "geography column" not in lowered
+    assert "selected geographies" not in lowered
+    assert "intervention date" not in lowered
+    assert "p < 0.001" not in lowered
+
+
 def test_report_renderers_are_reproducible_and_do_not_overstate_causality() -> None:
     model = report_model(causal_claim_allowed=False)
     csv_bytes = CsvReportRenderer().render(model)

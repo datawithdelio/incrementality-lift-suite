@@ -362,6 +362,32 @@ describe("workspace project lifecycle", () => {
   });
 
 
+  it("registers a new dataset version when replacing a ready dataset", async () => {
+    getProjectOverview.mockResolvedValueOnce({
+      ...project,
+      latest_dataset_id: "dataset-1",
+      latest_dataset_status: "ready",
+      semantic_mapping_configured: true,
+      latest_analysis_run_id: null,
+      latest_analysis_run_status: null,
+    });
+
+    render(
+      <ProjectOverview
+        workspaceId="workspace-1"
+        projectId="project-1"
+      />,
+    );
+
+    expect(
+      await screen.findByRole("link", { name: "Replace Dataset" }),
+    ).toHaveAttribute(
+      "href",
+      "/workspaces/workspace-1/projects/project-1/datasets/upload?replace=1",
+    );
+  });
+
+
   it("keeps project creation read-only for viewers", async () => {
     listWorkspaces.mockResolvedValueOnce([
       {
