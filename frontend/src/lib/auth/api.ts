@@ -1,5 +1,6 @@
 export const SESSION_TOKEN_KEY = "incrementality_session_token";
 export const WORKSPACE_ID_KEY = "incrementality_workspace_id";
+const AUTH_REQUEST_TIMEOUT_MS = 45_000;
 
 export type LoginResponse = {
   user_id: string;
@@ -38,11 +39,40 @@ export class RegistrationConflictError extends AuthenticationError {
   }
 }
 
+async function authFetch(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  let didTimeOut = false;
+  const timeout = window.setTimeout(() => {
+    didTimeOut = true;
+    controller.abort();
+  }, AUTH_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (didTimeOut) {
+      throw new AuthenticationError(
+        "The demo server is taking too long to respond. Please try again.",
+      );
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 async function post<T>(path: string, body: object): Promise<T> {
   let response: Response;
 
   try {
-    response = await fetch(path, {
+    response = await authFetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -69,7 +99,7 @@ export function login(email: string, password: string): Promise<LoginResponse> {
 }
 
 export async function validateSession(token: string): Promise<SessionResponse> {
-  const response = await fetch("/api/v1/auth/session", {
+  const response = await authFetch("/api/v1/auth/session", {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -88,7 +118,7 @@ export async function validateSession(token: string): Promise<SessionResponse> {
 }
 
 export async function logout(token: string): Promise<void> {
-  const response = await fetch("/api/v1/auth/logout", {
+  const response = await authFetch("/api/v1/auth/logout", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });

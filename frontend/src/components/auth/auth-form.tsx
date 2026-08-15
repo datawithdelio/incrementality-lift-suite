@@ -5,7 +5,7 @@ import { CircleNotchIcon } from "@phosphor-icons/react/CircleNotch";
 import { WarningCircleIcon } from "@phosphor-icons/react/WarningCircle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -17,6 +17,7 @@ import {
 import { useAuth } from "./auth-provider";
 
 type AuthMode = "login" | "register";
+const SLOW_AUTH_NOTICE_MS = 6_000;
 
 type AuthFeedback = {
   title: string;
@@ -29,12 +30,39 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const auth = useAuth();
   const [pending, setPending] = useState(false);
+  const [isTakingLonger, setIsTakingLonger] = useState(false);
   const [error, setError] = useState<AuthFeedback | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const slowNoticeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (slowNoticeTimerRef.current !== null) {
+        window.clearTimeout(slowNoticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  function startPending() {
+    setPending(true);
+    setIsTakingLonger(false);
+    slowNoticeTimerRef.current = window.setTimeout(() => {
+      setIsTakingLonger(true);
+    }, SLOW_AUTH_NOTICE_MS);
+  }
+
+  function finishPending() {
+    if (slowNoticeTimerRef.current !== null) {
+      window.clearTimeout(slowNoticeTimerRef.current);
+      slowNoticeTimerRef.current = null;
+    }
+    setPending(false);
+    setIsTakingLonger(false);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
+    startPending();
     setError(null);
 
     const data = new FormData(event.currentTarget);
@@ -77,7 +105,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       });
       toast.error(title, { description: message });
     } finally {
-      setPending(false);
+      finishPending();
     }
   }
 
@@ -167,6 +195,13 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         <span>{pending ? (isLogin ? "Signing in…" : "Creating account…") : (isLogin ? "Sign in" : "Create account")}</span>
         {pending ? <CircleNotchIcon className="auth-spinner" size={18} aria-hidden="true" /> : <ArrowRightIcon size={18} aria-hidden="true" />}
       </button>
+
+      {isTakingLonger ? (
+        <p className="auth-slow-start" role="status">
+          Starting the secure demo server. The first visit may take a little
+          longer, so please keep this screen open.
+        </p>
+      ) : null}
 
       <p className="auth-switch">
         {isLogin ? "New to Incrementality?" : "Already have an account?"}{" "}

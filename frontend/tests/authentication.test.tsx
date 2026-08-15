@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import RootLayout from "../src/app/layout";
@@ -274,6 +274,36 @@ describe("AuthForm", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("explains when the demo server is still starting", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockImplementationOnce(
+      () => new Promise<Response>(() => undefined),
+    );
+
+    render(
+      <AuthProvider>
+        <AuthForm mode="login" />
+      </AuthProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Work email"), {
+      target: { value: "owner@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "secure-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(6_000);
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Starting the secure demo server",
+    );
+    vi.useRealTimers();
+  });
+
 
   it("updates centralized authentication state after successful login", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
@@ -378,13 +408,14 @@ describe("session API", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/v1/auth/session",
-      {
+      expect.objectContaining({
         method: "GET",
         headers: {
           Authorization: "Bearer existing-session",
         },
         cache: "no-store",
-      },
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 });
@@ -559,12 +590,13 @@ describe("AuthProvider", () => {
 
     expect(fetch).toHaveBeenLastCalledWith(
       "/api/v1/auth/logout",
-      {
+      expect.objectContaining({
         method: "POST",
         headers: {
           Authorization: "Bearer active-session",
         },
-      },
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 

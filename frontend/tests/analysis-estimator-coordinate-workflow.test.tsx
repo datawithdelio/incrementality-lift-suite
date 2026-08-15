@@ -44,6 +44,7 @@ function renderGeoSettings(
       mmmOutcomeKind="revenue"
       mmmAdstockDecay={{}}
       mmmSaturationHalfSpend={{}}
+      mmmSaturationHalfSpendDefaults={{}}
       rewardColumn=""
       observedActionExpectedRewardColumn=""
       targetPolicyExpectedRewardColumn=""
