@@ -24,6 +24,8 @@ incremental impact of marketing campaigns and product interventions.
 
 ## Architecture
 
+Editable Mermaid sources are stored alongside the SVG diagrams in `docs/architecture/`.
+
 #### 1. High-level architecture
 
 ![High-level architecture](docs/architecture/01-high-level-architecture.svg)

@@ -1,0 +1,27 @@
+flowchart LR
+    CSV["CSV upload"]
+    DATASET_OBJECT[/"S3 dataset artifact + SHA-256"/]
+    DATASET[("PostgreSQL datasets version metadata")]
+    ESTIMATOR["Estimator configuration + version"]
+    RUN[("PostgreSQL analysis_runs immutable snapshot")]
+    RESULT[("PostgreSQL analysis_results + diagnostics")]
+    REPORT[("PostgreSQL report_generations snapshot")]
+    OUTPUT[/"S3 PDF/CSV artifact + SHA-256"/]
+
+    CSV -->|"Write and verify"| DATASET_OBJECT
+    DATASET_OBJECT -->|"Storage key + checksum"| DATASET
+    DATASET -->|"Dataset ID + checksum + size"| RUN
+    ESTIMATOR -->|"Captured in snapshot"| RUN
+    RUN -->|"Run ID + input fingerprint"| RESULT
+    RESULT -->|"Estimate + diagnostics"| REPORT
+    REPORT -->|"Generate artifact and record checksum"| OUTPUT
+
+    classDef process fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef metadata fill:#ede9fe,stroke:#7c3aed,color:#3b0764
+    classDef artifact fill:#ffedd5,stroke:#ea580c,color:#7c2d12
+    classDef output fill:#dcfce7,stroke:#16a34a,color:#14532d
+
+    class CSV,ESTIMATOR process
+    class DATASET,RUN,RESULT,REPORT metadata
+    class DATASET_OBJECT artifact
+    class OUTPUT output

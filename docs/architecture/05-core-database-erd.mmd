@@ -1,0 +1,68 @@
+erDiagram
+    users {
+        uuid id PK
+        string email
+        string display_name
+    }
+
+    workspaces {
+        uuid id PK
+        string name
+        string slug
+    }
+
+    workspace_memberships {
+        uuid id PK
+        uuid workspace_id FK
+        uuid user_id FK
+        string role
+    }
+
+    projects {
+        uuid id PK
+        uuid workspace_id FK
+        string name
+        string status
+    }
+
+    datasets {
+        uuid id PK
+        uuid project_id FK
+        string checksum_sha256
+        string storage_key
+        string status
+    }
+
+    analysis_runs {
+        uuid id PK
+        uuid dataset_id FK
+        string dataset_checksum_sha256
+        string estimator_version
+        string input_fingerprint_sha256
+        string status
+    }
+
+    analysis_results {
+        uuid id PK
+        uuid analysis_run_id FK
+        float effect
+        jsonb diagnostics
+    }
+
+    report_generations {
+        uuid id PK
+        uuid analysis_run_id FK
+        int version
+        string format
+        string status
+        string storage_key
+        string artifact_checksum_sha256
+    }
+
+    users ||--o{ workspace_memberships : joins
+    workspaces ||--o{ workspace_memberships : grants
+    workspaces ||--o{ projects : owns
+    projects ||--o{ datasets : contains
+    datasets ||--o{ analysis_runs : inputs
+    analysis_runs ||--o| analysis_results : produces
+    analysis_runs ||--o{ report_generations : generates

@@ -1,0 +1,65 @@
+flowchart LR
+    subgraph USER["User / browser"]
+        BROWSER["Analyst browser"]
+    end
+
+    subgraph VERCEL["Vercel"]
+        direction LR
+        WEB["Next.js frontend"]
+        REWRITE["Same-origin API rewrite"]
+        WEB -->|"/api/*"| REWRITE
+    end
+
+    subgraph COMPOSE["Docker Compose / backend infrastructure"]
+        direction TB
+        API["FastAPI API container"]
+        WORKER["Background worker container"]
+        PG[("PostgreSQL 17")]
+        S3[("S3-compatible object storage")]
+        REDIS[("Redis 7: provisioned, no verified app flow")]
+        MIGRATE["Alembic migration bootstrap"]
+        S3INIT["Bucket initialization job"]
+        HEALTH["Liveness + readiness checks"]
+
+        API -->|"SQL + durable jobs"| PG
+        API -->|"datasets + downloads"| S3
+        WORKER -->|"claim jobs + persist"| PG
+        WORKER -->|"read data + write reports"| S3
+        MIGRATE -->|"upgrade head"| PG
+        S3INIT -->|"create bucket"| S3
+        API -.->|"exposes"| HEALTH
+        HEALTH -.->|"readiness DB probe"| PG
+    end
+
+    subgraph EXTERNAL["External service"]
+        OSM["OpenStreetMap tile service"]
+    end
+
+    BROWSER -->|"HTTPS"| WEB
+    REWRITE -->|"BACKEND_URL"| API
+    BROWSER -->|"tile requests"| OSM
+
+    classDef client fill:#e7f5ff,stroke:#1971c2,color:#0b3d66
+    classDef frontend fill:#e5dbff,stroke:#7048e8,color:#3b2468
+    classDef backend fill:#d3f9d8,stroke:#2b8a3e,color:#1b4332
+    classDef worker fill:#ffe8cc,stroke:#e8590c,color:#7f2704
+    classDef storage fill:#f3d9fa,stroke:#9c36b5,color:#4a1858
+    classDef bootstrap fill:#fff3bf,stroke:#f08c00,color:#663c00
+    classDef observability fill:#c5f6fa,stroke:#0c8599,color:#0b4f5c
+    classDef external fill:#d0ebff,stroke:#1c7ed6,color:#123b5d
+    classDef unused fill:#f1f3f5,stroke:#868e96,color:#495057,stroke-dasharray:6 4
+
+    class BROWSER client
+    class WEB,REWRITE frontend
+    class API backend
+    class WORKER worker
+    class PG,S3 storage
+    class MIGRATE,S3INIT bootstrap
+    class HEALTH observability
+    class OSM external
+    class REDIS unused
+
+    style USER fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px
+    style VERCEL fill:#f3f0ff,stroke:#845ef7,stroke-width:1px
+    style COMPOSE fill:#f8f9fa,stroke:#495057,stroke-width:1px
+    style EXTERNAL fill:#e7f5ff,stroke:#339af0,stroke-width:1px

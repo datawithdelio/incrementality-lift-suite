@@ -1,0 +1,63 @@
+flowchart LR
+    subgraph LAYOUT[" "]
+        direction TB
+
+        subgraph PRIMARY["Async processing"]
+            direction LR
+
+            subgraph ROW1[" "]
+                direction LR
+                API["FastAPI"] -->|"Enqueue jobs"| PG[("PostgreSQL durable job queues")]
+                PG -->|"Claim next"| CLAIM["Worker claim"]
+                CLAIM --> VALIDATE["Dataset validation"]
+                VALIDATE -->|"Dataset ready"| PREP["Input preparation"]
+            end
+
+            subgraph ROW2[" "]
+                direction LR
+                REGISTRY["Estimator registry"] --> EST["Causal estimator"]
+                REPORT["Report worker"] -->|"PDF / CSV"| S3[("S3-compatible object storage")]
+            end
+
+            PREP -->|"Select estimator"| REGISTRY
+            EST -->|"Persist results + diagnostics"| PG
+            PG -->|"Claim report job + immutable snapshot"| REPORT
+        end
+
+        subgraph REL["Reliability controls"]
+            direction LR
+            LOCK["FOR UPDATE SKIP LOCKED"]
+            RECOVERY["Retries + stale-job recovery"]
+            LINEAGE["Immutable lineage + snapshots"]
+            INTEGRITY["SHA-256 + reconciliation"]
+            LOGS["Failure + lifecycle logs"]
+        end
+
+        CLAIM <-.- LOCK
+        PG <-.- RECOVERY
+        CLAIM <-.- RECOVERY
+        PREP <-.- LINEAGE
+        REPORT <-.- LINEAGE
+        REPORT <-.- INTEGRITY
+        S3 <-.- INTEGRITY
+        CLAIM <-.- LOGS
+        REPORT <-.- LOGS
+    end
+
+    classDef service fill:#d3f9d8,stroke:#2b8a3e,color:#1b4332
+    classDef worker fill:#ffe8cc,stroke:#e8590c,color:#7f2704
+    classDef stage fill:#dbe4ff,stroke:#4263eb,color:#1c2d6b
+    classDef storage fill:#e5dbff,stroke:#7048e8,color:#3b2468
+    classDef reliability fill:#f1f3f5,stroke:#495057,color:#212529
+
+    class API service
+    class CLAIM,REPORT worker
+    class VALIDATE,PREP,REGISTRY,EST stage
+    class PG,S3 storage
+    class LOCK,RECOVERY,LINEAGE,INTEGRITY,LOGS reliability
+
+    style LAYOUT fill:transparent,stroke:transparent
+    style PRIMARY fill:#f8f9fa,stroke:#868e96,stroke-width:1px
+    style ROW1 fill:transparent,stroke:transparent
+    style ROW2 fill:transparent,stroke:transparent
+    style REL fill:#fff9db,stroke:#868e96,stroke-width:1px

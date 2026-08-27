@@ -1,0 +1,24 @@
+flowchart LR
+    ANALYST["Analyst"] -->|"Use app"| NEXT["Next.js"]
+    NEXT -->|"Sync REST"| API["FastAPI"]
+    API -->|"Metadata / jobs"| PG[("PostgreSQL")]
+    API -->|"Upload CSV"| STORE[("Object storage")]
+    PG -. "Async job" .-> WORKER["Background worker"]
+    STORE -->|"Dataset"| WORKER
+    WORKER -->|"Run"| PIPE["Causal pipeline"]
+    PIPE -->|"Persist"| RESULTS["Persisted results and reports"]
+
+    API -.-> OBS["Logs and health checks"]
+    WORKER -.-> OBS
+
+    classDef user fill:#e8f1ff,stroke:#2563eb,color:#172554;
+    classDef service fill:#ecfdf5,stroke:#15803d,color:#052e16;
+    classDef worker fill:#fff7ed,stroke:#d97706,color:#451a03;
+    classDef storage fill:#f5f3ff,stroke:#7c3aed,color:#2e1065;
+    classDef observability fill:#f8fafc,stroke:#475569,color:#0f172a;
+
+    class ANALYST user;
+    class NEXT,API service;
+    class WORKER,PIPE worker;
+    class PG,STORE,RESULTS storage;
+    class OBS observability;
